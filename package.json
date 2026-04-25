@@ -1,0 +1,21 @@
+{
+  "name": "ethglobalkrump",
+  "version": "0.1.0",
+  "description": "Krump x UCP hackathon MVP demos",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "ucp",
+    "circle",
+    "arc",
+    "hackathon",
+    "krump"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

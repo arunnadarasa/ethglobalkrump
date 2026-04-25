@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Krump x UCP MVP Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Krump x UCP Top 3 MVP Demo</h1>
+      <p class="subtitle">U1: Live Tipping • U2: Pay-per-Move • U5: Battle Entry + Prize Payout</p>
+
+      <section>
+        <h2>U1 - Live Battle Micro-Tipping</h2>
+        <form id="tip-form">
+          <input id="fan-name" placeholder="Fan name" />
+          <select id="dancer-id">
+            <option value="dancer-1">NOVA</option>
+            <option value="dancer-2">SHADOW</option>
+            <option value="dancer-3">RAWFIRE</option>
+          </select>
+          <input id="tip-amount" type="number" min="1" value="25" />
+          <button type="submit">Send Tip (minor units)</button>
+        </form>
+        <pre id="leaderboard"></pre>
+      </section>
+
+      <section>
+        <h2>U2 - Pay-per-Move Tutorial Unlock</h2>
+        <div class="row">
+          <select id="clip-id"></select>
+          <button id="try-locked" type="button">Try Open Locked Clip</button>
+          <button id="pay-unlock" type="button">Pay + Unlock</button>
+          <button id="open-unlocked" type="button">Open with Token</button>
+        </div>
+        <pre id="tutorial-output"></pre>
+      </section>
+
+      <section>
+        <h2>U5 - Battle Entry + Prize Payout</h2>
+        <form id="register-form">
+          <input id="entry-name" placeholder="Dancer name" required />
+          <input id="entry-wallet" placeholder="Wallet (Arc testnet)" required />
+          <input id="entry-fee" type="number" min="100" value="500" />
+          <button type="submit">Register Entrant</button>
+        </form>
+        <div class="row">
+          <button id="close-battle" type="button">Close Registration</button>
+          <select id="winner-id"></select>
+          <button id="payout-winner" type="button">Payout Winner</button>
+        </div>
+        <pre id="battle-output"></pre>
+      </section>
+    </main>
+
+    <script src="/main.js"></script>
+  </body>
+</html>
