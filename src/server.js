@@ -20,12 +20,13 @@ const CIRCLE_API_KEY = process.env.CIRCLE_API_KEY || "";
 const CIRCLE_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET || "";
 const CIRCLE_WALLET_ID = process.env.CIRCLE_WALLET_ID || "";
 const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
+const CIRCLE_TOKEN_ID = process.env.CIRCLE_TOKEN_ID || "";
 
-const ARCTESTNET_CHAIN_ID = process.env.ARC_CHAIN_ID || "11155111";
+const ARCTESTNET_CHAIN_ID = process.env.ARC_CHAIN_ID || "5042002";
 const ARCTESTNET_CHAIN_ID_HEX = `0x${Number(ARCTESTNET_CHAIN_ID).toString(16)}`;
-const ARCTESTNET_RPC_URL = process.env.ARC_RPC_URL || "https://sepolia.infura.io/v3/";
+const ARCTESTNET_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network";
 const ARCTESTNET_NAME = process.env.ARC_CHAIN_NAME || "Arc Testnet";
-const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "ETH";
+const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "USDC";
 const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
 
 app.use(express.json());
@@ -73,8 +74,9 @@ function getRailConfig() {
         treasury_address: ONCHAIN_TREASURY_ADDRESS
       },
       circle: {
-        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID),
+        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID && CIRCLE_TOKEN_ID),
         wallet_id: CIRCLE_WALLET_ID,
+        token_id: CIRCLE_TOKEN_ID,
         destination_address: CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS,
         api_base: CIRCLE_API_BASE,
         transfer_path: CIRCLE_TRANSFER_PATH
@@ -86,6 +88,9 @@ function getRailConfig() {
 async function createCircleTransfer({ amountMinor, memo }) {
   if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !CIRCLE_WALLET_ID) {
     throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
+  }
+  if (!CIRCLE_TOKEN_ID) {
+    throw new Error("Circle token missing: set CIRCLE_TOKEN_ID for USDC on your target chain");
   }
 
   const destinationAddress = CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS;
@@ -100,7 +105,7 @@ async function createCircleTransfer({ amountMinor, memo }) {
     amounts: [amount],
     feeLevel: "MEDIUM",
     idempotencyKey: helpers.makeId("circle"),
-    tokenId: "USD",
+    tokenId: CIRCLE_TOKEN_ID,
     metadata: {
       memo: memo || "krump-ucp-demo"
     }
