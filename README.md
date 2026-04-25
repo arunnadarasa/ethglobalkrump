@@ -2,7 +2,7 @@
 
 An ETHGlobal-ready app that turns Krump culture into programmable commerce using:
 
-- Universal Commerce Protocol (UCP)-inspired payment flows
+- Official Universal Commerce Protocol (UCP) JS SDK + schema validation
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
 
@@ -12,6 +12,7 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - Dual rails by design: MetaMask on-chain and Circle wallet transfers in one UI.
 - Built for demo-day reliability: onboarding UX, wallet save state, balance visibility, and funding cues.
 - Built for auditability: incremental commits, explicit docs, and reproducible setup.
+- Conformance-aware by design: schema-validated UCP endpoints and built-in self-test route.
 
 ## Contents
 
@@ -27,6 +28,23 @@ This repo now includes a runnable prototype for the three prioritized tracks:
 - `U2` Pay-Per-Move Tutorial Unlock
 - `U5` Battle Entry + Instant Prize Pool Payout
 
+## Official UCP Integration (Now Live)
+
+This app now integrates the official UCP stack in Node via `@ucp-js/sdk` and validates payloads using canonical schemas.
+
+### UCP API Routes
+
+- `GET /api/ucp/discovery` - returns discovery profile with capabilities + REST service metadata
+- `POST /api/ucp/checkout/create` - validates request with `CheckoutCreateRequestSchema` and returns UCP checkout response
+- `GET /api/ucp/orders/:orderId` - returns UCP order-style status response
+- `GET /api/ucp/conformance/self-test` - runs local schema validation checks for checkout/order artifacts
+
+### Conformance Notes
+
+- Runtime validation is performed through official SDK schemas.
+- Invalid checkout payloads are rejected with a typed UCP validation error path.
+- The self-test endpoint is intended for quick demo-day confidence checks.
+
 ### Local Run
 
 1. Install dependencies:
@@ -40,7 +58,7 @@ This repo now includes a runnable prototype for the three prioritized tracks:
 
 ### Project Structure
 
-- `src/server.js` - Express API for track flows, Circle onboarding, and balance/transfer endpoints
+- `src/server.js` - Express API for tracks, Circle rails, and official UCP endpoints
 - `src/state.js` - in-memory demo state and helper utilities
 - `public/index.html` - single-page demo UI
 - `public/main.js` - client interactions, wallet rails, onboarding, and balances
@@ -97,3 +115,4 @@ Set these in `.env` so the UI can switch/add chain and send tx:
 - U2 keeps content locked behind payment and returns unlock tokens for access.
 - U5 registers entrants, closes rounds, and computes winner payout paths.
 - Circle and MetaMask balances are visible in the same demo for operational confidence.
+- Official UCP discovery/checkout/order responses are exposed with schema-backed validation.

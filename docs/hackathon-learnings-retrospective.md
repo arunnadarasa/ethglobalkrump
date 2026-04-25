@@ -43,6 +43,11 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - Kept wallet onboarding and funding guidance close to payment controls.
    - Reduced demo friction for judges and operators.
 
+8. **Official UCP integration was operationalized**
+   - Added `@ucp-js/sdk` and wired schema validation directly in API handlers.
+   - Exposed UCP discovery, checkout, and order-style endpoints in the same app.
+   - Added a conformance self-test endpoint for fast protocol sanity checks.
+
 ## What Failed / Pain Points
 
 1. **Repository assumption mismatch**
@@ -73,6 +78,10 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - Transfer calls failed when `entitySecretCiphertext` was absent, even when other credentials were present.
    - Generic "API parameter invalid" errors required deeper payload-level inspection.
 
+8. **Official SDK packaging quirks required care**
+   - ESM import path issues appeared in direct dynamic import attempts.
+   - CommonJS `require()` path worked reliably for server-side integration in this stack.
+
 ## Key Learnings
 
 1. **Discovery-first beats assumption-first**
@@ -96,6 +105,9 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 7. **Instrument payload shape, not just success/failure**
    - Logging key presence (not secrets) on outbound payloads quickly revealed missing required fields.
 
+8. **Conformance should be continuously checkable**
+   - A lightweight self-test endpoint catches schema drift faster than manual endpoint checks.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -109,6 +121,8 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 5. Keep a strict "no secret logging" policy while preserving high-signal operational logs.
 6. Add a lightweight startup sync endpoint to set active wallet from last saved onboarding result.
 7. Add transfer preflight checks in UI (wallet selected, token selector present, destination configured).
+8. Add CI step to call `/api/ucp/conformance/self-test` and fail fast on schema regressions.
+9. Add sample UCP request/response fixtures under `docs/` for judge walkthroughs.
 
 ## Outcome Snapshot
 
@@ -119,3 +133,4 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 - UX funding guidance: added with direct faucet path
 - Wallet balances: visible in app for MetaMask and Circle wallets
 - Circle tip transfer reliability: fixed for restart and payload-validation edge cases
+- Official UCP SDK/schema integration: enabled with discovery/checkout/order and self-test routes

@@ -16,6 +16,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@ucp-js/sdk": "^0.1.0",
     "dotenv": "^16.6.1",
     "express": "^4.21.2"
   }

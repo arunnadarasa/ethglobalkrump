@@ -3,6 +3,11 @@ const crypto = require("crypto");
 const express = require("express");
 const path = require("path");
 const {
+  CheckoutCreateRequestSchema,
+  UcpCheckoutResponseSchema,
+  UcpOrderResponseSchema
+} = require("@ucp-js/sdk");
+const {
   dancers,
   tutorialClips,
   entries,
@@ -95,6 +100,29 @@ function getRailConfig() {
       }
     }
   };
+}
+
+function getUcpBaseUrl(req) {
+  const host = req.get("host") || `localhost:${PORT}`;
+  const proto = req.get("x-forwarded-proto") || req.protocol || "http";
+  return `${proto}://${host}`;
+}
+
+function buildUcpCapabilities() {
+  return [
+    {
+      name: "checkout_create",
+      version: "1.0.0",
+      schema: "https://ucp.dev/latest/schemas/checkout/create-request.json",
+      spec: "https://ucp.dev/latest/specification/checkout/"
+    },
+    {
+      name: "order_status",
+      version: "1.0.0",
+      schema: "https://ucp.dev/latest/schemas/order/response.json",
+      spec: "https://ucp.dev/latest/specification/order/"
+    }
+  ];
 }
 
 function makeUuid() {
@@ -386,6 +414,128 @@ async function getCircleWalletBalances(walletId) {
 
 app.get("/api/config", (_req, res) => {
   res.json(getRailConfig());
+});
+
+app.get("/api/ucp/discovery", (req, res) => {
+  const baseUrl = getUcpBaseUrl(req);
+  return res.json({
+    ucp: {
+      version: "1.0.0",
+      capabilities: buildUcpCapabilities(),
+      services: {
+        version: "1.0.0",
+        spec: "https://ucp.dev/latest/specification/overview/",
+        rest: {
+          endpoint: `${baseUrl}/api/ucp`,
+          schema: "https://ucp.dev/latest/schemas/discovery/profile.json",
+          version: "1.0.0",
+          spec: "https://ucp.dev/latest/specification/rest/"
+        }
+      }
+    }
+  });
+});
+
+app.post("/api/ucp/checkout/create", (req, res) => {
+  const parsedRequest = CheckoutCreateRequestSchema.safeParse(req.body || {});
+  if (!parsedRequest.success) {
+    return sendError(
+      res,
+      400,
+      "ucp_checkout_invalid",
+      `UCP checkout request validation failed: ${parsedRequest.error.issues[0]?.message || "invalid payload"}`
+    );
+  }
+
+  const normalizedLineItems = (parsedRequest.data.line_items || []).map((lineItem) => {
+    const clip = tutorialClips.find((item) => item.id === lineItem.item.id);
+    const unitMinor = clip ? clip.priceMinor : 100;
+    return {
+      item_id: lineItem.item.id,
+      quantity: lineItem.quantity,
+      unit_minor: unitMinor,
+      line_total_minor: unitMinor * lineItem.quantity
+    };
+  });
+  const totalMinor = normalizedLineItems.reduce((sum, item) => sum + item.line_total_minor, 0);
+  const checkoutId = helpers.makeId("ucp-checkout");
+
+  const checkoutResponseCore = {
+    version: "1.0.0",
+    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
+  };
+  const validatedResponse = UcpCheckoutResponseSchema.safeParse(checkoutResponseCore);
+  if (!validatedResponse.success) {
+    return sendError(res, 500, "ucp_checkout_response_invalid", "UCP checkout response schema validation failed.");
+  }
+
+  return res.status(201).json({
+    ...validatedResponse.data,
+    checkout: {
+      id: checkoutId,
+      currency: parsedRequest.data.currency,
+      line_items: normalizedLineItems,
+      total_minor: totalMinor,
+      total_usd: helpers.toUsd(totalMinor),
+      status: "created"
+    }
+  });
+});
+
+app.get("/api/ucp/orders/:orderId", (req, res) => {
+  const orderId = req.params.orderId;
+  const relatedPayment = payments.find((payment) => payment.id === orderId) || null;
+  const orderResponseCore = {
+    version: "1.0.0",
+    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
+  };
+  const validated = UcpOrderResponseSchema.safeParse(orderResponseCore);
+  if (!validated.success) {
+    return sendError(res, 500, "ucp_order_response_invalid", "UCP order response schema validation failed.");
+  }
+
+  return res.json({
+    ...validated.data,
+    order: {
+      id: orderId,
+      status: relatedPayment ? relatedPayment.status : "unknown",
+      payment_mode: relatedPayment?.payment_mode || null,
+      amount_minor: relatedPayment?.amount_minor || null,
+      amount_usd:
+        typeof relatedPayment?.amount_minor === "number" ? helpers.toUsd(relatedPayment.amount_minor) : null
+    }
+  });
+});
+
+app.get("/api/ucp/conformance/self-test", (_req, res) => {
+  const sampleCheckoutRequest = {
+    currency: "USD",
+    line_items: [{ item: { id: "clip-1" }, quantity: 1 }],
+    payment: {
+      instruments: [{ id: "card-1", handler_id: "stripe", type: "card", brand: "visa", last_digits: "4242" }],
+      selected_instrument_id: "card-1"
+    }
+  };
+  const sampleCheckoutResponse = {
+    version: "1.0.0",
+    capabilities: [{ name: "checkout_create", version: "1.0.0" }]
+  };
+  const sampleOrderResponse = {
+    version: "1.0.0",
+    capabilities: [{ name: "order_status", version: "1.0.0" }]
+  };
+
+  const checks = {
+    checkout_create_request: CheckoutCreateRequestSchema.safeParse(sampleCheckoutRequest).success,
+    checkout_response: UcpCheckoutResponseSchema.safeParse(sampleCheckoutResponse).success,
+    order_response: UcpOrderResponseSchema.safeParse(sampleOrderResponse).success
+  };
+  const passed = Object.values(checks).every(Boolean);
+  return res.json({
+    ok: passed,
+    source: "@ucp-js/sdk",
+    checks
+  });
 });
 
 app.post("/api/circle/wallets/create", async (req, res) => {
