@@ -64,3 +64,21 @@ pre {
   overflow: auto;
   max-height: 300px;
 }
+
+#circle-wallet-save-status {
+  color: #b3bfd1;
+  align-self: center;
+}
+
+#circle-funding-cue {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2e466f;
+  background: #0d1627;
+  color: #d7e6ff;
+}
+
+#circle-funding-cue a {
+  color: #7fb1ff;
+}

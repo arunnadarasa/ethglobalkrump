@@ -12,6 +12,54 @@ function print(targetId, payload) {
 let unlockToken = "";
 let railConfig = null;
 let connectedAccount = "";
+let lastCreatedCircleWallet = null;
+
+function extractCircleWalletDetails(payload) {
+  const wallet =
+    payload?.wallet ||
+    payload?.data?.wallet ||
+    payload?.wallets?.[0] ||
+    payload?.data?.wallets?.[0] ||
+    payload?.result?.wallet ||
+    payload?.result?.wallets?.[0] ||
+    null;
+  const walletId = wallet?.id || payload?.walletId || payload?.wallet_id || null;
+  const walletAddress = wallet?.address || payload?.address || payload?.wallet_address || null;
+  const walletSetId = payload?.walletSetId || payload?.wallet_set_id || wallet?.walletSetId || null;
+  if (!walletId || !walletAddress) {
+    return null;
+  }
+  return { walletId, walletAddress, walletSetId };
+}
+
+function setCircleSaveStatus(message) {
+  document.getElementById("circle-wallet-save-status").textContent = message;
+}
+
+function renderCircleFundingCue(details) {
+  const target = document.getElementById("circle-funding-cue");
+  if (!details) {
+    target.textContent = "Create a Circle wallet, then save it to show funding instructions.";
+    return;
+  }
+  const faucetUrl = "https://faucet.circle.com/";
+  target.innerHTML =
+    `Wallet ID: <code>${details.walletId}</code><br>` +
+    `Wallet Address: <code>${details.walletAddress}</code><br>` +
+    `Fund this wallet on Arc Testnet using Circle Faucet: <a href="${faucetUrl}" target="_blank" rel="noopener noreferrer">${faucetUrl}</a>`;
+}
+
+function getWalletDetailsFromOutputPane() {
+  try {
+    const raw = document.getElementById("circle-wallet-output").textContent || "";
+    if (!raw.trim()) {
+      return null;
+    }
+    return extractCircleWalletDetails(JSON.parse(raw));
+  } catch (_error) {
+    return null;
+  }
+}
 
 function toHexWeiFromMinor(minor) {
   const wei = BigInt(minor) * 10n ** 14n;
@@ -150,7 +198,53 @@ async function createCircleWalletFromUi() {
     throw new Error(response.body?.error?.message || "Failed to create Circle wallet");
   }
   print("circle-wallet-output", response.body);
+  lastCreatedCircleWallet = extractCircleWalletDetails(response.body);
+  renderCircleFundingCue(lastCreatedCircleWallet);
+  if (lastCreatedCircleWallet) {
+    setCircleSaveStatus("Wallet created. Save wallet details for quick reuse.");
+  }
   await loadConfig();
+}
+
+async function saveCircleWalletFromUi() {
+  const hasOutputWallet = Boolean(getWalletDetailsFromOutputPane());
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S1',location:'public/main.js:saveCircleWalletFromUi:entry',message:'Save wallet requested',data:{hasInMemoryWallet:Boolean(lastCreatedCircleWallet),hasOutputWallet},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const details = lastCreatedCircleWallet || getWalletDetailsFromOutputPane();
+  if (!details) {
+    setCircleSaveStatus("No wallet found. Create a Circle wallet first.");
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S2',location:'public/main.js:saveCircleWalletFromUi:no-wallet',message:'Save failed due to missing wallet details',data:{reason:'missing_wallet_details'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return;
+  }
+  localStorage.setItem("circleWalletDetails", JSON.stringify(details));
+  setCircleSaveStatus("Circle wallet details saved locally.");
+  renderCircleFundingCue(details);
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S3',location:'public/main.js:saveCircleWalletFromUi:success',message:'Wallet details saved',data:{walletIdPrefix:details.walletId.slice(0,8),addressPrefix:details.walletAddress.slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+}
+
+function hydrateSavedCircleWallet() {
+  try {
+    const saved = localStorage.getItem("circleWalletDetails");
+    if (!saved) {
+      renderCircleFundingCue(null);
+      return;
+    }
+    const parsed = JSON.parse(saved);
+    if (parsed?.walletId && parsed?.walletAddress) {
+      lastCreatedCircleWallet = parsed;
+      setCircleSaveStatus("Loaded saved Circle wallet details from this browser.");
+      renderCircleFundingCue(parsed);
+      return;
+    }
+    renderCircleFundingCue(null);
+  } catch (_error) {
+    renderCircleFundingCue(null);
+  }
 }
 
 async function generateCiphertextFromUi() {
@@ -342,8 +436,13 @@ document.getElementById("generate-ciphertext").addEventListener("click", async (
   }
 });
 
+document.getElementById("save-circle-wallet").addEventListener("click", async () => {
+  await saveCircleWalletFromUi();
+});
+
 async function bootstrap() {
   await loadConfig();
+  hydrateSavedCircleWallet();
   await refreshLeaderboard();
   await loadTutorials();
   await refreshBattle();
