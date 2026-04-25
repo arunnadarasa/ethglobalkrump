@@ -17,6 +17,21 @@
       <pre id="rail-config"></pre>
 
       <section>
+        <h2>Circle Wallet Onboarding</h2>
+        <div class="row">
+          <input id="circle-wallet-name" placeholder="Wallet name (optional)" />
+          <select id="circle-blockchain">
+            <option value="ARC-TESTNET">ARC-TESTNET</option>
+            <option value="BASE-SEPOLIA">BASE-SEPOLIA</option>
+            <option value="ETH-SEPOLIA">ETH-SEPOLIA</option>
+          </select>
+          <input id="circle-wallet-set-id" placeholder="Existing walletSetId (optional)" />
+          <button id="create-circle-wallet" type="button">Create Circle Wallet</button>
+        </div>
+        <pre id="circle-wallet-output"></pre>
+      </section>
+
+      <section>
         <h2>U1 - Live Battle Micro-Tipping</h2>
         <form id="tip-form">
           <input id="fan-name" placeholder="Fan name" />

@@ -57,6 +57,7 @@ Put your Circle credentials in `.env`:
 - `CIRCLE_API_KEY`
 - `CIRCLE_ENTITY_SECRET`
 - `CIRCLE_WALLET_ID`
+- `CIRCLE_WALLET_SET_ID` (optional; app can auto-create if omitted)
 - `CIRCLE_TOKEN_ID` (preferred) **or** `CIRCLE_TOKEN_ADDRESS` + `CIRCLE_TOKEN_BLOCKCHAIN`
 - `CIRCLE_DESTINATION_ADDRESS`
 

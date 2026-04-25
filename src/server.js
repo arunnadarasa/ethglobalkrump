@@ -1,4 +1,5 @@
 require("dotenv").config();
+const crypto = require("crypto");
 const express = require("express");
 const path = require("path");
 const {
@@ -23,6 +24,7 @@ const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
 const CIRCLE_TOKEN_ID = process.env.CIRCLE_TOKEN_ID || "";
 const CIRCLE_TOKEN_ADDRESS = process.env.CIRCLE_TOKEN_ADDRESS || "";
 const CIRCLE_TOKEN_BLOCKCHAIN = process.env.CIRCLE_TOKEN_BLOCKCHAIN || "ARC-TESTNET";
+const CIRCLE_WALLET_SET_ID = process.env.CIRCLE_WALLET_SET_ID || "";
 
 const ARCTESTNET_CHAIN_ID = process.env.ARC_CHAIN_ID || "5042002";
 const ARCTESTNET_CHAIN_ID_HEX = `0x${Number(ARCTESTNET_CHAIN_ID).toString(16)}`;
@@ -30,6 +32,8 @@ const ARCTESTNET_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.n
 const ARCTESTNET_NAME = process.env.ARC_CHAIN_NAME || "Arc Testnet";
 const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "USDC";
 const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
+let activeCircleWalletId = CIRCLE_WALLET_ID;
+let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -77,8 +81,9 @@ function getRailConfig() {
         treasury_address: ONCHAIN_TREASURY_ADDRESS
       },
       circle: {
-        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID && hasTokenSelector),
-        wallet_id: CIRCLE_WALLET_ID,
+        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && activeCircleWalletId && hasTokenSelector),
+        wallet_id: activeCircleWalletId,
+        wallet_set_id: activeCircleWalletSetId,
         token_id: CIRCLE_TOKEN_ID,
         token_address: CIRCLE_TOKEN_ADDRESS,
         token_blockchain: CIRCLE_TOKEN_BLOCKCHAIN,
@@ -90,8 +95,88 @@ function getRailConfig() {
   };
 }
 
+function makeUuid() {
+  return crypto.randomUUID();
+}
+
+async function circlePost(pathname, payload) {
+  const response = await fetch(`${CIRCLE_API_BASE}${pathname}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CIRCLE_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const text = await response.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch (_error) {
+    body = { raw: text };
+  }
+  if (!response.ok) {
+    const detail = body?.message || body?.error || `Circle API ${response.status}`;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return body;
+}
+
+async function ensureCircleWalletSet(walletSetName) {
+  if (activeCircleWalletSetId) {
+    return activeCircleWalletSetId;
+  }
+  const payload = {
+    idempotencyKey: makeUuid(),
+    entitySecretCiphertext: CIRCLE_ENTITY_SECRET,
+    name: walletSetName || "krump-wallet-set"
+  };
+  const response = await circlePost("/v1/w3s/developer/walletSets", payload);
+  const walletSetId = response?.data?.walletSet?.id || response?.data?.id || null;
+  if (!walletSetId) {
+    throw new Error("Circle wallet set creation succeeded but no wallet set id was returned");
+  }
+  activeCircleWalletSetId = walletSetId;
+  return walletSetId;
+}
+
+async function createCircleWallet({ blockchain, walletSetId, walletName }) {
+  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET) {
+    throw new Error("Circle credentials missing: set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET");
+  }
+  const resolvedWalletSetId = walletSetId || (await ensureCircleWalletSet("krump-wallet-set"));
+  const payload = {
+    idempotencyKey: makeUuid(),
+    entitySecretCiphertext: CIRCLE_ENTITY_SECRET,
+    walletSetId: resolvedWalletSetId,
+    blockchains: [blockchain || "ARC-TESTNET"],
+    accountType: "EOA",
+    count: 1
+  };
+  if (walletName) {
+    payload.metadata = [{ name: walletName }];
+  }
+  const response = await circlePost("/v1/w3s/developer/wallets", payload);
+  const createdWallet =
+    response?.data?.wallets?.[0] ||
+    response?.data?.wallet ||
+    response?.data ||
+    null;
+  const createdWalletId = createdWallet?.id;
+  if (!createdWalletId) {
+    throw new Error("Circle wallet creation succeeded but no wallet id was returned");
+  }
+  activeCircleWalletId = createdWalletId;
+  activeCircleWalletSetId = resolvedWalletSetId;
+  return {
+    wallet: createdWallet,
+    walletSetId: resolvedWalletSetId,
+    raw: response
+  };
+}
+
 async function createCircleTransfer({ amountMinor, memo }) {
-  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !CIRCLE_WALLET_ID) {
+  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !activeCircleWalletId) {
     throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
   }
   const hasTokenId = Boolean(CIRCLE_TOKEN_ID);
@@ -109,11 +194,11 @@ async function createCircleTransfer({ amountMinor, memo }) {
 
   const amount = (amountMinor / 100).toFixed(2);
   const payload = {
-    walletId: CIRCLE_WALLET_ID,
+    walletId: activeCircleWalletId,
     destinationAddress,
     amounts: [amount],
     feeLevel: "MEDIUM",
-    idempotencyKey: helpers.makeId("circle"),
+    idempotencyKey: makeUuid(),
     metadata: {
       memo: memo || "krump-ucp-demo"
     }
@@ -154,6 +239,25 @@ async function createCircleTransfer({ amountMinor, memo }) {
 
 app.get("/api/config", (_req, res) => {
   res.json(getRailConfig());
+});
+
+app.post("/api/circle/wallets/create", async (req, res) => {
+  try {
+    const { blockchain, wallet_set_id, wallet_name } = req.body || {};
+    const created = await createCircleWallet({
+      blockchain: blockchain || "ARC-TESTNET",
+      walletSetId: wallet_set_id || "",
+      walletName: wallet_name || ""
+    });
+    return res.status(201).json({
+      ok: true,
+      active_wallet_id: activeCircleWalletId,
+      active_wallet_set_id: activeCircleWalletSetId,
+      result: created
+    });
+  } catch (error) {
+    return sendError(res, 502, "circle_wallet_create_failed", error.message);
+  }
 });
 
 app.post("/api/payments/circle/transfer", async (req, res) => {

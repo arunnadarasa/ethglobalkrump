@@ -133,6 +133,24 @@ async function loadConfig() {
   print("rail-config", railConfig);
 }
 
+async function createCircleWalletFromUi() {
+  const payload = {
+    wallet_name: document.getElementById("circle-wallet-name").value || "",
+    blockchain: document.getElementById("circle-blockchain").value || "ARC-TESTNET",
+    wallet_set_id: document.getElementById("circle-wallet-set-id").value || ""
+  };
+  const response = await request("/api/circle/wallets/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(response.body?.error?.message || "Failed to create Circle wallet");
+  }
+  print("circle-wallet-output", response.body);
+  await loadConfig();
+}
+
 async function loadTutorials() {
   const data = await request("/api/tutorials");
   const select = document.getElementById("clip-id");
@@ -277,6 +295,14 @@ document.getElementById("connect-metamask").addEventListener("click", async () =
     await connectMetaMask();
   } catch (error) {
     document.getElementById("wallet-status").textContent = `Wallet error: ${error.message}`;
+  }
+});
+
+document.getElementById("create-circle-wallet").addEventListener("click", async () => {
+  try {
+    await createCircleWalletFromUi();
+  } catch (error) {
+    print("circle-wallet-output", { error: error.message });
   }
 });
 
