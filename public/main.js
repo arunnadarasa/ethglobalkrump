@@ -274,6 +274,25 @@ async function getLastAgentSessionFromUi() {
   });
 }
 
+async function evaluateSettlementFromUi() {
+  const amountMinor = Number(document.getElementById("settlement-amount-minor").value || 0);
+  const response = await request("/api/settlement/vyper/evaluate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      agent_id: "payments-agent",
+      amount_minor: amountMinor,
+      intent: "ui_manual_check"
+    })
+  });
+  print("agent-output", {
+    route: "/api/settlement/vyper/evaluate",
+    ok: response.ok,
+    status: response.status,
+    body: response.body
+  });
+}
+
 async function ensureMetaMaskChain() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found in browser");
@@ -686,6 +705,10 @@ document.getElementById("agent-run-session").addEventListener("click", async () 
 
 document.getElementById("agent-get-last-session").addEventListener("click", async () => {
   await getLastAgentSessionFromUi();
+});
+
+document.getElementById("settlement-evaluate").addEventListener("click", async () => {
+  await evaluateSettlementFromUi();
 });
 
 async function bootstrap() {

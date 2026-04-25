@@ -59,6 +59,23 @@ Sub-agents coordinate internally (agent-to-agent), but only the payments sub-age
 
 OpenClaw is optional for this MVP. The current implementation is OpenClaw-compatible by design (session traces + delegated sub-agents), and can later be connected through an external OpenClaw gateway adapter without changing UCP routes.
 
+## Vyper Deep Settlement Slice
+
+This repo now includes a Vyper policy contract and Titanoboa tests for deep settlement checks while preserving UCP as the primary commerce protocol.
+
+- Contract: `contracts/AgentSettlementPolicy.vy`
+- Tests: `tests/titanoboa/test_agent_settlement_policy.py`
+- Python deps: `tests/titanoboa/requirements.txt` (includes `circle-titanoboa-sdk`)
+
+### Runtime toggle
+
+When `ENABLE_VYPER_SETTLEMENT=true`, the app enforces policy checks before Circle transfer execution and also in the agent payments flow:
+
+- `POST /api/settlement/vyper/evaluate` - manual policy evaluation endpoint
+- `GET /api/agents/capabilities` - includes `settlement_mode`
+
+If disabled, default Circle/UCP demo behavior remains active for maximum reliability.
+
 ### Local Run
 
 1. Install dependencies:
@@ -73,10 +90,14 @@ OpenClaw is optional for this MVP. The current implementation is OpenClaw-compat
 ### Project Structure
 
 - `src/server.js` - Express API for tracks, Circle rails, and official UCP endpoints
+- `src/agents/orchestrator.js` - in-repo H2A/A2H/A2A session orchestration
+- `src/settlement/vyperPolicy.js` - deep settlement policy evaluator (Node-side mirror)
 - `src/state.js` - in-memory demo state and helper utilities
 - `public/index.html` - single-page demo UI
 - `public/main.js` - client interactions, wallet rails, onboarding, and balances
 - `public/styles.css` - app styling
+- `contracts/` - Vyper contracts used for settlement policy proofs
+- `tests/titanoboa/` - Titanoboa-based contract tests
 
 ## Wallet Rails
 

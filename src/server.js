@@ -18,6 +18,7 @@ const {
   helpers
 } = require("./state");
 const { makeAgentOrchestrator } = require("./agents/orchestrator");
+const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,8 +41,10 @@ const ARCTESTNET_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.testnet.arc.n
 const ARCTESTNET_NAME = process.env.ARC_CHAIN_NAME || "Arc Testnet";
 const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "USDC";
 const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
+const ENABLE_VYPER_SETTLEMENT = String(process.env.ENABLE_VYPER_SETTLEMENT || "").toLowerCase() === "true";
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
+const vyperSettlement = createVyperSettlementPolicy();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -390,6 +393,16 @@ async function createCircleTransfer({ amountMinor, memo, walletId }) {
   if (!CIRCLE_API_KEY || !resolvedWalletId) {
     throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
   }
+  if (ENABLE_VYPER_SETTLEMENT) {
+    const policyCheck = vyperSettlement.evaluate({
+      agentId: "payments-agent",
+      amountMinor,
+      intent: "circle_transfer"
+    });
+    if (!policyCheck.approved) {
+      throw new Error(`Vyper settlement policy blocked transfer: ${policyCheck.reasons.join(", ")}`);
+    }
+  }
   const rawSecret = CIRCLE_ENTITY_SECRET_RAW || "";
   const fallbackCiphertext = CIRCLE_ENTITY_SECRET_CIPHERTEXT || CIRCLE_ENTITY_SECRET || "";
   const transferCiphertext = rawSecret ? await generateEntitySecretCiphertext(rawSecret) : fallbackCiphertext;
@@ -516,12 +529,29 @@ const agentOrchestrator = makeAgentOrchestrator({
   helpers,
   tutorialClips,
   createCheckout: createUcpCheckoutResponse,
-  getOrderStatus: createUcpOrderResponse
+  getOrderStatus: createUcpOrderResponse,
+  evaluateSettlementPolicy: ENABLE_VYPER_SETTLEMENT ? vyperSettlement.evaluate : null
 });
 
 app.get("/api/agents/capabilities", (_req, res) => {
   return res.json({
-    agents: agentOrchestrator.listCapabilities()
+    agents: {
+      ...agentOrchestrator.listCapabilities(),
+      settlement_mode: ENABLE_VYPER_SETTLEMENT ? "vyper_policy_enabled" : "circle_default"
+    }
+  });
+});
+
+app.post("/api/settlement/vyper/evaluate", (req, res) => {
+  const { agent_id, amount_minor, intent } = req.body || {};
+  const result = vyperSettlement.evaluate({
+    agentId: agent_id || "payments-agent",
+    amountMinor: Number(amount_minor || 0),
+    intent: intent || "manual_check"
+  });
+  return res.json({
+    ok: result.approved,
+    result
   });
 });
 

@@ -1,0 +1,4 @@
+pytest
+titanoboa
+vyper==0.4.0
+git+https://github.com/vyperlang/circle-titanoboa-sdk.git

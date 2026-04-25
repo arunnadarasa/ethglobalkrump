@@ -1,6 +1,6 @@
 "use strict";
 
-function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrderStatus }) {
+function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrderStatus, evaluateSettlementPolicy }) {
   const sessions = new Map();
 
   function appendEvent(session, event) {
@@ -41,6 +41,21 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
   }
 
   function paymentsAgentCheckout(itemId, quantity, context) {
+    const previewAmountMinor = (tutorialClips.find((clip) => clip.id === itemId)?.priceMinor || 100) * quantity;
+    const settlement =
+      typeof evaluateSettlementPolicy === "function"
+        ? evaluateSettlementPolicy({
+            agentId: "payments-agent",
+            amountMinor: previewAmountMinor,
+            intent: context?.intent || "unknown"
+          })
+        : null;
+    if (settlement && !settlement.approved) {
+      const policyError = new Error(`Settlement policy blocked checkout: ${settlement.reasons.join(", ")}`);
+      policyError.code = "settlement_policy_blocked";
+      throw policyError;
+    }
+
     const checkoutRequest = {
       currency: "USD",
       line_items: [{ item: { id: itemId }, quantity }],
@@ -60,7 +75,11 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
         session_hint: String(context?.session_hint || "")
       }
     };
-    return createCheckout(checkoutRequest);
+    const checkout = createCheckout(checkoutRequest);
+    return {
+      checkout,
+      settlement
+    };
   }
 
   function resolveItemId(intent, context) {
@@ -99,19 +118,21 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
 
       const itemId = resolveItemId(intent, context);
       const quantity = Math.max(1, Number(context?.quantity || 1));
-      const checkout = paymentsAgentCheckout(itemId, quantity, {
+      const checkoutResult = paymentsAgentCheckout(itemId, quantity, {
+        intent,
         session_hint: session.id
       });
       appendEvent(session, {
         kind: "payments_agent",
         message: "UCP checkout created.",
         data: {
-          checkout_id: checkout?.checkout?.id || null,
-          total_minor: checkout?.checkout?.total_minor || null
+          checkout_id: checkoutResult?.checkout?.checkout?.id || null,
+          total_minor: checkoutResult?.checkout?.checkout?.total_minor || null,
+          settlement: checkoutResult?.settlement || null
         }
       });
 
-      const order = getOrderStatus(checkout?.checkout?.id || helpers.makeId("ucp-order"));
+      const order = getOrderStatus(checkoutResult?.checkout?.checkout?.id || helpers.makeId("ucp-order"));
       appendEvent(session, {
         kind: "payments_agent",
         message: "UCP order status fetched.",
