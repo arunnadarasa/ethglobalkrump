@@ -278,10 +278,23 @@ async function createCircleWallet({ blockchain, walletSetId, walletName, entityS
   };
 }
 
-async function createCircleTransfer({ amountMinor, memo }) {
-  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !activeCircleWalletId) {
+async function createCircleTransfer({ amountMinor, memo, walletId }) {
+  const resolvedWalletId = walletId || activeCircleWalletId || CIRCLE_WALLET_ID;
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T5',location:'src/server.js:createCircleTransfer:entry',message:'Create circle transfer called',data:{amountMinor,hasApiKey:Boolean(CIRCLE_API_KEY),hasEntitySecret:Boolean(CIRCLE_ENTITY_SECRET),hasActiveWalletId:Boolean(activeCircleWalletId),hasResolvedWalletId:Boolean(resolvedWalletId),activeWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null,resolvedWalletIdPrefix:resolvedWalletId?String(resolvedWalletId).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!CIRCLE_API_KEY || !resolvedWalletId) {
     throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
   }
+  const rawSecret = CIRCLE_ENTITY_SECRET_RAW || "";
+  const fallbackCiphertext = CIRCLE_ENTITY_SECRET_CIPHERTEXT || CIRCLE_ENTITY_SECRET || "";
+  const transferCiphertext = rawSecret ? await generateEntitySecretCiphertext(rawSecret) : fallbackCiphertext;
+  if (!transferCiphertext) {
+    throw new Error(
+      "Circle transfer requires entity secret material: set CIRCLE_ENTITY_SECRET_RAW or CIRCLE_ENTITY_SECRET_CIPHERTEXT."
+    );
+  }
+  activeCircleWalletId = resolvedWalletId;
   const hasTokenId = Boolean(CIRCLE_TOKEN_ID);
   const hasTokenAddressSelector = Boolean(CIRCLE_TOKEN_ADDRESS && CIRCLE_TOKEN_BLOCKCHAIN);
   if (!hasTokenId && !hasTokenAddressSelector) {
@@ -297,7 +310,8 @@ async function createCircleTransfer({ amountMinor, memo }) {
 
   const amount = (amountMinor / 100).toFixed(2);
   const payload = {
-    walletId: activeCircleWalletId,
+    walletId: resolvedWalletId,
+    entitySecretCiphertext: transferCiphertext,
     destinationAddress,
     amounts: [amount],
     feeLevel: "MEDIUM",
@@ -312,6 +326,9 @@ async function createCircleTransfer({ amountMinor, memo }) {
     payload.tokenAddress = CIRCLE_TOKEN_ADDRESS;
     payload.blockchain = CIRCLE_TOKEN_BLOCKCHAIN;
   }
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v2',hypothesisId:'T8',location:'src/server.js:createCircleTransfer:payload',message:'Circle transfer payload prepared',data:{walletIdPrefix:String(payload.walletId||'').slice(0,8),amounts:payload.amounts,hasEntitySecretCiphertext:Boolean(payload.entitySecretCiphertext),hasTokenId:Boolean(payload.tokenId),hasTokenAddress:Boolean(payload.tokenAddress),blockchain:payload.blockchain||null,destinationPrefix:String(payload.destinationAddress||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const response = await fetch(`${CIRCLE_API_BASE}${CIRCLE_TRANSFER_PATH}`, {
     method: "POST",
@@ -330,6 +347,9 @@ async function createCircleTransfer({ amountMinor, memo }) {
     body = { raw: text };
   }
   if (!response.ok) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v2',hypothesisId:'T9',location:'src/server.js:createCircleTransfer:api-error',message:'Circle API rejected transfer payload',data:{status:response.status,bodyKeys:Object.keys(body||{}),errorMessage:body?.message||body?.error||null,errorCode:body?.code||body?.errorCode||null,errors:body?.errors||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const detail = body?.message || body?.error || `Circle API ${response.status}`;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
@@ -402,11 +422,14 @@ app.post("/api/circle/entity-secret-ciphertext/generate", async (req, res) => {
 
 app.post("/api/payments/circle/transfer", async (req, res) => {
   try {
-    const { amount_minor, memo } = req.body || {};
+    const { amount_minor, memo, wallet_id } = req.body || {};
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T6',location:'src/server.js:/api/payments/circle/transfer:entry',message:'Circle transfer endpoint called',data:{amountMinor:amount_minor||null,hasApiKey:Boolean(CIRCLE_API_KEY),hasEntitySecret:Boolean(CIRCLE_ENTITY_SECRET),hasActiveWalletId:Boolean(activeCircleWalletId),hasWalletIdFromRequest:Boolean(wallet_id),envWalletIdPrefix:CIRCLE_WALLET_ID?String(CIRCLE_WALLET_ID).slice(0,8):null,activeWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null,walletIdFromRequestPrefix:wallet_id?String(wallet_id).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!Number.isInteger(amount_minor) || amount_minor < 1) {
       return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
     }
-    const transfer = await createCircleTransfer({ amountMinor: amount_minor, memo });
+    const transfer = await createCircleTransfer({ amountMinor: amount_minor, memo, walletId: wallet_id || "" });
     return res.status(201).json({
       payment_mode: "circle_wallet",
       amount_minor,
@@ -414,6 +437,9 @@ app.post("/api/payments/circle/transfer", async (req, res) => {
       transfer
     });
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T7',location:'src/server.js:/api/payments/circle/transfer:error',message:'Circle transfer endpoint failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return sendError(res, 502, "circle_transfer_failed", error.message);
   }
 });

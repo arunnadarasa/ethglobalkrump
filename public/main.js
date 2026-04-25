@@ -248,11 +248,22 @@ async function sendMetaMaskPayment(amountMinor) {
 }
 
 async function sendCirclePayment(amountMinor, memo) {
+  const savedWalletId =
+    lastCreatedCircleWallet?.walletId ||
+    railConfig?.rails?.circle?.wallet_id ||
+    getWalletDetailsFromOutputPane()?.walletId ||
+    null;
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T2',location:'public/main.js:sendCirclePayment:entry',message:'Sending circle payment request',data:{amountMinor,memo:memo||null,hasSavedWalletId:Boolean(savedWalletId),savedWalletIdPrefix:savedWalletId?String(savedWalletId).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   const response = await request("/api/payments/circle/transfer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount_minor: amountMinor, memo })
+    body: JSON.stringify({ amount_minor: amountMinor, memo, wallet_id: savedWalletId })
   });
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T3',location:'public/main.js:sendCirclePayment:response',message:'Circle payment response received',data:{ok:response.ok,status:response.status,hasError:Boolean(response.body?.error),errorMessage:response.body?.error?.message||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!response.ok) {
     throw new Error(response.body?.error?.message || "Circle transfer failed");
   }
@@ -397,6 +408,9 @@ document.getElementById("tip-form").addEventListener("submit", async (event) => 
   try {
     const amountMinor = Number(document.getElementById("tip-amount").value);
     const mode = document.getElementById("tip-mode").value;
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T1',location:'public/main.js:tip-form:submit',message:'Tip form submitted',data:{mode,amountMinor,dancerId:document.getElementById("dancer-id").value},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const payment = await resolvePaymentReference(mode, amountMinor, "u1-tip");
     const payload = {
       fan_name: document.getElementById("fan-name").value || "Anonymous",
@@ -413,6 +427,9 @@ document.getElementById("tip-form").addEventListener("submit", async (event) => 
     print("leaderboard", { payment_receipt: payment.receipt, app_response: data.body });
     await refreshLeaderboard();
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T4',location:'public/main.js:tip-form:error',message:'Tip flow failed in client',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     print("leaderboard", { error: error.message });
   }
 });
