@@ -71,9 +71,9 @@ function makeAgentOrchestrator({
           {
             id: "agent-instrument-1",
             handler_id: "agentic",
-            type: "wallet",
-            brand: "demo",
-            last_digits: "0000"
+            type: "card",
+            brand: "visa",
+            last_digits: "4242"
           }
         ],
         selected_instrument_id: "agent-instrument-1"

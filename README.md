@@ -98,6 +98,19 @@ Use the helper script to deploy the Vyper policy contract:
 3. Copy deployed address into:
    - `VYPER_SETTLEMENT_CONTRACT`
 
+### Arc deployment proof (bonus credibility)
+
+- Network: Arc testnet (`chainId` `0x4cef52`)
+- Contract: `0xEb5c12779Ac3E7623645B0519F25E0924Fc58ea7`
+- Deploy tx: `0x5a1601efa89da876cfbf0dc3ff989306483cf6cc37d11d95a150e6b22877f93a`
+- Owner: `0x3fce8a30a63A024eb41156344c1818fa1aB57133`
+
+The runtime can enforce this by setting `ENABLE_VYPER_SETTLEMENT=true` and `VYPER_SETTLEMENT_CONTRACT` to the deployed address.
+
+### Demo-safe fallback
+
+If testnet RPC or key issues appear close to demo time, set `ENABLE_VYPER_SETTLEMENT=false` temporarily. Keep the deployment proof above in submission notes and continue demoing on UCP core + Circle rails.
+
 ### Local Run
 
 1. Install dependencies:
