@@ -14,7 +14,7 @@ Recreate the app **functionally equivalent** to this specification. Prefer clari
 
 ## Tech stack (must match)
 
-- **Backend:** Node.js + Express + `dotenv`
+- **Backend:** Node.js **20+** + Express + `dotenv` (see `package.json`: `@ucp-js/sdk`, `express`, `dotenv`; scripts `start` + `dev`)
 - **UCP:** `@ucp-js/sdk` Zod schemas:
   - `CheckoutCreateRequestSchema`
   - `UcpCheckoutResponseSchema`
@@ -90,7 +90,14 @@ docs/*                        # optional marketing/pitch md
 ### Config
 
 - `GET /api/config`  
-  Returns `rails.metamask` + `rails.circle` booleans and config needed by UI (chain id hex, rpc, treasury, token selector, circle paths).
+  Returns `rails` object shaped like the reference:
+  - `rails.metamask`: `{ chain_id, chain_id_hex, chain_name, rpc_url, symbol, treasury_address }`
+  - `rails.circle.enabled` is `true` only when **all** are true:
+    - `CIRCLE_API_KEY` non-empty
+    - `CIRCLE_ENTITY_SECRET` non-empty (used as `X-Entity-Secret` on transfer)
+    - `activeCircleWalletId` resolved (env `CIRCLE_WALLET_ID` or last created wallet id)
+    - token selector present: **`CIRCLE_TOKEN_ID` OR (`CIRCLE_TOKEN_ADDRESS` + `CIRCLE_TOKEN_BLOCKCHAIN`)**
+  - Also include `wallet_id`, `wallet_set_id`, token fields, `destination_address` (fallback to treasury), `api_base`, `transfer_path`.
 
 ### UCP (official stack)
 
@@ -101,10 +108,15 @@ docs/*                        # optional marketing/pitch md
   - Validate body with `CheckoutCreateRequestSchema`.
   - Map each `line_items[].item.id` to tutorial clip price if known; else default unit `100` minor.
   - Build response validated by `UcpCheckoutResponseSchema` and include `checkout` object with `id`, `currency`, `line_items` (normalized), `total_minor`, `total_usd`, `status: created`.
+  - **Normalized line item shape** (demo-specific, but must match):
+    - `{ item_id, quantity, unit_minor, line_total_minor }` where `line_total_minor = unit_minor * quantity`
+  - `checkout.id` should be generated like `ucp-checkout-<random>`.
 
 - `GET /api/ucp/orders/:orderId`  
   - Validate envelope with `UcpOrderResponseSchema`.
-  - If `orderId` matches a stored payment id, reflect its status; else `unknown`.
+  - `order.id` equals the `:orderId` path param.
+  - `order.status` is `payments[].status` when a payment row exists with `id === orderId`, else `"unknown"`.
+  - When known, also include `payment_mode`, `amount_minor`, `amount_usd`.
 
 - `GET /api/ucp/conformance/self-test`  
   Returns `{ ok, source: "@ucp-js/sdk", checks: { checkout_create_request, checkout_response, order_response } }`.
@@ -117,6 +129,7 @@ docs/*                        # optional marketing/pitch md
   - `settlement_mode` (`vyper_policy_enabled` if `ENABLE_VYPER_SETTLEMENT=true`, else `circle_default`)
   - intents: `tip_dancer`, `unlock_clip`, `battle_entry`
   - `sub_agents`, `ucp_core_dependency: true`
+  - Also include `version`, `model: "openclaw-style-inrepo"`, `optional_gateway_adapter: true` (parity with reference).
 
 - `GET /api/agents/identity`  
   Returns `{ ok, identity: { standard: "erc-8004-style", agent_registry, agent_id, token_uri, capabilities_uri } }` (nulls allowed).
@@ -133,6 +146,14 @@ docs/*                        # optional marketing/pitch md
   - If `ENABLE_VYPER_SETTLEMENT`: call `vyperPolicy.evaluate` before checkout with `{ agentId: "payments-agent", amountMinor: previewTotal, intent }`; block with `502` + failed session if not approved.
   - Then fetch order status for checkout id.
   - Return `201` if completed, `502` if failed.
+  - **Orchestrator behavior details (must match):**
+    - Trace events are `{ id: evt-<random>, at: ISO8601, ...fields }`.
+    - `fanAgentForTip`: reads `context.dancer_id` default `dancer-1`, `context.amount_minor` default `25`, returns `{ action: "propose_tip", dancer_id, quantity: ceil(amount_minor/100) }` with quantity at least 1.
+    - `dancerAgentForBattle`: returns `{ action: "confirm_battle_entry", dancer_name: context.dancer_name || "Guest Dancer", wallet: context.wallet || zero address }`.
+    - `resolveItemId`: `unlock_clip` uses `context.clip_id || "clip-1"`; `battle_entry` uses `context.clip_id || "clip-2"`; others default `context.clip_id || "clip-1"`.
+    - `quantity = max(1, Number(context.quantity || 1))`.
+    - `previewAmountMinor = (clip.priceMinor || 100) * quantity` (clip lookup by id).
+    - On success: `session.status = "completed"` and `session.summary` is a short human string; on error: `failed` + `{kind:"error", message}`.
 
 - `GET /api/agents/sessions/:sessionId`  
   Return stored session or 404.
@@ -141,6 +162,11 @@ docs/*                        # optional marketing/pitch md
 
 - `POST /api/settlement/vyper/evaluate` body `{ agent_id?, amount_minor, intent? }`  
   Always returns evaluation JSON with `ok` + `result` including `policy` + `proof` (include `settlement_contract` + `identity_registry` from env when set).
+  - **Node-side policy mirror** (when `ENABLE_VYPER_SETTLEMENT` is used by checkout/transfer/orchestrator):
+    - Track per-agent spend in-memory (`spentByAgent` map).
+    - Reject if amount not integer `<1`, `> VYPER_POLICY_MAX_TICKET_MINOR`, or would exceed `VYPER_POLICY_DAILY_CAP_MINOR` for that agent.
+    - On approval, increment ledger; on rejection, do not increment.
+    - `proof` includes `intent`, `spent_before_minor`, `spent_after_minor`.
 
 ### Circle onboarding + transfers
 
@@ -148,8 +174,24 @@ docs/*                        # optional marketing/pitch md
 - `POST /api/circle/entity-secret-ciphertext/generate`
 - `GET /api/circle/wallets/:walletId/balances` (try multiple candidate paths like the reference)
 - `POST /api/payments/circle/transfer`  
-  - If `ENABLE_VYPER_SETTLEMENT`, enforce policy before calling Circle.
-  - Use `fetch` to Circle transfer endpoint with `Authorization: Bearer` + `X-Entity-Secret`.
+  - If `ENABLE_VYPER_SETTLEMENT`, enforce policy **inside transfer** too (`evaluate({ agentId:"payments-agent", amountMinor, intent:"circle_transfer" })`) and throw if blocked.
+  - Use `fetch` to `${CIRCLE_API_BASE}${CIRCLE_TRANSFER_PATH}` with `Authorization: Bearer` + `X-Entity-Secret: CIRCLE_ENTITY_SECRET`.
+  - Request JSON must include `walletId`, fresh `entitySecretCiphertext` (prefer generating from `CIRCLE_ENTITY_SECRET_RAW` via Circle public key RSA-OAEP-SHA256), `destinationAddress` (`CIRCLE_DESTINATION_ADDRESS` else treasury), `amounts: [(amountMinor/100).toFixed(2)]`, `feeLevel: "MEDIUM"`, `idempotencyKey: uuid`, `metadata.memo`.
+  - Token: `tokenId` if set, else `tokenAddress` + `blockchain`.
+
+**Circle wallet create rules (must match reference quirks):**
+
+- Requires `CIRCLE_API_KEY`.
+- Accepts `entity_secret_raw` **or** `entity_secret_ciphertext` (or env fallbacks).
+- If `wallet_set_id` missing:
+  - If only ciphertext path (no raw secret): **error** telling user raw secret is needed to auto-generate unique ciphertexts for wallet set bootstrap.
+  - If raw secret exists: generate ciphertext, create wallet set via `/v1/w3s/developer/walletSets` when none cached, then create wallet via `/v1/w3s/developer/wallets` with `blockchains: [<blockchain>]`, `accountType: "EOA"`, `count: 1`.
+- Response should echo `active_wallet_id` / `active_wallet_set_id` after creation.
+
+**Entity secret ciphertext generation:**
+
+- `POST /api/circle/entity-secret-ciphertext/generate` uses `GET /v1/w3s/config/entity/publicKey` then RSA-OAEP-SHA256 encrypt.
+- Accept entity secret as **64-char hex (32 bytes)** or **base64 that decodes to 32 bytes**.
 
 ### Domain tracks
 
@@ -170,6 +212,76 @@ docs/*                        # optional marketing/pitch md
 - `POST /api/battle/register`
 - `POST /api/battle/close`
 - `POST /api/battle/declare-winner`
+
+### In-memory seed data (must match)
+
+**Dancers (`dancers`)**
+
+- `dancer-1` NOVA tipsMinor 0
+- `dancer-2` SHADOW tipsMinor 0
+- `dancer-3` RAWFIRE tipsMinor 0
+
+**Tutorial clips (`tutorialClips`)**
+
+- `clip-1` Chest Pop Fundamentals — 25 minor — NOVA
+- `clip-2` Arm Swing Variations — 40 minor — SHADOW
+- `clip-3` Stomp Timing and Control — 30 minor — RAWFIRE
+
+**Other stores**
+
+- `payments[]`, `entries[]`, `payouts[]`
+- `unlocks` map: `unlockToken -> Set(clipId)`
+- `battleClosed` boolean toggled by `/api/battle/close`
+
+### Domain endpoint contracts (must match)
+
+**`GET /api/tips/leaderboard`**
+
+- Returns `{ track:"U1", leaderboard:[{id,name,tips_minor,tips_usd}], settlement_network:"Arc_Testnet", payment_rail:"Circle_Gateway_Nanopayments" }` (leaderboard sorted desc by tips).
+
+**`POST /api/tips`**
+
+- Body `{ fan_name?, dancer_id, amount_minor:int>=1, payment_mode?, payment_ref? }`
+- Errors: unknown dancer `404`, bad amount `400`
+- Side effects: increment `dancer.tipsMinor`, push payment `{ id: tip-<rand>, type:"tip", fan_name, dancer_id, amount_minor, payment_mode default offchain_demo, payment_ref, status:"authorized_offchain", created_at }`
+- Response `201` includes `payment_id`, `amount_usd`, dancer subset, `gateway` object, refreshed leaderboard.
+
+**`GET /api/tutorials`**
+
+- `{ track:"U2", tutorials: clips + price_usd }`
+
+**`GET /api/tutorials/:clipId`**
+
+- Locked unless unlock token contains clip:
+  - Accept token via header `x-unlock-token` **or** query `unlock_token`
+  - If locked: `402` with `{ error:{code:"payment_required",...}, payment:{ protocol:"x402", amount_minor, amount_usd, seller } }`
+  - If unlocked: `200` with clip + fixed `content` object (use the reference copy).
+
+**`POST /api/tutorials/:clipId/pay`**
+
+- Body `{ buyer_name?, payment_mode?, payment_ref? }`
+- Creates `unlock_token` like `unlock-<rand>`, stores `unlocks.set(token, Set(clipId))`, pushes payment `{ type:"tutorial_unlock", clip_id, buyer_name, amount_minor: clip.priceMinor, status:"authorized_offchain", ... }`
+- Response includes `unlock_token` + amounts.
+
+**`GET /api/battle`**
+
+- `{ track:"U5", battle_closed, entrants: entries, total_pool_minor, total_pool_usd, payouts }`
+
+**`POST /api/battle/register`**
+
+- If `battle_closed`: `409`
+- Requires `dancer_name` + `wallet` strings
+- `entry_fee_minor` must be integer `>= 100`
+- Push entry `{ id: entry-<rand>, dancer_name, wallet, entry_fee_minor, entry_fee_usd, paid_via default offchain_demo, payment_ref, created_at }`
+
+**`POST /api/battle/close`**
+
+- Sets `battle_closed=true`, returns confirmation JSON.
+
+**`POST /api/battle/declare-winner`**
+
+- Body `{ winner_entry_id }` must match an entrant
+- Payout amount is **sum of all entry fees** (full pool), pushes payout `{ id: payout-<rand>, winner_entry_id, winner_name, winner_wallet, amount_minor, amount_usd, chain:"Arc_Testnet", settlement_status:"submitted", created_at }`
 
 ### Health
 
