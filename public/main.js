@@ -66,6 +66,139 @@ function toHexWeiFromMinor(minor) {
   return `0x${wei.toString(16)}`;
 }
 
+function formatUnits(value, decimals) {
+  const base = 10n ** BigInt(decimals);
+  const whole = value / base;
+  const frac = value % base;
+  if (frac === 0n) {
+    return whole.toString();
+  }
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole.toString()}.${fracStr}`;
+}
+
+async function getNativeBalanceFromMetaMask() {
+  await connectMetaMask();
+  const hexBalance = await window.ethereum.request({
+    method: "eth_getBalance",
+    params: [connectedAccount, "latest"]
+  });
+  const wei = BigInt(hexBalance);
+  return {
+    account: connectedAccount,
+    amount: formatUnits(wei, 18),
+    symbol: railConfig?.rails?.metamask?.symbol || "NATIVE",
+    source: "eth_getBalance"
+  };
+}
+
+function erc20BalanceOfCallData(address) {
+  return `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
+}
+
+async function getErc20BalanceFromMetaMask(tokenAddress) {
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M1',location:'public/main.js:getErc20BalanceFromMetaMask:entry',message:'MetaMask USDC balance request started',data:{hasTokenAddress:Boolean(tokenAddress),tokenAddressPrefix:tokenAddress?tokenAddress.slice(0,10):null,hasEthereum:Boolean(window.ethereum)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!tokenAddress || !window.ethereum) {
+    return null;
+  }
+  await connectMetaMask();
+  let callResult = "0x0";
+  try {
+    callResult = await window.ethereum.request({
+      method: "eth_call",
+      params: [
+        {
+          to: tokenAddress,
+          data: erc20BalanceOfCallData(connectedAccount)
+        },
+        "latest"
+      ]
+    });
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M3',location:'public/main.js:getErc20BalanceFromMetaMask:balanceof-failed',message:'MetaMask balanceOf eth_call failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw error;
+  }
+  const rawBalance = BigInt(callResult || "0x0");
+  // Try decimals(), fallback to 6 for USDC-like tokens on testnets.
+  let decimals = 6;
+  try {
+    const decimalsResult = await window.ethereum.request({
+      method: "eth_call",
+      params: [
+        {
+          to: tokenAddress,
+          data: "0x313ce567"
+        },
+        "latest"
+      ]
+    });
+    decimals = Number(BigInt(decimalsResult || "0x6"));
+  } catch (_error) {
+    decimals = 6;
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M4',location:'public/main.js:getErc20BalanceFromMetaMask:success',message:'MetaMask USDC balance fetched',data:{decimals,rawBalanceHex:`0x${rawBalance.toString(16)}`},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return {
+    account: connectedAccount,
+    token_address: tokenAddress,
+    amount: formatUnits(rawBalance, decimals),
+    decimals,
+    symbol: "USDC",
+    source: "eth_call.balanceOf"
+  };
+}
+
+async function getCircleWalletBalance() {
+  const walletId =
+    railConfig?.rails?.circle?.wallet_id || lastCreatedCircleWallet?.walletId || null;
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B1',location:'public/main.js:getCircleWalletBalance:entry',message:'Requesting Circle wallet balance',data:{hasWalletId:Boolean(walletId),walletIdPrefix:walletId?walletId.slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!walletId) {
+    throw new Error("No Circle wallet id available. Create/save a Circle wallet first.");
+  }
+  const response = await request(`/api/circle/wallets/${walletId}/balances`);
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v2',hypothesisId:'B6',location:'public/main.js:getCircleWalletBalance:response',message:'Circle balance HTTP response received',data:{ok:response.ok,status:response.status,bodyType:typeof response.body,hasErrorObject:Boolean(response.body?.error),hasMessage:Boolean(response.body?.error?.message||response.body?.message)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!response.ok) {
+    throw new Error(response.body?.error?.message || "Failed to fetch Circle wallet balance");
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B2',location:'public/main.js:getCircleWalletBalance:success',message:'Circle wallet balance response received',data:{balanceCount:Array.isArray(response.body?.balances)?response.body.balances.length:-1,source:response.body?.balance_source||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return response.body;
+}
+
+async function refreshBalances() {
+  try {
+    const native = await getNativeBalanceFromMetaMask();
+    const tokenAddress = railConfig?.rails?.circle?.token_address || "";
+    const usdcToken = await getErc20BalanceFromMetaMask(tokenAddress);
+    const circle = await getCircleWalletBalance();
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M2',location:'public/main.js:refreshBalances:combined-success',message:'Combined balances fetched',data:{hasNative:Boolean(native),hasUsdcToken:Boolean(usdcToken),hasCircle:Boolean(circle)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    print("balances-output", {
+      metamask: {
+        native_balance: native,
+        usdc_token_balance: usdcToken
+      },
+      circle_wallet: circle
+    });
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M5',location:'public/main.js:refreshBalances:error',message:'Refresh balances failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    print("balances-output", { error: error.message });
+  }
+}
+
 async function ensureMetaMaskChain() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found in browser");
@@ -440,9 +573,16 @@ document.getElementById("save-circle-wallet").addEventListener("click", async ()
   await saveCircleWalletFromUi();
 });
 
+document.getElementById("refresh-balances").addEventListener("click", async () => {
+  await refreshBalances();
+});
+
 async function bootstrap() {
   await loadConfig();
   hydrateSavedCircleWallet();
+  print("balances-output", {
+    info: "Connect MetaMask and click Refresh Balances to load MetaMask and Circle wallet USDC balances."
+  });
   await refreshLeaderboard();
   await loadTutorials();
   await refreshBattle();
