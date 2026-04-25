@@ -1,6 +1,13 @@
 "use strict";
 
-function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrderStatus, evaluateSettlementPolicy }) {
+function makeAgentOrchestrator({
+  helpers,
+  tutorialClips,
+  createCheckout,
+  getOrderStatus,
+  evaluateSettlementPolicy,
+  getAgentIdentity
+}) {
   const sessions = new Map();
 
   function appendEvent(session, event) {
@@ -93,10 +100,12 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
   }
 
   function runSession(intent, context) {
+    const identity = typeof getAgentIdentity === "function" ? getAgentIdentity() : null;
     const session = {
       id: helpers.makeId("agent-session"),
       intent,
       context: context || {},
+      identity,
       created_at: helpers.nowIso(),
       updated_at: helpers.nowIso(),
       trace: [],
@@ -104,6 +113,13 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
     };
     sessions.set(session.id, session);
     appendEvent(session, { kind: "orchestrator", message: "Session started." });
+    if (identity) {
+      appendEvent(session, {
+        kind: "identity",
+        message: "Attached ERC-8004 style agent identity metadata.",
+        data: identity
+      });
+    }
 
     try {
       if (intent === "tip_dancer") {
@@ -160,6 +176,7 @@ function makeAgentOrchestrator({ helpers, tutorialClips, createCheckout, getOrde
       version: "1.0.0",
       model: "openclaw-style-inrepo",
       optional_gateway_adapter: true,
+      identity_enabled: Boolean(getAgentIdentity && getAgentIdentity()?.agent_registry),
       intents: [
         { id: "tip_dancer", description: "Fan to agent tip flow over UCP checkout" },
         { id: "unlock_clip", description: "Agent-driven tutorial unlock checkout" },

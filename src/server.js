@@ -42,6 +42,10 @@ const ARCTESTNET_NAME = process.env.ARC_CHAIN_NAME || "Arc Testnet";
 const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "USDC";
 const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
 const ENABLE_VYPER_SETTLEMENT = String(process.env.ENABLE_VYPER_SETTLEMENT || "").toLowerCase() === "true";
+const ERC8004_AGENT_REGISTRY = process.env.ERC8004_AGENT_REGISTRY || "";
+const ERC8004_AGENT_ID = process.env.ERC8004_AGENT_ID || "";
+const ERC8004_AGENT_TOKEN_URI = process.env.ERC8004_AGENT_TOKEN_URI || "";
+const ERC8004_AGENT_CAPABILITIES_URI = process.env.ERC8004_AGENT_CAPABILITIES_URI || "";
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 const vyperSettlement = createVyperSettlementPolicy();
@@ -103,6 +107,16 @@ function getRailConfig() {
         transfer_path: CIRCLE_TRANSFER_PATH
       }
     }
+  };
+}
+
+function getAgentIdentityMetadata() {
+  return {
+    standard: "erc-8004-style",
+    agent_registry: ERC8004_AGENT_REGISTRY || null,
+    agent_id: ERC8004_AGENT_ID || null,
+    token_uri: ERC8004_AGENT_TOKEN_URI || null,
+    capabilities_uri: ERC8004_AGENT_CAPABILITIES_URI || null
   };
 }
 
@@ -530,7 +544,8 @@ const agentOrchestrator = makeAgentOrchestrator({
   tutorialClips,
   createCheckout: createUcpCheckoutResponse,
   getOrderStatus: createUcpOrderResponse,
-  evaluateSettlementPolicy: ENABLE_VYPER_SETTLEMENT ? vyperSettlement.evaluate : null
+  evaluateSettlementPolicy: ENABLE_VYPER_SETTLEMENT ? vyperSettlement.evaluate : null,
+  getAgentIdentity: getAgentIdentityMetadata
 });
 
 app.get("/api/agents/capabilities", (_req, res) => {
@@ -539,6 +554,13 @@ app.get("/api/agents/capabilities", (_req, res) => {
       ...agentOrchestrator.listCapabilities(),
       settlement_mode: ENABLE_VYPER_SETTLEMENT ? "vyper_policy_enabled" : "circle_default"
     }
+  });
+});
+
+app.get("/api/agents/identity", (_req, res) => {
+  return res.json({
+    ok: true,
+    identity: getAgentIdentityMetadata()
   });
 });
 

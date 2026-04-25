@@ -241,6 +241,16 @@ async function loadAgentCapabilitiesFromUi() {
   });
 }
 
+async function loadAgentIdentityFromUi() {
+  const response = await request("/api/agents/identity");
+  print("agent-output", {
+    route: "/api/agents/identity",
+    ok: response.ok,
+    status: response.status,
+    body: response.body
+  });
+}
+
 async function runAgentSessionFromUi() {
   const intent = document.getElementById("agent-intent").value;
   const context = parseAgentContext();
@@ -693,6 +703,9 @@ document.getElementById("ucp-run-sample-checkout").addEventListener("click", asy
 
 document.getElementById("agent-load-capabilities").addEventListener("click", async () => {
   await loadAgentCapabilitiesFromUi();
+});
+document.getElementById("agent-load-identity").addEventListener("click", async () => {
+  await loadAgentIdentityFromUi();
 });
 
 document.getElementById("agent-run-session").addEventListener("click", async () => {

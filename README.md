@@ -52,6 +52,7 @@ This app now supports in-repo agent orchestration while keeping UCP as the comme
 - `POST /api/agents/sessions` - runs intent-driven human-to-agent sessions
 - `GET /api/agents/sessions/:sessionId` - fetches agent trace for agent-to-human visibility
 - `GET /api/agents/capabilities` - returns supported intents and sub-agent model
+- `GET /api/agents/identity` - returns ERC-8004 style identity metadata configured in env
 
 Sub-agents coordinate internally (agent-to-agent), but only the payments sub-agent executes checkout and order calls via the existing UCP response builders.
 
@@ -76,6 +77,27 @@ When `ENABLE_VYPER_SETTLEMENT=true`, the app enforces policy checks before Circl
 
 If disabled, default Circle/UCP demo behavior remains active for maximum reliability.
 
+### ERC-8004 style identity metadata
+
+When configured, agent sessions include identity metadata and emit a dedicated identity trace event:
+
+- `ERC8004_AGENT_REGISTRY`
+- `ERC8004_AGENT_ID`
+- `ERC8004_AGENT_TOKEN_URI`
+- `ERC8004_AGENT_CAPABILITIES_URI`
+
+### Optional deploy to Arc
+
+Use the helper script to deploy the Vyper policy contract:
+
+1. Set env:
+   - `ARC_RPC_URL`
+   - `DEPLOYER_PRIVATE_KEY`
+2. Run:
+   - `python3 scripts/deploy_vyper_policy.py`
+3. Copy deployed address into:
+   - `VYPER_SETTLEMENT_CONTRACT`
+
 ### Local Run
 
 1. Install dependencies:
@@ -98,6 +120,7 @@ If disabled, default Circle/UCP demo behavior remains active for maximum reliabi
 - `public/styles.css` - app styling
 - `contracts/` - Vyper contracts used for settlement policy proofs
 - `tests/titanoboa/` - Titanoboa-based contract tests
+- `scripts/deploy_vyper_policy.py` - optional Arc deployment helper for Vyper policy
 
 ## Wallet Rails
 
