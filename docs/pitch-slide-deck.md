@@ -27,8 +27,9 @@ Speaker note: Existing solutions force a tradeoff between agent intelligence and
 - Agent orchestration layer for H2A, A2A, A2H.
 - Vyper settlement policy for enforcement credibility.
 - Circle + Arc rails for practical payment operations.
+- **KeeperHub** (ETHGlobal OpenAgents sponsor): optional direct execution on Arc for battle payout / demos — additive, not a replacement for UCP or Circle.
 
-Speaker note: We did not replace standards. We composed them.
+Speaker note: We did not replace standards. We composed them, then layered sponsor-grade execution where it helps.
 
 ---
 
@@ -57,10 +58,12 @@ flowchart LR
   Payments --> UcpOrder["GET /api/ucp/orders/:id"]
   Payments --> Settlement["VyperPolicyCheck"]
   Settlement --> Arc["ArcTestnetContract"]
+  U5Payout[U5DeclareWinner] --> KeeperHub["KeeperHubExecute"]
+  KeeperHub --> ArcTransfer["ArcTokenTransfer"]
   Orchestrator --> Trace[A2HTrace]
 ```
 
-Speaker note: Payments agent is the constrained executor; UCP remains the contract for commerce semantics.
+Speaker note: Payments agent is the constrained executor; UCP remains the contract for commerce semantics. KeeperHub is the optional reliability layer when we push the prize pool on-chain.
 
 ---
 
@@ -88,14 +91,15 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 
 ## Slide 8 - Live Demo Script (2-3 min)
 
-1. Show `GET /api/agents/capabilities` and settlement mode.
+1. Show `GET /api/agents/capabilities` — settlement mode + `keeperhub_execution` when configured.
 2. Show `GET /api/agents/identity` (ERC-8004 style metadata).
 3. Run `tip_dancer` agent session.
 4. Highlight trace events and settlement proof.
 5. Show UCP checkout/order endpoints.
-6. Show Arc deployment proof in README.
+6. **KeeperHub:** `GET /api/keeperhub/status` (Arc in chain list), optional demo transfer or U5 payout with checkbox.
+7. Show Arc deployment proof in README.
 
-Speaker note: Keep pace fast. Focus on trust signals and interoperability.
+Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (KeeperHub executes; UCP decides commerce shape).
 
 ---
 
@@ -126,6 +130,8 @@ Speaker note: We already have the core stack. Next is distribution and integrati
 
 - UCP endpoints in `src/server.js`
 - Agent orchestration in `src/agents/orchestrator.js`
+- KeeperHub client in `src/keeperhub/client.js`; routes `/api/keeperhub/*` and `execute_via_keeperhub` on declare-winner in `src/server.js`
 - Vyper contract in `contracts/AgentSettlementPolicy.vy`
 - Tests in `tests/titanoboa/test_agent_settlement_policy.py`
 - Deployment helper in `scripts/deploy_vyper_policy.py`
+- Marketing one-pager: `docs/lovable-landing-page.md`; Lovable rebuild spec: `docs/lovable-mega-prompt.md`

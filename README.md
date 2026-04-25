@@ -7,11 +7,13 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - Official Universal Commerce Protocol (UCP) stack (JS SDK + schema validation + conformance checks)
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
+- Optional [KeeperHub](https://docs.keeperhub.com/api) direct execution on Arc (ETHGlobal [OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor track)
 
 ## Why this app is awesome
 
 - Real creator economy flows, not toy examples: live tips, paid tutorials, and battle payouts.
 - Dual rails by design: MetaMask on-chain and Circle wallet transfers in one UI.
+- Optional KeeperHub layer for reliable on-chain transfers (demo + U5 payout) without replacing UCP or Circle as the commerce core.
 - Built for demo-day reliability: onboarding UX, wallet save state, balance visibility, and funding cues.
 - Built for auditability: incremental commits, explicit docs, and reproducible setup.
 - Conformance-aware by design: schema-validated UCP endpoints and built-in self-test route.
@@ -21,6 +23,9 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - `docs/krump-ucp-usecases.md` - 10 use cases, scoring model, rankings, and top 3 MVP tracks
 - `docs/auditability-playbook.md` - Git audit workflow, AI attribution standards, and submission checklist
 - `docs/hackathon-learnings-retrospective.md` - implementation learnings, wins, failures, and next steps
+- `docs/pitch-slide-deck.md` - short slide outline and demo script for judges
+- `docs/lovable-landing-page.md` - marketing-style one-pager for the product
+- `docs/lovable-mega-prompt.md` - full rebuild spec for tools such as Lovable
 
 ## Top 3 MVP Demo (Implemented)
 
@@ -228,6 +233,7 @@ KeeperHub’s prize page asks for a demo, public repo with README, and a short w
 
 - U1 tips settle through selectable rails and update leaderboard in real time.
 - U2 keeps content locked behind payment and returns unlock tokens for access.
-- U5 registers entrants, closes rounds, and computes winner payout paths.
+- U5 registers entrants, closes rounds, and computes winner payout paths (optional on-chain payout via KeeperHub when configured).
 - Circle and MetaMask balances are visible in the same demo for operational confidence.
 - Official UCP discovery/checkout/order responses are exposed with schema-backed validation.
+- KeeperHub status/chains and demo transfer UI exercise the sponsor integration without changing UCP semantics.

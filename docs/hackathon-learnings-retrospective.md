@@ -1,12 +1,15 @@
-# ETHGlobal Krump x UCP Retrospective
+# Krump Protocol Agents — Hackathon learnings (Krump x UCP)
 
 ## Context
 
-This project implemented a hackathon demo for Krump Dance commerce using:
+This project implemented **Krump Protocol Agents**, a hackathon demo for Krump dance commerce using:
 
-- UCP-inspired commerce flows (tips, tutorial unlocks, battle entry/payout)
-- Arc Testnet as settlement network
-- Dual payment rails (MetaMask and Circle developer-controlled wallets)
+- Official **UCP** stack (`@ucp-js/sdk`: discovery, checkout, order, conformance self-test)
+- **Arc Testnet** as the primary settlement network narrative
+- Dual payment rails (**MetaMask** and **Circle** developer-controlled wallets)
+- Optional **Vyper** settlement policy + deployed Arc contract for credibility
+- In-repo **agent orchestration** (H2A / A2A / A2H) with session traces
+- **KeeperHub** ([OpenAgents sponsor](https://ethglobal.com/events/openagents/prizes)) as an optional execution layer for Arc testnet transfers (demo form + U5 winner payout path)
 - Strict auditability expectations (frequent commits, reproducible steps, AI attribution)
 
 ## What Worked Well (Successes)
@@ -48,6 +51,10 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - Exposed UCP discovery, checkout, and order-style endpoints in the same app.
    - Added a conformance self-test endpoint for fast protocol sanity checks.
 
+9. **KeeperHub sponsor integration stayed additive**
+   - REST client in `src/keeperhub/client.js`: chains discovery, direct `POST /execute/transfer`, execution status.
+   - UI section plus U5 checkbox; `declare-winner` accepts `execute_via_keeperhub` without breaking the off-chain payout record.
+
 ## What Failed / Pain Points
 
 1. **Repository assumption mismatch**
@@ -82,6 +89,10 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - ESM import path issues appeared in direct dynamic import attempts.
    - CommonJS `require()` path worked reliably for server-side integration in this stack.
 
+9. **KeeperHub API base and key type confusion**
+   - Setting `KEEPERHUB_API_BASE` to `https://app.keeperhub.com` (missing `/api`) produced **HTML 404** responses because requests hit `/chains` instead of `/api/chains`. The client now normalizes that case.
+   - **Organization keys (`kh_`)** are required for REST and direct execution; **user webhook keys (`wfb_`)** are for workflow webhooks only — using `wfb_` in `KEEPERHUB_API_KEY` fails with an explicit error.
+
 ## Key Learnings
 
 1. **Discovery-first beats assumption-first**
@@ -108,6 +119,9 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 8. **Conformance should be continuously checkable**
    - A lightweight self-test endpoint catches schema drift faster than manual endpoint checks.
 
+9. **Sponsor REST integrations need the same discovery discipline as Circle**
+   - Read upstream docs for **base URL**, **auth header** (Bearer vs `X-API-Key` on execute routes), and **key scope** before debugging “mystery HTML” errors.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -123,6 +137,7 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 7. Add transfer preflight checks in UI (wallet selected, token selector present, destination configured).
 8. Add CI step to call `/api/ucp/conformance/self-test` and fail fast on schema regressions.
 9. Add sample UCP request/response fixtures under `docs/` for judge walkthroughs.
+10. Document KeeperHub org wallet funding and `KEEPERHUB_EXECUTE_NETWORK` once Arc slug is confirmed from live `GET /api/chains`.
 
 ## Outcome Snapshot
 
@@ -134,3 +149,4 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 - Wallet balances: visible in app for MetaMask and Circle wallets
 - Circle tip transfer reliability: fixed for restart and payload-validation edge cases
 - Official UCP SDK/schema integration: enabled with discovery/checkout/order and self-test routes
+- KeeperHub (OpenAgents): optional Arc execution (`/api/keeperhub/*`, U5 checkbox, `kh_` org key); README and `.env.example` document setup

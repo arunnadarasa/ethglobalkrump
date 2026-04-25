@@ -2,7 +2,7 @@
 
 ---
 
-You are building **Krump Protocol Agents**: a single-page hackathon demo + Express API that proves **UCP-first commerce** with **human↔agent orchestration** and **optional deep settlement** (Vyper policy + Arc testnet proof), plus **dual payment rails** (MetaMask on Arc + Circle developer-controlled wallets).
+You are building **Krump Protocol Agents**: a single-page hackathon demo + Express API that proves **UCP-first commerce** with **human↔agent orchestration** and **optional deep settlement** (Vyper policy + Arc testnet proof), plus **dual payment rails** (MetaMask on Arc + Circle developer-controlled wallets), and **optional KeeperHub** ([ETHGlobal OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor) **direct execution** on Arc for demos and U5 winner payout when an org API key (`kh_…`) is configured.
 
 Recreate the app **functionally equivalent** to this specification. Prefer clarity and parity over clever refactors. If you must choose, preserve **API shapes**, **UCP schema validation behavior**, and **UI flows**.
 
@@ -10,7 +10,7 @@ Recreate the app **functionally equivalent** to this specification. Prefer clari
 
 - **Name:** Krump Protocol Agents  
 - **Subtitle:** Krump x UCP MVP Demo (U1 / U2 / U5 tracks)  
-- **Pitch:** programmable creator-economy flows (tips, paid tutorials, battle entry + payout) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), and **Arc credibility** via a deployed + verifiable Vyper policy contract.
+- **Pitch:** programmable creator-economy flows (tips, paid tutorials, battle entry + payout) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), **Arc credibility** via a deployed + verifiable Vyper policy contract, and **optional KeeperHub** on-chain execution (chains + `POST /execute/transfer`) that does not replace UCP or Circle as the commerce core.
 
 ## Tech stack (must match)
 
@@ -33,6 +33,7 @@ src/server.js                 # Express app + all routes
 src/state.js                  # dancers, clips, payments, battle, helpers
 src/agents/orchestrator.js    # agent sessions + trace
 src/settlement/vyperPolicy.js # Node-side policy mirror + spend ledger
+src/keeperhub/client.js       # KeeperHub REST: chains, execute/transfer, execution status
 contracts/AgentSettlementPolicy.vy
 scripts/deploy_vyper_policy.py
 tests/titanoboa/requirements.txt
@@ -85,6 +86,14 @@ docs/*                        # optional marketing/pitch md
 
 - `DEPLOYER_PRIVATE_KEY` (for `scripts/deploy_vyper_policy.py`)
 
+### KeeperHub (optional; ETHGlobal OpenAgents sponsor)
+
+- `KEEPERHUB_API_KEY` — **organization** key prefix `kh_` only (not user webhook `wfb_` keys)
+- `KEEPERHUB_API_BASE` — default `https://app.keeperhub.com/api` (must include `/api`; normalize `https://app.keeperhub.com` → default)
+- `KEEPERHUB_EXECUTE_NETWORK` — optional slug override for `POST /execute/transfer` `network` field when Arc auto-detection is insufficient
+- `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for ERC-20 transfers; omit for native
+- `KEEPERHUB_TOKEN_DECIMALS`, `KEEPERHUB_TOKEN_SYMBOL`, `KEEPERHUB_GAS_LIMIT_MULTIPLIER` — optional
+
 ## HTTP API (must implement)
 
 ### Config
@@ -98,6 +107,14 @@ docs/*                        # optional marketing/pitch md
     - `activeCircleWalletId` resolved (env `CIRCLE_WALLET_ID` or last created wallet id)
     - token selector present: **`CIRCLE_TOKEN_ID` OR (`CIRCLE_TOKEN_ADDRESS` + `CIRCLE_TOKEN_BLOCKCHAIN`)**
   - Also include `wallet_id`, `wallet_set_id`, token fields, `destination_address` (fallback to treasury), `api_base`, `transfer_path`.
+  - `rails.keeperhub`: `{ api_key_configured, api_base }` (boolean reflects presence of `KEEPERHUB_API_KEY`, not the secret itself).
+
+### KeeperHub (sponsor execution layer)
+
+- `GET /api/keeperhub/status` — JSON: `configured`, `api_base`, `arc_chain_id`, `arc_supported`, `execute_network`, matched `chain` summary, `token_address_configured`, or `error` string if chains call failed.
+- `GET /api/keeperhub/chains?includeDisabled=true|false` — requires key; returns `{ ok, arc_chain_id, matched, chains }`.
+- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor }`; uses KeeperHub [direct execution transfer](https://docs.keeperhub.com/api/direct-execution); Bearer + `X-API-Key` on execute routes as in reference `src/keeperhub/client.js`.
+- **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL.
 
 ### UCP (official stack)
 
@@ -130,6 +147,7 @@ docs/*                        # optional marketing/pitch md
   - intents: `tip_dancer`, `unlock_clip`, `battle_entry`
   - `sub_agents`, `ucp_core_dependency: true`
   - Also include `version`, `model: "openclaw-style-inrepo"`, `optional_gateway_adapter: true` (parity with reference).
+  - `keeperhub_execution: true` when `KEEPERHUB_API_KEY` is set (non-empty).
 
 - `GET /api/agents/identity`  
   Returns `{ ok, identity: { standard: "erc-8004-style", agent_registry, agent_id, token_uri, capabilities_uri } }` (nulls allowed).
@@ -211,7 +229,7 @@ docs/*                        # optional marketing/pitch md
 - `GET /api/battle`
 - `POST /api/battle/register`
 - `POST /api/battle/close`
-- `POST /api/battle/declare-winner`
+- `POST /api/battle/declare-winner` — body `{ winner_entry_id, execute_via_keeperhub?: boolean }`. When `execute_via_keeperhub` is true and `KEEPERHUB_API_KEY` is set, after pushing the payout record call KeeperHub transfer to `winner.wallet` for `amount_minor = totalPoolMinor`; merge `keeperhub` + optional `execution_status` onto payout; set `settlement_status` to `keeperhub_submitted` / `keeperhub_failed` / `keeperhub_error` as appropriate. When key missing but flag true, set `keeperhub.skipped` with message (do not fail the HTTP success of declare-winner).
 
 ### In-memory seed data (must match)
 
@@ -316,6 +334,11 @@ Inputs/buttons as in reference:
 - Buttons: `#ucp-load-discovery`, `#ucp-run-self-test`, `#ucp-run-sample-checkout`
 - Output `#ucp-output`
 
+### KeeperHub (UI)
+
+- `#keeperhub-load-status`, `#keeperhub-load-chains`, `#keeperhub-demo-recipient`, `#keeperhub-demo-amount`, `#keeperhub-demo-transfer`
+- Output `#keeperhub-output`
+
 ### Agent orchestration
 
 - `#agent-load-capabilities`, `#agent-load-identity`
@@ -327,7 +350,7 @@ Inputs/buttons as in reference:
 
 ### U1/U2/U5 sections
 
-Match forms and IDs from reference (`tip-form`, `register-form`, etc.) and print JSON to `<pre>` targets.
+Match forms and IDs from reference (`tip-form`, `register-form`, etc.) and print JSON to `<pre>` targets. U5 includes checkbox `#keeperhub-on-payout` — when checked, `declare-winner` POST includes `execute_via_keeperhub: true`.
 
 ## Client payment rail behavior (must match)
 
@@ -367,7 +390,7 @@ Arcscan supports Blockscout v2 verification API:
 ## CI (`.github/workflows/ci.yml`)
 
 - `npm ci`
-- `node --check` on `src/server.js`, `src/agents/orchestrator.js`, `src/settlement/vyperPolicy.js`, `public/main.js`
+- `node --check` on `src/server.js`, `src/agents/orchestrator.js`, `src/settlement/vyperPolicy.js`, `src/keeperhub/client.js`, `public/main.js`
 - Python 3.11: `pip install -r tests/titanoboa/requirements.txt` + `pytest tests/titanoboa -q`
 
 ## Known “debug telemetry” (optional)
@@ -383,6 +406,7 @@ Current reference code may include `fetch('http://127.0.0.1:7488/ingest/...')` b
 5. MetaMask chain switch + send works when treasury configured.
 6. Tutorial lock/unlock + battle flows behave as specified.
 7. CI jobs pass.
+8. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
 
 ---
 
