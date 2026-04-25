@@ -26,6 +26,7 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - `docs/pitch-slide-deck.md` - short slide outline and demo script for judges
 - `docs/lovable-landing-page.md` - marketing-style one-pager for the product
 - `docs/lovable-mega-prompt.md` - full rebuild spec for tools such as Lovable
+- `docs/cursor-mega-prompt-self-hosted-keeperhub-arc.md` - Cursor mega prompt to fork KeeperHub open source and add Arc testnet for local linking to this app
 
 ## Top 3 MVP Demo (Implemented)
 
