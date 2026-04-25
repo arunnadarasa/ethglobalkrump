@@ -175,6 +175,49 @@ async function refreshBalances() {
   }
 }
 
+async function loadUcpDiscoveryFromUi() {
+  const response = await request("/api/ucp/discovery");
+  print("ucp-output", {
+    route: "/api/ucp/discovery",
+    ok: response.ok,
+    status: response.status,
+    body: response.body
+  });
+}
+
+async function runUcpSelfTestFromUi() {
+  const response = await request("/api/ucp/conformance/self-test");
+  print("ucp-output", {
+    route: "/api/ucp/conformance/self-test",
+    ok: response.ok,
+    status: response.status,
+    body: response.body
+  });
+}
+
+async function runUcpSampleCheckoutFromUi() {
+  const payload = {
+    currency: "USD",
+    line_items: [{ item: { id: "clip-1" }, quantity: 1 }],
+    payment: {
+      instruments: [{ id: "card-1", handler_id: "stripe", type: "card", brand: "visa", last_digits: "4242" }],
+      selected_instrument_id: "card-1"
+    }
+  };
+  const response = await request("/api/ucp/checkout/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("ucp-output", {
+    route: "/api/ucp/checkout/create",
+    ok: response.ok,
+    status: response.status,
+    request: payload,
+    body: response.body
+  });
+}
+
 async function ensureMetaMaskChain() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found in browser");
@@ -561,11 +604,26 @@ document.getElementById("refresh-balances").addEventListener("click", async () =
   await refreshBalances();
 });
 
+document.getElementById("ucp-load-discovery").addEventListener("click", async () => {
+  await loadUcpDiscoveryFromUi();
+});
+
+document.getElementById("ucp-run-self-test").addEventListener("click", async () => {
+  await runUcpSelfTestFromUi();
+});
+
+document.getElementById("ucp-run-sample-checkout").addEventListener("click", async () => {
+  await runUcpSampleCheckoutFromUi();
+});
+
 async function bootstrap() {
   await loadConfig();
   hydrateSavedCircleWallet();
   print("balances-output", {
     info: "Connect MetaMask and click Refresh Balances to load MetaMask and Circle wallet USDC balances."
+  });
+  print("ucp-output", {
+    info: "Use the UCP buttons to view discovery, run self-test, and execute a sample checkout."
   });
   await refreshLeaderboard();
   await loadTutorials();
