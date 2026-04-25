@@ -60,6 +60,23 @@
         </div>
         <pre id="ucp-output"></pre>
       </section>
+      <section>
+        <h2>Agent Orchestration (H2A / A2H / A2A)</h2>
+        <div class="row">
+          <button id="agent-load-capabilities" type="button">Load Agent Capabilities</button>
+          <input id="agent-context-json" placeholder='Context JSON (optional), e.g. {"clip_id":"clip-1"}' />
+        </div>
+        <div class="row">
+          <select id="agent-intent">
+            <option value="tip_dancer">tip_dancer</option>
+            <option value="unlock_clip">unlock_clip</option>
+            <option value="battle_entry">battle_entry</option>
+          </select>
+          <button id="agent-run-session" type="button">Run Agent Session</button>
+          <button id="agent-get-last-session" type="button">Get Last Session</button>
+        </div>
+        <pre id="agent-output"></pre>
+      </section>
 
       <section>
         <h2>U1 - Live Battle Micro-Tipping</h2>

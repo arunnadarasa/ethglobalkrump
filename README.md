@@ -45,6 +45,20 @@ This app now integrates the official UCP stack in Node via `@ucp-js/sdk` and val
 - Invalid checkout payloads are rejected with a typed UCP validation error path.
 - The self-test endpoint is intended for quick demo-day confidence checks.
 
+## Agent Orchestration (Now Live)
+
+This app now supports in-repo agent orchestration while keeping UCP as the commerce core:
+
+- `POST /api/agents/sessions` - runs intent-driven human-to-agent sessions
+- `GET /api/agents/sessions/:sessionId` - fetches agent trace for agent-to-human visibility
+- `GET /api/agents/capabilities` - returns supported intents and sub-agent model
+
+Sub-agents coordinate internally (agent-to-agent), but only the payments sub-agent executes checkout and order calls via the existing UCP response builders.
+
+### OpenClaw note
+
+OpenClaw is optional for this MVP. The current implementation is OpenClaw-compatible by design (session traces + delegated sub-agents), and can later be connected through an external OpenClaw gateway adapter without changing UCP routes.
+
 ### Local Run
 
 1. Install dependencies:

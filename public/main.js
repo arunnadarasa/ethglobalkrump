@@ -13,6 +13,7 @@ let unlockToken = "";
 let railConfig = null;
 let connectedAccount = "";
 let lastCreatedCircleWallet = null;
+let lastAgentSessionId = "";
 
 function extractCircleWalletDetails(payload) {
   const wallet =
@@ -214,6 +215,61 @@ async function runUcpSampleCheckoutFromUi() {
     ok: response.ok,
     status: response.status,
     request: payload,
+    body: response.body
+  });
+}
+
+function parseAgentContext() {
+  const raw = document.getElementById("agent-context-json").value || "";
+  if (!raw.trim()) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    throw new Error("Invalid JSON in agent context field.");
+  }
+}
+
+async function loadAgentCapabilitiesFromUi() {
+  const response = await request("/api/agents/capabilities");
+  print("agent-output", {
+    route: "/api/agents/capabilities",
+    ok: response.ok,
+    status: response.status,
+    body: response.body
+  });
+}
+
+async function runAgentSessionFromUi() {
+  const intent = document.getElementById("agent-intent").value;
+  const context = parseAgentContext();
+  const payload = { intent, context };
+  const response = await request("/api/agents/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  lastAgentSessionId = response.body?.session?.id || "";
+  print("agent-output", {
+    route: "/api/agents/sessions",
+    ok: response.ok,
+    status: response.status,
+    request: payload,
+    body: response.body
+  });
+}
+
+async function getLastAgentSessionFromUi() {
+  if (!lastAgentSessionId) {
+    print("agent-output", { info: "No agent session id yet. Run a session first." });
+    return;
+  }
+  const response = await request(`/api/agents/sessions/${encodeURIComponent(lastAgentSessionId)}`);
+  print("agent-output", {
+    route: `/api/agents/sessions/${lastAgentSessionId}`,
+    ok: response.ok,
+    status: response.status,
     body: response.body
   });
 }
@@ -616,6 +672,22 @@ document.getElementById("ucp-run-sample-checkout").addEventListener("click", asy
   await runUcpSampleCheckoutFromUi();
 });
 
+document.getElementById("agent-load-capabilities").addEventListener("click", async () => {
+  await loadAgentCapabilitiesFromUi();
+});
+
+document.getElementById("agent-run-session").addEventListener("click", async () => {
+  try {
+    await runAgentSessionFromUi();
+  } catch (error) {
+    print("agent-output", { error: error.message });
+  }
+});
+
+document.getElementById("agent-get-last-session").addEventListener("click", async () => {
+  await getLastAgentSessionFromUi();
+});
+
 async function bootstrap() {
   await loadConfig();
   hydrateSavedCircleWallet();
@@ -624,6 +696,9 @@ async function bootstrap() {
   });
   print("ucp-output", {
     info: "Use the UCP buttons to view discovery, run self-test, and execute a sample checkout."
+  });
+  print("agent-output", {
+    info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."
   });
   await refreshLeaderboard();
   await loadTutorials();

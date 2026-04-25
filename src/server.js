@@ -17,6 +17,7 @@ const {
   battleClosed,
   helpers
 } = require("./state");
+const { makeAgentOrchestrator } = require("./agents/orchestrator");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -127,6 +128,81 @@ function buildUcpCapabilities() {
 
 function makeUuid() {
   return crypto.randomUUID();
+}
+
+function createUcpCheckoutResponse(payload) {
+  const parsedRequest = CheckoutCreateRequestSchema.safeParse(payload || {});
+  if (!parsedRequest.success) {
+    const validationIssue = parsedRequest.error.issues[0]?.message || "invalid payload";
+    const error = new Error(`UCP checkout request validation failed: ${validationIssue}`);
+    error.code = "ucp_checkout_invalid";
+    error.status = 400;
+    throw error;
+  }
+
+  const normalizedLineItems = (parsedRequest.data.line_items || []).map((lineItem) => {
+    const clip = tutorialClips.find((item) => item.id === lineItem.item.id);
+    const unitMinor = clip ? clip.priceMinor : 100;
+    return {
+      item_id: lineItem.item.id,
+      quantity: lineItem.quantity,
+      unit_minor: unitMinor,
+      line_total_minor: unitMinor * lineItem.quantity
+    };
+  });
+  const totalMinor = normalizedLineItems.reduce((sum, item) => sum + item.line_total_minor, 0);
+  const checkoutId = helpers.makeId("ucp-checkout");
+
+  const checkoutResponseCore = {
+    version: "1.0.0",
+    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
+  };
+  const validatedResponse = UcpCheckoutResponseSchema.safeParse(checkoutResponseCore);
+  if (!validatedResponse.success) {
+    const error = new Error("UCP checkout response schema validation failed.");
+    error.code = "ucp_checkout_response_invalid";
+    error.status = 500;
+    throw error;
+  }
+
+  return {
+    ...validatedResponse.data,
+    checkout: {
+      id: checkoutId,
+      currency: parsedRequest.data.currency,
+      line_items: normalizedLineItems,
+      total_minor: totalMinor,
+      total_usd: helpers.toUsd(totalMinor),
+      status: "created"
+    }
+  };
+}
+
+function createUcpOrderResponse(orderId) {
+  const relatedPayment = payments.find((payment) => payment.id === orderId) || null;
+  const orderResponseCore = {
+    version: "1.0.0",
+    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
+  };
+  const validated = UcpOrderResponseSchema.safeParse(orderResponseCore);
+  if (!validated.success) {
+    const error = new Error("UCP order response schema validation failed.");
+    error.code = "ucp_order_response_invalid";
+    error.status = 500;
+    throw error;
+  }
+
+  return {
+    ...validated.data,
+    order: {
+      id: orderId,
+      status: relatedPayment ? relatedPayment.status : "unknown",
+      payment_mode: relatedPayment?.payment_mode || null,
+      amount_minor: relatedPayment?.amount_minor || null,
+      amount_usd:
+        typeof relatedPayment?.amount_minor === "number" ? helpers.toUsd(relatedPayment.amount_minor) : null
+    }
+  };
 }
 
 async function circlePost(pathname, payload) {
@@ -436,75 +512,61 @@ app.get("/api/ucp/discovery", (req, res) => {
   });
 });
 
-app.post("/api/ucp/checkout/create", (req, res) => {
-  const parsedRequest = CheckoutCreateRequestSchema.safeParse(req.body || {});
-  if (!parsedRequest.success) {
-    return sendError(
-      res,
-      400,
-      "ucp_checkout_invalid",
-      `UCP checkout request validation failed: ${parsedRequest.error.issues[0]?.message || "invalid payload"}`
-    );
-  }
+const agentOrchestrator = makeAgentOrchestrator({
+  helpers,
+  tutorialClips,
+  createCheckout: createUcpCheckoutResponse,
+  getOrderStatus: createUcpOrderResponse
+});
 
-  const normalizedLineItems = (parsedRequest.data.line_items || []).map((lineItem) => {
-    const clip = tutorialClips.find((item) => item.id === lineItem.item.id);
-    const unitMinor = clip ? clip.priceMinor : 100;
-    return {
-      item_id: lineItem.item.id,
-      quantity: lineItem.quantity,
-      unit_minor: unitMinor,
-      line_total_minor: unitMinor * lineItem.quantity
-    };
-  });
-  const totalMinor = normalizedLineItems.reduce((sum, item) => sum + item.line_total_minor, 0);
-  const checkoutId = helpers.makeId("ucp-checkout");
-
-  const checkoutResponseCore = {
-    version: "1.0.0",
-    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
-  };
-  const validatedResponse = UcpCheckoutResponseSchema.safeParse(checkoutResponseCore);
-  if (!validatedResponse.success) {
-    return sendError(res, 500, "ucp_checkout_response_invalid", "UCP checkout response schema validation failed.");
-  }
-
-  return res.status(201).json({
-    ...validatedResponse.data,
-    checkout: {
-      id: checkoutId,
-      currency: parsedRequest.data.currency,
-      line_items: normalizedLineItems,
-      total_minor: totalMinor,
-      total_usd: helpers.toUsd(totalMinor),
-      status: "created"
-    }
+app.get("/api/agents/capabilities", (_req, res) => {
+  return res.json({
+    agents: agentOrchestrator.listCapabilities()
   });
 });
 
-app.get("/api/ucp/orders/:orderId", (req, res) => {
-  const orderId = req.params.orderId;
-  const relatedPayment = payments.find((payment) => payment.id === orderId) || null;
-  const orderResponseCore = {
-    version: "1.0.0",
-    capabilities: buildUcpCapabilities().map(({ name, version }) => ({ name, version }))
-  };
-  const validated = UcpOrderResponseSchema.safeParse(orderResponseCore);
-  if (!validated.success) {
-    return sendError(res, 500, "ucp_order_response_invalid", "UCP order response schema validation failed.");
+app.post("/api/agents/sessions", (req, res) => {
+  const { intent, context } = req.body || {};
+  if (!intent || typeof intent !== "string") {
+    return sendError(res, 400, "agent_intent_required", "intent is required and must be a string");
   }
-
-  return res.json({
-    ...validated.data,
-    order: {
-      id: orderId,
-      status: relatedPayment ? relatedPayment.status : "unknown",
-      payment_mode: relatedPayment?.payment_mode || null,
-      amount_minor: relatedPayment?.amount_minor || null,
-      amount_usd:
-        typeof relatedPayment?.amount_minor === "number" ? helpers.toUsd(relatedPayment.amount_minor) : null
-    }
+  const allowedIntents = new Set(["tip_dancer", "unlock_clip", "battle_entry"]);
+  if (!allowedIntents.has(intent)) {
+    return sendError(res, 400, "agent_intent_unsupported", `Unsupported intent: ${intent}`);
+  }
+  const session = agentOrchestrator.runSession(intent, context || {});
+  const statusCode = session.status === "failed" ? 502 : 201;
+  return res.status(statusCode).json({
+    ok: session.status === "completed",
+    session
   });
+});
+
+app.get("/api/agents/sessions/:sessionId", (req, res) => {
+  const session = agentOrchestrator.getSession(req.params.sessionId);
+  if (!session) {
+    return sendError(res, 404, "agent_session_not_found", "Unknown agent session id");
+  }
+  return res.json({
+    ok: true,
+    session
+  });
+});
+
+app.post("/api/ucp/checkout/create", (req, res) => {
+  try {
+    return res.status(201).json(createUcpCheckoutResponse(req.body || {}));
+  } catch (error) {
+    return sendError(res, error.status || 500, error.code || "ucp_checkout_failed", error.message);
+  }
+});
+
+app.get("/api/ucp/orders/:orderId", (req, res) => {
+  try {
+    return res.json(createUcpOrderResponse(req.params.orderId));
+  } catch (error) {
+    return sendError(res, error.status || 500, error.code || "ucp_order_failed", error.message);
+  }
 });
 
 app.get("/api/ucp/conformance/self-test", (_req, res) => {
