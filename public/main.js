@@ -97,9 +97,6 @@ function erc20BalanceOfCallData(address) {
 }
 
 async function getErc20BalanceFromMetaMask(tokenAddress) {
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M1',location:'public/main.js:getErc20BalanceFromMetaMask:entry',message:'MetaMask USDC balance request started',data:{hasTokenAddress:Boolean(tokenAddress),tokenAddressPrefix:tokenAddress?tokenAddress.slice(0,10):null,hasEthereum:Boolean(window.ethereum)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!tokenAddress || !window.ethereum) {
     return null;
   }
@@ -117,9 +114,6 @@ async function getErc20BalanceFromMetaMask(tokenAddress) {
       ]
     });
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M3',location:'public/main.js:getErc20BalanceFromMetaMask:balanceof-failed',message:'MetaMask balanceOf eth_call failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw error;
   }
   const rawBalance = BigInt(callResult || "0x0");
@@ -140,9 +134,6 @@ async function getErc20BalanceFromMetaMask(tokenAddress) {
   } catch (_error) {
     decimals = 6;
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M4',location:'public/main.js:getErc20BalanceFromMetaMask:success',message:'MetaMask USDC balance fetched',data:{decimals,rawBalanceHex:`0x${rawBalance.toString(16)}`},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return {
     account: connectedAccount,
     token_address: tokenAddress,
@@ -156,22 +147,13 @@ async function getErc20BalanceFromMetaMask(tokenAddress) {
 async function getCircleWalletBalance() {
   const walletId =
     railConfig?.rails?.circle?.wallet_id || lastCreatedCircleWallet?.walletId || null;
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B1',location:'public/main.js:getCircleWalletBalance:entry',message:'Requesting Circle wallet balance',data:{hasWalletId:Boolean(walletId),walletIdPrefix:walletId?walletId.slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!walletId) {
     throw new Error("No Circle wallet id available. Create/save a Circle wallet first.");
   }
   const response = await request(`/api/circle/wallets/${walletId}/balances`);
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v2',hypothesisId:'B6',location:'public/main.js:getCircleWalletBalance:response',message:'Circle balance HTTP response received',data:{ok:response.ok,status:response.status,bodyType:typeof response.body,hasErrorObject:Boolean(response.body?.error),hasMessage:Boolean(response.body?.error?.message||response.body?.message)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!response.ok) {
     throw new Error(response.body?.error?.message || "Failed to fetch Circle wallet balance");
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B2',location:'public/main.js:getCircleWalletBalance:success',message:'Circle wallet balance response received',data:{balanceCount:Array.isArray(response.body?.balances)?response.body.balances.length:-1,source:response.body?.balance_source||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return response.body;
 }
 
@@ -181,9 +163,6 @@ async function refreshBalances() {
     const tokenAddress = railConfig?.rails?.circle?.token_address || "";
     const usdcToken = await getErc20BalanceFromMetaMask(tokenAddress);
     const circle = await getCircleWalletBalance();
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M2',location:'public/main.js:refreshBalances:combined-success',message:'Combined balances fetched',data:{hasNative:Boolean(native),hasUsdcToken:Boolean(usdcToken),hasCircle:Boolean(circle)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     print("balances-output", {
       metamask: {
         native_balance: native,
@@ -192,9 +171,6 @@ async function refreshBalances() {
       circle_wallet: circle
     });
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'mm-usdc-v1',hypothesisId:'M5',location:'public/main.js:refreshBalances:error',message:'Refresh balances failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     print("balances-output", { error: error.message });
   }
 }
@@ -341,23 +317,14 @@ async function createCircleWalletFromUi() {
 
 async function saveCircleWalletFromUi() {
   const hasOutputWallet = Boolean(getWalletDetailsFromOutputPane());
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S1',location:'public/main.js:saveCircleWalletFromUi:entry',message:'Save wallet requested',data:{hasInMemoryWallet:Boolean(lastCreatedCircleWallet),hasOutputWallet},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const details = lastCreatedCircleWallet || getWalletDetailsFromOutputPane();
   if (!details) {
     setCircleSaveStatus("No wallet found. Create a Circle wallet first.");
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S2',location:'public/main.js:saveCircleWalletFromUi:no-wallet',message:'Save failed due to missing wallet details',data:{reason:'missing_wallet_details'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return;
   }
   localStorage.setItem("circleWalletDetails", JSON.stringify(details));
   setCircleSaveStatus("Circle wallet details saved locally.");
   renderCircleFundingCue(details);
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'wallet-save-v1',hypothesisId:'S3',location:'public/main.js:saveCircleWalletFromUi:success',message:'Wallet details saved',data:{walletIdPrefix:details.walletId.slice(0,8),addressPrefix:details.walletAddress.slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 }
 
 function hydrateSavedCircleWallet() {

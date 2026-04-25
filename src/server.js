@@ -347,9 +347,6 @@ async function getCircleWalletBalances(walletId) {
   if (!walletId) {
     throw new Error("Circle wallet id missing");
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B3',location:'src/server.js:getCircleWalletBalances:entry',message:'Fetching Circle wallet balances',data:{hasWalletId:Boolean(walletId),walletIdPrefix:String(walletId).slice(0,8)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const candidatePaths = [
     `/v1/w3s/wallets/${walletId}/balances`,
     `/v1/w3s/developer/wallets/${walletId}/balances`
@@ -359,15 +356,9 @@ async function getCircleWalletBalances(walletId) {
     try {
       const body = await circleGet(pathname);
       const balances = body?.data?.tokenBalances || body?.data?.balances || body?.data || [];
-      // #region agent log
-      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B4',location:'src/server.js:getCircleWalletBalances:success',message:'Circle wallet balances fetched',data:{pathname,balanceCount:Array.isArray(balances)?balances.length:-1},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return { pathname, balances, raw: body };
     } catch (error) {
       lastError = error;
-      // #region agent log
-      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'balance-v1',hypothesisId:'B5',location:'src/server.js:getCircleWalletBalances:path-failed',message:'Circle balance path failed',data:{pathname,errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     }
   }
   throw new Error(lastError?.message || "Failed to fetch Circle wallet balances");
