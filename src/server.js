@@ -19,6 +19,7 @@ const {
 } = require("./state");
 const { makeAgentOrchestrator } = require("./agents/orchestrator");
 const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
+const keeperhub = require("./keeperhub/client");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,6 +106,10 @@ function getRailConfig() {
         destination_address: CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS,
         api_base: CIRCLE_API_BASE,
         transfer_path: CIRCLE_TRANSFER_PATH
+      },
+      keeperhub: {
+        api_key_configured: keeperhub.isConfigured(),
+        api_base: keeperhub.getBaseUrl()
       }
     }
   };
@@ -519,6 +524,73 @@ app.get("/api/config", (_req, res) => {
   res.json(getRailConfig());
 });
 
+app.get("/api/keeperhub/status", async (_req, res) => {
+  try {
+    const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+    return res.json({ ok: true, ...summary });
+  } catch (error) {
+    return sendError(res, 500, "keeperhub_status_failed", error.message);
+  }
+});
+
+app.get("/api/keeperhub/chains", async (req, res) => {
+  try {
+    if (!keeperhub.isConfigured()) {
+      return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY to list chains");
+    }
+    const includeDisabled = String(req.query.includeDisabled || "").toLowerCase() === "true";
+    const chains = await keeperhub.listChains({ includeDisabled });
+    return res.json({
+      ok: true,
+      arc_chain_id: Number(ARCTESTNET_CHAIN_ID),
+      matched: keeperhub.pickArcChain(chains, ARCTESTNET_CHAIN_ID),
+      chains
+    });
+  } catch (error) {
+    return sendError(res, error.status || 502, "keeperhub_chains_failed", error.message);
+  }
+});
+
+app.post("/api/keeperhub/execute-transfer", async (req, res) => {
+  try {
+    if (!keeperhub.isConfigured()) {
+      return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY");
+    }
+    const { recipient_address, amount_minor } = req.body || {};
+    if (!recipient_address || typeof recipient_address !== "string") {
+      return sendError(res, 400, "invalid_recipient", "recipient_address is required");
+    }
+    if (!Number.isInteger(amount_minor) || amount_minor < 1) {
+      return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
+    }
+    const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+    if (!summary.execute_network) {
+      return sendError(
+        res,
+        400,
+        "keeperhub_no_network",
+        "Arc testnet not found in KeeperHub chain list, or could not derive slug. Set KEEPERHUB_EXECUTE_NETWORK (see README)."
+      );
+    }
+    const transfer = await keeperhub.executeTransferPayout({
+      recipientAddress: recipient_address.trim(),
+      amountMinor: amount_minor,
+      network: summary.execute_network
+    });
+    let execution_status = null;
+    if (transfer?.executionId) {
+      try {
+        execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+      } catch (_e) {
+        execution_status = null;
+      }
+    }
+    return res.status(201).json({ ok: true, keeperhub: transfer, execution_status: execution_status, arc: summary });
+  } catch (error) {
+    return sendError(res, error.status || 502, "keeperhub_transfer_failed", error.message);
+  }
+});
+
 app.get("/api/ucp/discovery", (req, res) => {
   const baseUrl = getUcpBaseUrl(req);
   return res.json({
@@ -552,7 +624,8 @@ app.get("/api/agents/capabilities", (_req, res) => {
   return res.json({
     agents: {
       ...agentOrchestrator.listCapabilities(),
-      settlement_mode: ENABLE_VYPER_SETTLEMENT ? "vyper_policy_enabled" : "circle_default"
+      settlement_mode: ENABLE_VYPER_SETTLEMENT ? "vyper_policy_enabled" : "circle_default",
+      keeperhub_execution: keeperhub.isConfigured()
     }
   });
 });
@@ -913,8 +986,8 @@ app.post("/api/battle/close", (_req, res) => {
   });
 });
 
-app.post("/api/battle/declare-winner", (req, res) => {
-  const { winner_entry_id } = req.body || {};
+app.post("/api/battle/declare-winner", async (req, res) => {
+  const { winner_entry_id, execute_via_keeperhub } = req.body || {};
   const winner = entries.find((entry) => entry.id === winner_entry_id);
   if (!winner) {
     return sendError(res, 404, "winner_not_found", "Unknown winner entry id");
@@ -932,10 +1005,52 @@ app.post("/api/battle/declare-winner", (req, res) => {
     created_at: helpers.nowIso()
   };
   payouts.push(payout);
+  const stored = payouts[payouts.length - 1];
+
+  if (execute_via_keeperhub) {
+    if (!keeperhub.isConfigured()) {
+      stored.keeperhub = {
+        ok: false,
+        skipped: true,
+        message: "Set KEEPERHUB_API_KEY and configure KeeperHub wallet to execute on-chain via KeeperHub."
+      };
+    } else {
+      try {
+        const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+        if (!summary.execute_network) {
+          stored.keeperhub = {
+            ok: false,
+            error:
+              "Arc testnet not found in KeeperHub chain list, or slug unknown. Set KEEPERHUB_EXECUTE_NETWORK (see README)."
+          };
+          stored.settlement_status = "keeperhub_error";
+        } else {
+          const transfer = await keeperhub.executeTransferPayout({
+            recipientAddress: String(winner.wallet).trim(),
+            amountMinor: totalPoolMinor,
+            network: summary.execute_network
+          });
+          stored.keeperhub = { ok: true, transfer, arc: summary };
+          stored.settlement_status =
+            transfer?.status === "failed" ? "keeperhub_failed" : "keeperhub_submitted";
+          if (transfer?.executionId) {
+            try {
+              stored.keeperhub.execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+            } catch (_e) {
+              // non-fatal
+            }
+          }
+        }
+      } catch (error) {
+        stored.keeperhub = { ok: false, error: error.message, http_status: error.status };
+        stored.settlement_status = "keeperhub_error";
+      }
+    }
+  }
 
   res.status(201).json({
     track: "U5",
-    payout
+    payout: stored
   });
 });
 

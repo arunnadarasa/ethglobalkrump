@@ -127,6 +127,7 @@ If testnet RPC or key issues appear close to demo time, set `ENABLE_VYPER_SETTLE
 ### Project Structure
 
 - `src/server.js` - Express API for tracks, Circle rails, and official UCP endpoints
+- `src/keeperhub/client.js` - KeeperHub REST client (chains discovery + direct execution transfers)
 - `src/agents/orchestrator.js` - in-repo H2A/A2H/A2A session orchestration
 - `src/settlement/vyperPolicy.js` - deep settlement policy evaluator (Node-side mirror)
 - `src/state.js` - in-memory demo state and helper utilities
@@ -181,6 +182,47 @@ Set these in `.env` so the UI can switch/add chain and send tx:
 - `ARC_RPC_URL`
 - `ARC_NATIVE_SYMBOL`
 - `ONCHAIN_TREASURY_ADDRESS`
+
+## KeeperHub (OpenAgents sponsor integration)
+
+This project uses **UCP + Circle + Arc** as the commerce spine. [KeeperHub](https://docs.keeperhub.com/api) is integrated as an **optional execution layer**: direct transfers on Arc testnet for demos and for the **U5 winner payout** path when you opt in.
+
+### Why this fits the hackathon
+
+The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes) rewards reliable onchain execution for agents (including payment-rail adjacency such as x402/MPP in their materials). Here, KeeperHub executes the **token transfer** leg after your app has already computed the pool and winner, without replacing UCP checkout or Circle wallet flows.
+
+### Setup
+
+1. Create an **organization API key** (`kh_…`) in [KeeperHub](https://app.keeperhub.com/) under Settings → API Keys (see [API keys](https://docs.keeperhub.com/api/api-keys)).
+2. Add to `.env` (never commit the real key):
+
+   - `KEEPERHUB_API_KEY` — required for any KeeperHub call
+   - `KEEPERHUB_API_BASE` — optional, default `https://app.keeperhub.com/api`
+   - `KEEPERHUB_EXECUTE_NETWORK` — optional; if Arc testnet (`ARC_CHAIN_ID`, default `5042002`) is listed under `GET /api/chains` but direct execution expects a different `network` string, set it explicitly (see [Direct execution](https://docs.keeperhub.com/api/direct-execution))
+   - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for USDC-style ERC-20 transfers. Leave unset only if you intend a **native** transfer on that network.
+   - `KEEPERHUB_TOKEN_DECIMALS` / `KEEPERHUB_TOKEN_SYMBOL` — optional metadata for non-standard tokens (defaults `6` / `USDC`)
+
+3. In KeeperHub, ensure your **organization wallet / spending** is configured for Arc testnet so `POST /execute/transfer` succeeds (see KeeperHub wallet docs if you hit `422`).
+
+### API routes (this repo)
+
+- `GET /api/keeperhub/status` — whether a key is set, whether Arc appears in KeeperHub’s chain list, and the resolved execute `network` slug when possible
+- `GET /api/keeperhub/chains` — proxied chain list (auth: Bearer `kh_…`, per [Authentication](https://docs.keeperhub.com/api/authentication))
+- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor }`; runs [transfer](https://docs.keeperhub.com/api/direct-execution) using `X-API-Key` + Bearer as implemented in `src/keeperhub/client.js`
+- `POST /api/battle/declare-winner` — optional body flag `execute_via_keeperhub: true` with the same semantics as the UI checkbox (pushes pool to winner wallet via KeeperHub when configured)
+
+### UI
+
+- **KeeperHub** section: status, chain list, and a small **demo transfer** form (minor units match the rest of the app: `amount_minor / 100` is the human token amount sent to KeeperHub).
+- **U5**: checkbox **Execute winner payout on-chain via KeeperHub** on declare winner.
+
+### Agent capabilities
+
+`GET /api/agents/capabilities` includes `keeperhub_execution: true` when `KEEPERHUB_API_KEY` is set.
+
+### Submission and feedback
+
+KeeperHub’s prize page asks for a demo, public repo with README, and a short write-up of how KeeperHub is used. Optionally compete for the **Builder Feedback Bounty** on the same page by documenting concrete UX, docs, bugs, or feature requests from your integration.
 
 ## Demo highlights
 

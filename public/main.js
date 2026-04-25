@@ -642,10 +642,11 @@ document.getElementById("close-battle").addEventListener("click", async () => {
 
 document.getElementById("payout-winner").addEventListener("click", async () => {
   const winner_entry_id = document.getElementById("winner-id").value;
+  const execute_via_keeperhub = document.getElementById("keeperhub-on-payout").checked;
   const data = await request("/api/battle/declare-winner", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ winner_entry_id })
+    body: JSON.stringify({ winner_entry_id, execute_via_keeperhub })
   });
   print("battle-output", { status: data.status, body: data.body });
   await refreshBattle();
@@ -724,6 +725,51 @@ document.getElementById("settlement-evaluate").addEventListener("click", async (
   await evaluateSettlementFromUi();
 });
 
+async function loadKeeperHubStatusFromUi() {
+  const data = await request("/api/keeperhub/status");
+  print("keeperhub-output", { status: data.status, body: data.body });
+}
+
+async function loadKeeperHubChainsFromUi() {
+  const data = await request("/api/keeperhub/chains?includeDisabled=true");
+  print("keeperhub-output", { status: data.status, body: data.body });
+}
+
+async function keeperHubDemoTransferFromUi() {
+  const recipient_address = document.getElementById("keeperhub-demo-recipient").value.trim();
+  const amount_minor = Number(document.getElementById("keeperhub-demo-amount").value);
+  const data = await request("/api/keeperhub/execute-transfer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient_address, amount_minor })
+  });
+  print("keeperhub-output", { status: data.status, body: data.body });
+}
+
+document.getElementById("keeperhub-load-status").addEventListener("click", async () => {
+  try {
+    await loadKeeperHubStatusFromUi();
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
+document.getElementById("keeperhub-load-chains").addEventListener("click", async () => {
+  try {
+    await loadKeeperHubChainsFromUi();
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
+document.getElementById("keeperhub-demo-transfer").addEventListener("click", async () => {
+  try {
+    await keeperHubDemoTransferFromUi();
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
 async function bootstrap() {
   await loadConfig();
   hydrateSavedCircleWallet();
@@ -735,6 +781,9 @@ async function bootstrap() {
   });
   print("agent-output", {
     info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."
+  });
+  print("keeperhub-output", {
+    info: "Load status to see if Arc testnet is listed in KeeperHub; use demo transfer or U5 payout checkbox when your org key and wallet are configured."
   });
   await refreshLeaderboard();
   await loadTutorials();

@@ -17,6 +17,7 @@ jobs:
       - run: node --check src/server.js
       - run: node --check src/agents/orchestrator.js
       - run: node --check src/settlement/vyperPolicy.js
+      - run: node --check src/keeperhub/client.js
       - run: node --check public/main.js
 
   vyper-tests:

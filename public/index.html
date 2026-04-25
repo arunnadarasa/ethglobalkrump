@@ -84,6 +84,24 @@
       </section>
 
       <section>
+        <h2>KeeperHub (execution layer)</h2>
+        <p class="subtitle">
+          Optional <a href="https://docs.keeperhub.com/api" target="_blank" rel="noopener noreferrer">KeeperHub</a> direct
+          execution for Arc testnet transfers (org API key). UCP and Circle remain the commerce core.
+        </p>
+        <div class="row">
+          <button id="keeperhub-load-status" type="button">Load KeeperHub Status</button>
+          <button id="keeperhub-load-chains" type="button">List KeeperHub Chains</button>
+        </div>
+        <div class="row">
+          <input id="keeperhub-demo-recipient" placeholder="Recipient 0x… (Arc testnet)" style="min-width: 280px" />
+          <input id="keeperhub-demo-amount" type="number" min="1" value="100" />
+          <button id="keeperhub-demo-transfer" type="button">Demo transfer (minor units)</button>
+        </div>
+        <pre id="keeperhub-output"></pre>
+      </section>
+
+      <section>
         <h2>U1 - Live Battle Micro-Tipping</h2>
         <form id="tip-form">
           <input id="fan-name" placeholder="Fan name" />
@@ -136,6 +154,12 @@
           <button id="close-battle" type="button">Close Registration</button>
           <select id="winner-id"></select>
           <button id="payout-winner" type="button">Payout Winner</button>
+        </div>
+        <div class="row">
+          <label>
+            <input type="checkbox" id="keeperhub-on-payout" />
+            Execute winner payout on-chain via KeeperHub (pool to winner wallet)
+          </label>
         </div>
         <pre id="battle-output"></pre>
       </section>
