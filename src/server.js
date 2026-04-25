@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const {
@@ -13,6 +14,19 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const CIRCLE_API_BASE = process.env.CIRCLE_API_BASE || "https://api.circle.com";
+const CIRCLE_TRANSFER_PATH = process.env.CIRCLE_TRANSFER_PATH || "/v1/w3s/developer/transactions/transfer";
+const CIRCLE_API_KEY = process.env.CIRCLE_API_KEY || "";
+const CIRCLE_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET || "";
+const CIRCLE_WALLET_ID = process.env.CIRCLE_WALLET_ID || "";
+const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
+
+const ARCTESTNET_CHAIN_ID = process.env.ARC_CHAIN_ID || "11155111";
+const ARCTESTNET_CHAIN_ID_HEX = `0x${Number(ARCTESTNET_CHAIN_ID).toString(16)}`;
+const ARCTESTNET_RPC_URL = process.env.ARC_RPC_URL || "https://sepolia.infura.io/v3/";
+const ARCTESTNET_NAME = process.env.ARC_CHAIN_NAME || "Arc Testnet";
+const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "ETH";
+const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -47,6 +61,100 @@ function setBattleClosed(value) {
   state.battleClosed = value;
 }
 
+function getRailConfig() {
+  return {
+    rails: {
+      metamask: {
+        chain_id: Number(ARCTESTNET_CHAIN_ID),
+        chain_id_hex: ARCTESTNET_CHAIN_ID_HEX,
+        chain_name: ARCTESTNET_NAME,
+        rpc_url: ARCTESTNET_RPC_URL,
+        symbol: ARCTESTNET_SYMBOL,
+        treasury_address: ONCHAIN_TREASURY_ADDRESS
+      },
+      circle: {
+        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID),
+        wallet_id: CIRCLE_WALLET_ID,
+        destination_address: CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS,
+        api_base: CIRCLE_API_BASE,
+        transfer_path: CIRCLE_TRANSFER_PATH
+      }
+    }
+  };
+}
+
+async function createCircleTransfer({ amountMinor, memo }) {
+  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !CIRCLE_WALLET_ID) {
+    throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
+  }
+
+  const destinationAddress = CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS;
+  if (!destinationAddress) {
+    throw new Error("Missing destination address: set CIRCLE_DESTINATION_ADDRESS or ONCHAIN_TREASURY_ADDRESS");
+  }
+
+  const amount = (amountMinor / 100).toFixed(2);
+  const payload = {
+    walletId: CIRCLE_WALLET_ID,
+    destinationAddress,
+    amounts: [amount],
+    feeLevel: "MEDIUM",
+    idempotencyKey: helpers.makeId("circle"),
+    tokenId: "USD",
+    metadata: {
+      memo: memo || "krump-ucp-demo"
+    }
+  };
+
+  const response = await fetch(`${CIRCLE_API_BASE}${CIRCLE_TRANSFER_PATH}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CIRCLE_API_KEY}`,
+      "Content-Type": "application/json",
+      "X-Entity-Secret": CIRCLE_ENTITY_SECRET
+    },
+    body: JSON.stringify(payload)
+  });
+  const text = await response.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch (_error) {
+    body = { raw: text };
+  }
+  if (!response.ok) {
+    const detail = body?.message || body?.error || `Circle API ${response.status}`;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+
+  return {
+    request: payload,
+    response: body
+  };
+}
+
+app.get("/api/config", (_req, res) => {
+  res.json(getRailConfig());
+});
+
+app.post("/api/payments/circle/transfer", async (req, res) => {
+  try {
+    const { amount_minor, memo } = req.body || {};
+    if (!Number.isInteger(amount_minor) || amount_minor < 1) {
+      return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
+    }
+    const transfer = await createCircleTransfer({ amountMinor: amount_minor, memo });
+    return res.status(201).json({
+      payment_mode: "circle_wallet",
+      amount_minor,
+      amount_usd: helpers.toUsd(amount_minor),
+      transfer
+    });
+  } catch (error) {
+    return sendError(res, 502, "circle_transfer_failed", error.message);
+  }
+});
+
 // U1: Live battle tipping
 app.get("/api/tips/leaderboard", (_req, res) => {
   res.json({
@@ -58,7 +166,7 @@ app.get("/api/tips/leaderboard", (_req, res) => {
 });
 
 app.post("/api/tips", (req, res) => {
-  const { fan_name, dancer_id, amount_minor } = req.body || {};
+  const { fan_name, dancer_id, amount_minor, payment_mode, payment_ref } = req.body || {};
   const dancer = dancers.find((item) => item.id === dancer_id);
   if (!dancer) {
     return sendError(res, 404, "dancer_not_found", "Unknown dancer_id");
@@ -75,6 +183,8 @@ app.post("/api/tips", (req, res) => {
     fan_name: fan_name || "Anonymous",
     dancer_id,
     amount_minor,
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   });
@@ -89,7 +199,7 @@ app.post("/api/tips", (req, res) => {
       name: dancer.name
     },
     gateway: {
-      mode: "x402_style_authorization",
+      mode: payment_mode || "x402_style_authorization",
       settlement: "batched_on_arc_testnet"
     },
     leaderboard: listLeaderboard()
@@ -146,7 +256,7 @@ app.get("/api/tutorials/:clipId", (req, res) => {
 
 app.post("/api/tutorials/:clipId/pay", (req, res) => {
   const { clipId } = req.params;
-  const { buyer_name } = req.body || {};
+  const { buyer_name, payment_mode, payment_ref } = req.body || {};
   const clip = tutorialClips.find((item) => item.id === clipId);
   if (!clip) {
     return sendError(res, 404, "clip_not_found", "Unknown clip id");
@@ -161,6 +271,8 @@ app.post("/api/tutorials/:clipId/pay", (req, res) => {
     clip_id: clipId,
     buyer_name: buyer_name || "Anonymous",
     amount_minor: clip.priceMinor,
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   });
@@ -173,7 +285,7 @@ app.post("/api/tutorials/:clipId/pay", (req, res) => {
     amount_minor: clip.priceMinor,
     amount_usd: helpers.toUsd(clip.priceMinor),
     gateway: {
-      mode: "x402_authorization",
+      mode: payment_mode || "x402_authorization",
       settlement: "batched"
     }
   });
@@ -197,7 +309,7 @@ app.post("/api/battle/register", (req, res) => {
     return sendError(res, 409, "registration_closed", "Battle entry is closed");
   }
 
-  const { dancer_name, wallet, entry_fee_minor } = req.body || {};
+  const { dancer_name, wallet, entry_fee_minor, payment_mode, payment_ref } = req.body || {};
   if (!dancer_name || !wallet) {
     return sendError(res, 400, "invalid_entry", "dancer_name and wallet are required");
   }
@@ -211,7 +323,8 @@ app.post("/api/battle/register", (req, res) => {
     wallet,
     entry_fee_minor,
     entry_fee_usd: helpers.toUsd(entry_fee_minor),
-    paid_via: "Circle_USDC",
+    paid_via: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
     created_at: helpers.nowIso()
   };
 
