@@ -2,7 +2,7 @@
 
 An ETHGlobal-ready app that turns Krump culture into programmable commerce using:
 
-- Official Universal Commerce Protocol (UCP) JS SDK + schema validation
+- Official Universal Commerce Protocol (UCP) stack (JS SDK + schema validation + conformance checks)
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
 
@@ -41,7 +41,7 @@ This app now integrates the official UCP stack in Node via `@ucp-js/sdk` and val
 
 ### Conformance Notes
 
-- Runtime validation is performed through official SDK schemas.
+- Runtime validation is performed through official UCP SDK schemas.
 - Invalid checkout payloads are rejected with a typed UCP validation error path.
 - The self-test endpoint is intended for quick demo-day confidence checks.
 
