@@ -138,7 +138,8 @@ async function createCircleWalletFromUi() {
     wallet_name: document.getElementById("circle-wallet-name").value || "",
     blockchain: document.getElementById("circle-blockchain").value || "ARC-TESTNET",
     wallet_set_id: document.getElementById("circle-wallet-set-id").value || "",
-    entity_secret_ciphertext: document.getElementById("circle-entity-ciphertext").value || ""
+    entity_secret_ciphertext: document.getElementById("circle-entity-ciphertext").value || "",
+    entity_secret_raw: document.getElementById("circle-entity-secret-raw").value || ""
   };
   const response = await request("/api/circle/wallets/create", {
     method: "POST",
