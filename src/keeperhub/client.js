@@ -2,12 +2,35 @@
 
 const DEFAULT_BASE = "https://app.keeperhub.com/api";
 
+/**
+ * KeeperHub docs use host `app.keeperhub.com` with API root `/api`.
+ * If KEEPERHUB_API_BASE is set to `https://app.keeperhub.com` (no `/api`),
+ * requests hit `/chains` instead of `/api/chains` and return HTML 404.
+ */
 function getBaseUrl() {
-  return (process.env.KEEPERHUB_API_BASE || DEFAULT_BASE).replace(/\/$/, "");
+  let base = (process.env.KEEPERHUB_API_BASE || DEFAULT_BASE).trim().replace(/\/$/, "");
+  if (/^https?:\/\/app\.keeperhub\.com$/i.test(base)) {
+    return DEFAULT_BASE;
+  }
+  return base;
 }
 
 function getApiKey() {
-  return process.env.KEEPERHUB_API_KEY || "";
+  return (process.env.KEEPERHUB_API_KEY || "").trim();
+}
+
+function assertOrgApiKeyForRest() {
+  const key = getApiKey();
+  if (!key) {
+    return;
+  }
+  if (key.startsWith("wfb_")) {
+    const err = new Error(
+      "KEEPERHUB_API_KEY is a user webhook key (wfb_). Use an Organization key (kh_) from Settings → API Keys → Organisation for REST, chains, and direct execution."
+    );
+    err.code = "keeperhub_wrong_key_type";
+    throw err;
+  }
 }
 
 function isConfigured() {
@@ -25,6 +48,7 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     err.code = "keeperhub_not_configured";
     throw err;
   }
+  assertOrgApiKeyForRest();
   const url = `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = {
     Accept: "application/json",
@@ -47,6 +71,15 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     parsed = { raw: text };
   }
   if (!response.ok) {
+    if (text.trimStart().startsWith("<!") || text.includes("<title>Error</title>")) {
+      const err = new Error(
+        `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
+          `If you set KEEPERHUB_API_BASE, it must include /api (e.g. ${DEFAULT_BASE}).`
+      );
+      err.status = response.status;
+      err.body = { html_preview: text.slice(0, 120) };
+      throw err;
+    }
     const msg =
       parsed?.error?.message ||
       parsed?.error ||

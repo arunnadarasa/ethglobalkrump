@@ -193,11 +193,11 @@ The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes)
 
 ### Setup
 
-1. Create an **organization API key** (`kh_…`) in [KeeperHub](https://app.keeperhub.com/) under Settings → API Keys (see [API keys](https://docs.keeperhub.com/api/api-keys)).
+1. Create an **organization API key** (`kh_…`) in [KeeperHub](https://app.keeperhub.com/) under Settings → API Keys → **Organisation** (see [API keys](https://docs.keeperhub.com/api/api-keys)). User-scoped **webhook** keys (`wfb_…`) are only for workflow webhook URLs in KeeperHub’s docs — **do not** put a `wfb_` key in `KEEPERHUB_API_KEY`; this app’s REST and direct-execution calls require `kh_`.
 2. Add to `.env` (never commit the real key):
 
-   - `KEEPERHUB_API_KEY` — required for any KeeperHub call
-   - `KEEPERHUB_API_BASE` — optional, default `https://app.keeperhub.com/api`
+   - `KEEPERHUB_API_KEY` — required for any KeeperHub call (`kh_…` only)
+   - `KEEPERHUB_API_BASE` — optional, default `https://app.keeperhub.com/api` (must include `/api`; if you omit it, the client normalizes `https://app.keeperhub.com` to the default)
    - `KEEPERHUB_EXECUTE_NETWORK` — optional; if Arc testnet (`ARC_CHAIN_ID`, default `5042002`) is listed under `GET /api/chains` but direct execution expects a different `network` string, set it explicitly (see [Direct execution](https://docs.keeperhub.com/api/direct-execution))
    - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for USDC-style ERC-20 transfers. Leave unset only if you intend a **native** transfer on that network.
    - `KEEPERHUB_TOKEN_DECIMALS` / `KEEPERHUB_TOKEN_SYMBOL` — optional metadata for non-standard tokens (defaults `6` / `USDC`)
