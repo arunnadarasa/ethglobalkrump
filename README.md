@@ -57,7 +57,7 @@ Put your Circle credentials in `.env`:
 - `CIRCLE_API_KEY`
 - `CIRCLE_ENTITY_SECRET`
 - `CIRCLE_WALLET_ID`
-- `CIRCLE_TOKEN_ID` (token id for USDC on your configured chain)
+- `CIRCLE_TOKEN_ID` (preferred) **or** `CIRCLE_TOKEN_ADDRESS` + `CIRCLE_TOKEN_BLOCKCHAIN`
 - `CIRCLE_DESTINATION_ADDRESS`
 
 If your Circle account uses a different transfer endpoint, update:

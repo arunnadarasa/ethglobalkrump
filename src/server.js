@@ -21,6 +21,8 @@ const CIRCLE_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET || "";
 const CIRCLE_WALLET_ID = process.env.CIRCLE_WALLET_ID || "";
 const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
 const CIRCLE_TOKEN_ID = process.env.CIRCLE_TOKEN_ID || "";
+const CIRCLE_TOKEN_ADDRESS = process.env.CIRCLE_TOKEN_ADDRESS || "";
+const CIRCLE_TOKEN_BLOCKCHAIN = process.env.CIRCLE_TOKEN_BLOCKCHAIN || "ARC-TESTNET";
 
 const ARCTESTNET_CHAIN_ID = process.env.ARC_CHAIN_ID || "5042002";
 const ARCTESTNET_CHAIN_ID_HEX = `0x${Number(ARCTESTNET_CHAIN_ID).toString(16)}`;
@@ -63,6 +65,7 @@ function setBattleClosed(value) {
 }
 
 function getRailConfig() {
+  const hasTokenSelector = Boolean(CIRCLE_TOKEN_ID || (CIRCLE_TOKEN_ADDRESS && CIRCLE_TOKEN_BLOCKCHAIN));
   return {
     rails: {
       metamask: {
@@ -74,9 +77,11 @@ function getRailConfig() {
         treasury_address: ONCHAIN_TREASURY_ADDRESS
       },
       circle: {
-        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID && CIRCLE_TOKEN_ID),
+        enabled: Boolean(CIRCLE_API_KEY && CIRCLE_ENTITY_SECRET && CIRCLE_WALLET_ID && hasTokenSelector),
         wallet_id: CIRCLE_WALLET_ID,
         token_id: CIRCLE_TOKEN_ID,
+        token_address: CIRCLE_TOKEN_ADDRESS,
+        token_blockchain: CIRCLE_TOKEN_BLOCKCHAIN,
         destination_address: CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS,
         api_base: CIRCLE_API_BASE,
         transfer_path: CIRCLE_TRANSFER_PATH
@@ -89,8 +94,12 @@ async function createCircleTransfer({ amountMinor, memo }) {
   if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET || !CIRCLE_WALLET_ID) {
     throw new Error("Circle credentials missing: set CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, CIRCLE_WALLET_ID");
   }
-  if (!CIRCLE_TOKEN_ID) {
-    throw new Error("Circle token missing: set CIRCLE_TOKEN_ID for USDC on your target chain");
+  const hasTokenId = Boolean(CIRCLE_TOKEN_ID);
+  const hasTokenAddressSelector = Boolean(CIRCLE_TOKEN_ADDRESS && CIRCLE_TOKEN_BLOCKCHAIN);
+  if (!hasTokenId && !hasTokenAddressSelector) {
+    throw new Error(
+      "Circle token missing: set CIRCLE_TOKEN_ID or set CIRCLE_TOKEN_ADDRESS + CIRCLE_TOKEN_BLOCKCHAIN"
+    );
   }
 
   const destinationAddress = CIRCLE_DESTINATION_ADDRESS || ONCHAIN_TREASURY_ADDRESS;
@@ -105,11 +114,16 @@ async function createCircleTransfer({ amountMinor, memo }) {
     amounts: [amount],
     feeLevel: "MEDIUM",
     idempotencyKey: helpers.makeId("circle"),
-    tokenId: CIRCLE_TOKEN_ID,
     metadata: {
       memo: memo || "krump-ucp-demo"
     }
   };
+  if (hasTokenId) {
+    payload.tokenId = CIRCLE_TOKEN_ID;
+  } else {
+    payload.tokenAddress = CIRCLE_TOKEN_ADDRESS;
+    payload.blockchain = CIRCLE_TOKEN_BLOCKCHAIN;
+  }
 
   const response = await fetch(`${CIRCLE_API_BASE}${CIRCLE_TRANSFER_PATH}`, {
     method: "POST",
