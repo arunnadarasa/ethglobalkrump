@@ -137,7 +137,8 @@ async function createCircleWalletFromUi() {
   const payload = {
     wallet_name: document.getElementById("circle-wallet-name").value || "",
     blockchain: document.getElementById("circle-blockchain").value || "ARC-TESTNET",
-    wallet_set_id: document.getElementById("circle-wallet-set-id").value || ""
+    wallet_set_id: document.getElementById("circle-wallet-set-id").value || "",
+    entity_secret_ciphertext: document.getElementById("circle-entity-ciphertext").value || ""
   };
   const response = await request("/api/circle/wallets/create", {
     method: "POST",
@@ -149,6 +150,26 @@ async function createCircleWalletFromUi() {
   }
   print("circle-wallet-output", response.body);
   await loadConfig();
+}
+
+async function generateCiphertextFromUi() {
+  const payload = {
+    entity_secret_raw: document.getElementById("circle-entity-secret-raw").value || ""
+  };
+  const response = await request("/api/circle/entity-secret-ciphertext/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(response.body?.error?.message || "Failed to generate ciphertext");
+  }
+  const value = response.body?.entity_secret_ciphertext || "";
+  document.getElementById("circle-entity-ciphertext").value = value;
+  print("circle-wallet-output", {
+    generated: true,
+    ciphertext_preview: value ? `${value.slice(0, 12)}...${value.slice(-12)}` : null
+  });
 }
 
 async function loadTutorials() {
@@ -301,6 +322,20 @@ document.getElementById("connect-metamask").addEventListener("click", async () =
 document.getElementById("create-circle-wallet").addEventListener("click", async () => {
   try {
     await createCircleWalletFromUi();
+  } catch (error) {
+    print("circle-wallet-output", { error: error.message });
+  }
+});
+
+document.getElementById("generate-ciphertext").addEventListener("click", async () => {
+  try {
+    const raw = document.getElementById("circle-entity-secret-raw").value || "";
+    if (!raw) {
+      print("circle-wallet-output", {
+        info: "Raw entity secret field is empty. The server will try CIRCLE_ENTITY_SECRET_RAW or CIRCLE_ENTITY_SECRET from .env."
+      });
+    }
+    await generateCiphertextFromUi();
   } catch (error) {
     print("circle-wallet-output", { error: error.message });
   }

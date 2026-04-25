@@ -28,6 +28,16 @@
           <input id="circle-wallet-set-id" placeholder="Existing walletSetId (optional)" />
           <button id="create-circle-wallet" type="button">Create Circle Wallet</button>
         </div>
+        <div class="row">
+          <input id="circle-entity-secret-raw" placeholder="Entity secret raw (optional if set in .env)" />
+          <button id="generate-ciphertext" type="button">Generate Fresh Ciphertext</button>
+        </div>
+        <div class="row">
+          <input
+            id="circle-entity-ciphertext"
+            placeholder="Fresh entitySecretCiphertext (required for wallet create)"
+          />
+        </div>
         <pre id="circle-wallet-output"></pre>
       </section>
 

@@ -19,6 +19,8 @@ const CIRCLE_API_BASE = process.env.CIRCLE_API_BASE || "https://api.circle.com";
 const CIRCLE_TRANSFER_PATH = process.env.CIRCLE_TRANSFER_PATH || "/v1/w3s/developer/transactions/transfer";
 const CIRCLE_API_KEY = process.env.CIRCLE_API_KEY || "";
 const CIRCLE_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET || "";
+const CIRCLE_ENTITY_SECRET_CIPHERTEXT = process.env.CIRCLE_ENTITY_SECRET_CIPHERTEXT || "";
+const CIRCLE_ENTITY_SECRET_RAW = process.env.CIRCLE_ENTITY_SECRET_RAW || "";
 const CIRCLE_WALLET_ID = process.env.CIRCLE_WALLET_ID || "";
 const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
 const CIRCLE_TOKEN_ID = process.env.CIRCLE_TOKEN_ID || "";
@@ -100,6 +102,9 @@ function makeUuid() {
 }
 
 async function circlePost(pathname, payload) {
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'initial',hypothesisId:'H1',location:'src/server.js:circlePost:request',message:'Circle POST request',data:{pathname,hasEntitySecretCiphertext:Boolean(payload?.entitySecretCiphertext),hasWalletSetId:Boolean(payload?.walletSetId),hasWalletId:Boolean(payload?.walletId),blockchains:payload?.blockchains||null,idempotencyKeyPrefix:String(payload?.idempotencyKey||'').slice(0,8)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   const response = await fetch(`${CIRCLE_API_BASE}${pathname}`, {
     method: "POST",
     headers: {
@@ -115,6 +120,9 @@ async function circlePost(pathname, payload) {
   } catch (_error) {
     body = { raw: text };
   }
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'initial',hypothesisId:'H2',location:'src/server.js:circlePost:response',message:'Circle POST response',data:{pathname,status:response.status,ok:response.ok,errorMessage:body?.message||body?.error||null,responseDataId:body?.data?.id||body?.data?.walletSet?.id||body?.data?.wallets?.[0]?.id||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!response.ok) {
     const detail = body?.message || body?.error || `Circle API ${response.status}`;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
@@ -122,13 +130,72 @@ async function circlePost(pathname, payload) {
   return body;
 }
 
-async function ensureCircleWalletSet(walletSetName) {
+async function circleGet(pathname) {
+  const response = await fetch(`${CIRCLE_API_BASE}${pathname}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${CIRCLE_API_KEY}`,
+      "Content-Type": "application/json"
+    }
+  });
+  const text = await response.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch (_error) {
+    body = { raw: text };
+  }
+  if (!response.ok) {
+    const detail = body?.message || body?.error || `Circle API ${response.status}`;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return body;
+}
+
+function asPemPublicKey(publicKeyRaw) {
+  if (!publicKeyRaw) {
+    throw new Error("Empty Circle public key");
+  }
+  if (publicKeyRaw.includes("BEGIN PUBLIC KEY")) {
+    return publicKeyRaw;
+  }
+  const lines = publicKeyRaw.replace(/\s+/g, "").match(/.{1,64}/g) || [];
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join("\n")}\n-----END PUBLIC KEY-----`;
+}
+
+async function generateEntitySecretCiphertext(entitySecretRaw) {
+  if (!CIRCLE_API_KEY) {
+    throw new Error("Circle API key missing");
+  }
+  if (!entitySecretRaw) {
+    throw new Error(
+      "Entity secret missing. Provide the registered raw entity secret in UI or set CIRCLE_ENTITY_SECRET_RAW."
+    );
+  }
+  const keyResult = await circleGet("/v1/w3s/config/entity/publicKey");
+  const publicKeyRaw = keyResult?.data?.publicKey;
+  const pem = asPemPublicKey(publicKeyRaw);
+  const encrypted = crypto.publicEncrypt(
+    {
+      key: pem,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256"
+    },
+    Buffer.from(entitySecretRaw, "utf8")
+  );
+  return encrypted.toString("base64");
+}
+
+async function ensureCircleWalletSet(walletSetName, entitySecretCiphertext) {
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'initial',hypothesisId:'H3',location:'src/server.js:ensureCircleWalletSet:entry',message:'Ensure wallet set entry',data:{hasActiveWalletSetId:Boolean(activeCircleWalletSetId),walletSetName:walletSetName||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (activeCircleWalletSetId) {
     return activeCircleWalletSetId;
   }
   const payload = {
     idempotencyKey: makeUuid(),
-    entitySecretCiphertext: CIRCLE_ENTITY_SECRET,
+    entitySecretCiphertext,
     name: walletSetName || "krump-wallet-set"
   };
   const response = await circlePost("/v1/w3s/developer/walletSets", payload);
@@ -140,14 +207,23 @@ async function ensureCircleWalletSet(walletSetName) {
   return walletSetId;
 }
 
-async function createCircleWallet({ blockchain, walletSetId, walletName }) {
-  if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET) {
-    throw new Error("Circle credentials missing: set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET");
+async function createCircleWallet({ blockchain, walletSetId, walletName, entitySecretCiphertext }) {
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'post-fix',hypothesisId:'H4',location:'src/server.js:createCircleWallet:entry',message:'Create wallet entry',data:{blockchain:blockchain||'ARC-TESTNET',hasProvidedWalletSetId:Boolean(walletSetId),hasApiKey:Boolean(CIRCLE_API_KEY),hasCiphertextFromRequest:Boolean(entitySecretCiphertext),hasCiphertextFromEnv:Boolean(CIRCLE_ENTITY_SECRET_CIPHERTEXT),walletName:walletName||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!CIRCLE_API_KEY) {
+    throw new Error("Circle credentials missing: set CIRCLE_API_KEY");
   }
-  const resolvedWalletSetId = walletSetId || (await ensureCircleWalletSet("krump-wallet-set"));
+  const ciphertext = entitySecretCiphertext || CIRCLE_ENTITY_SECRET_CIPHERTEXT || CIRCLE_ENTITY_SECRET;
+  if (!ciphertext) {
+    throw new Error(
+      "Missing entity secret ciphertext: provide entity_secret_ciphertext in UI or set CIRCLE_ENTITY_SECRET_CIPHERTEXT"
+    );
+  }
+  const resolvedWalletSetId = walletSetId || (await ensureCircleWalletSet("krump-wallet-set", ciphertext));
   const payload = {
     idempotencyKey: makeUuid(),
-    entitySecretCiphertext: CIRCLE_ENTITY_SECRET,
+    entitySecretCiphertext: ciphertext,
     walletSetId: resolvedWalletSetId,
     blockchains: [blockchain || "ARC-TESTNET"],
     accountType: "EOA",
@@ -243,11 +319,15 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/circle/wallets/create", async (req, res) => {
   try {
-    const { blockchain, wallet_set_id, wallet_name } = req.body || {};
+    const { blockchain, wallet_set_id, wallet_name, entity_secret_ciphertext } = req.body || {};
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'post-fix',hypothesisId:'H5',location:'src/server.js:/api/circle/wallets/create',message:'Wallet create route called',data:{blockchain:blockchain||null,hasWalletSetId:Boolean(wallet_set_id),hasWalletName:Boolean(wallet_name),hasCiphertext:Boolean(entity_secret_ciphertext)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const created = await createCircleWallet({
       blockchain: blockchain || "ARC-TESTNET",
       walletSetId: wallet_set_id || "",
-      walletName: wallet_name || ""
+      walletName: wallet_name || "",
+      entitySecretCiphertext: entity_secret_ciphertext || ""
     });
     return res.status(201).json({
       ok: true,
@@ -257,6 +337,26 @@ app.post("/api/circle/wallets/create", async (req, res) => {
     });
   } catch (error) {
     return sendError(res, 502, "circle_wallet_create_failed", error.message);
+  }
+});
+
+app.post("/api/circle/entity-secret-ciphertext/generate", async (req, res) => {
+  try {
+    const { entity_secret_raw } = req.body || {};
+    const sourceSecret = entity_secret_raw || CIRCLE_ENTITY_SECRET_RAW || "";
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'post-fix-3',hypothesisId:'M3',location:'src/server.js:/api/circle/entity-secret-ciphertext/generate',message:'Ciphertext generation route called',data:{hasApiKey:Boolean(CIRCLE_API_KEY),hasRawFromRequest:Boolean(entity_secret_raw),hasRawFromEnvRaw:Boolean(CIRCLE_ENTITY_SECRET_RAW),selectedSource:entity_secret_raw?'request':(CIRCLE_ENTITY_SECRET_RAW?'env_raw':'none')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const ciphertext = await generateEntitySecretCiphertext(sourceSecret);
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'cipher-gen',hypothesisId:'N2',location:'src/server.js:generateEntitySecretCiphertext:success',message:'Ciphertext generated',data:{ciphertextLength:ciphertext.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return res.status(201).json({ ok: true, entity_secret_ciphertext: ciphertext });
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'post-fix-3',hypothesisId:'M4',location:'src/server.js:generateEntitySecretCiphertext:error',message:'Ciphertext generation failed',data:{errorMessage:error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return sendError(res, 502, "circle_ciphertext_generate_failed", error.message);
   }
 });
 
