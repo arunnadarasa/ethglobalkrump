@@ -33,6 +33,16 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - Hypothesis-driven instrumentation made API failures reproducible and explainable.
    - Wallet creation success was verified with runtime evidence, not assumptions.
 
+6. **Circle tip resilience improved after restart edge cases**
+   - Tip flow now resolves wallet identity from UI/request state, not only process memory.
+   - Transfer payloads include required secret material in the expected Circle format.
+   - Result: Circle wallet tipping recovered from restart-related regressions.
+
+7. **Operational visibility improved in UX**
+   - Added wallet balance panel for quick runtime checks.
+   - Kept wallet onboarding and funding guidance close to payment controls.
+   - Reduced demo friction for judges and operators.
+
 ## What Failed / Pain Points
 
 1. **Repository assumption mismatch**
@@ -55,6 +65,14 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - Port collisions (`EADDRINUSE`) and shell syntax differences (`zsh` vs `bash`) slowed iteration.
    - Endpoint naming mismatches (expected vs actual) caused temporary dead ends.
 
+6. **State split between UI and backend caused payment drift**
+   - Wallet created and saved in UI did not always persist as active runtime state after backend restart.
+   - This mismatch triggered false "missing credentials" errors even with valid keys.
+
+7. **Circle transfer payload requirements were stricter than expected**
+   - Transfer calls failed when `entitySecretCiphertext` was absent, even when other credentials were present.
+   - Generic "API parameter invalid" errors required deeper payload-level inspection.
+
 ## Key Learnings
 
 1. **Discovery-first beats assumption-first**
@@ -72,6 +90,12 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 5. **UX should surface operational next steps**
    - Showing wallet identifiers and faucet instructions directly in UI reduced operator mistakes.
 
+6. **Persistence and process state must be bridged explicitly**
+   - Frontend-saved wallet context should be passed to backend transfer routes to survive restarts.
+
+7. **Instrument payload shape, not just success/failure**
+   - Logging key presence (not secrets) on outbound payloads quickly revealed missing required fields.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -83,6 +107,8 @@ This project implemented a hackathon demo for Krump Dance commerce using:
    - with generated ciphertext
 4. Add a short runbook for demo-day recovery (ports, env sanity checks, payment fallback mode).
 5. Keep a strict "no secret logging" policy while preserving high-signal operational logs.
+6. Add a lightweight startup sync endpoint to set active wallet from last saved onboarding result.
+7. Add transfer preflight checks in UI (wallet selected, token selector present, destination configured).
 
 ## Outcome Snapshot
 
@@ -91,3 +117,5 @@ This project implemented a hackathon demo for Krump Dance commerce using:
 - Circle rail: integrated with wallet onboarding UX
 - Circle wallet creation blocker: resolved through fresh ciphertext strategy
 - UX funding guidance: added with direct faucet path
+- Wallet balances: visible in app for MetaMask and Circle wallets
+- Circle tip transfer reliability: fixed for restart and payload-validation edge cases
