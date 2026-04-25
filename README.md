@@ -1,4 +1,6 @@
-# Krump x UCP MVP Demo
+# Krump Protocol Agents
+
+Krump x UCP MVP Demo.
 
 An ETHGlobal-ready app that turns Krump culture into programmable commerce using:
 
