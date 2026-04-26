@@ -72,6 +72,7 @@
             <option value="tip_dancer">tip_dancer</option>
             <option value="unlock_clip">unlock_clip</option>
             <option value="battle_entry">battle_entry</option>
+            <option value="merch_concierge_checkout">merch_concierge_checkout</option>
           </select>
           <button id="agent-run-session" type="button">Run Agent Session</button>
           <button id="agent-get-last-session" type="button">Get Last Session</button>
@@ -162,6 +163,115 @@
           </label>
         </div>
         <pre id="battle-output"></pre>
+      </section>
+
+      <section>
+        <h2>U3 - Judge Feedback Marketplace</h2>
+        <div class="row">
+          <input id="u3-dancer-name" placeholder="Dancer name" />
+          <input id="u3-judge-name" placeholder="Judge name" />
+          <input id="u3-topic" placeholder="Feedback topic" />
+          <input id="u3-amount" type="number" min="100" value="600" />
+          <button id="u3-request-feedback" type="button">Request Feedback</button>
+          <button id="u3-list-feedback" type="button">List Requests</button>
+        </div>
+        <div class="row">
+          <input id="u3-request-id" placeholder="Request id" />
+          <button id="u3-deliver-feedback" type="button">Deliver Feedback</button>
+          <button id="u3-complete-feedback" type="button">Mark Complete</button>
+        </div>
+        <pre id="u3-output"></pre>
+      </section>
+
+      <section>
+        <h2>U6 - Practice Room Booking</h2>
+        <div class="row">
+          <button id="u6-list-rooms" type="button">List Rooms</button>
+          <button id="u6-list-bookings" type="button">List Bookings</button>
+          <input id="u6-room-id" placeholder="room-1" />
+          <input id="u6-dancer-name" placeholder="Dancer name" />
+          <input id="u6-minutes" type="number" min="5" value="30" />
+          <button id="u6-reserve" type="button">Reserve</button>
+        </div>
+        <div class="row">
+          <input id="u6-booking-id" placeholder="Booking id" />
+          <button id="u6-start" type="button">Start</button>
+          <input id="u6-actual-minutes" type="number" min="1" value="28" />
+          <button id="u6-end" type="button">End + Settle</button>
+        </div>
+        <pre id="u6-output"></pre>
+      </section>
+
+      <section>
+        <h2>U7 - Sample Pack Licensing</h2>
+        <div class="row">
+          <button id="u7-list-packs" type="button">List Packs</button>
+          <input id="u7-pack-id" placeholder="pack-1" />
+          <input id="u7-tier-id" placeholder="tier-personal" />
+          <input id="u7-buyer-name" placeholder="Buyer name" />
+          <button id="u7-purchase" type="button">Purchase License</button>
+        </div>
+        <div class="row">
+          <input id="u7-license-token" placeholder="License token" />
+          <button id="u7-verify" type="button">Verify License</button>
+        </div>
+        <pre id="u7-output"></pre>
+      </section>
+
+      <section>
+        <h2>U8 - Skill Challenges + Bounties</h2>
+        <div class="row">
+          <button id="u8-list" type="button">List Challenges</button>
+          <input id="u8-title" placeholder="Challenge title" />
+          <input id="u8-sponsor" placeholder="Sponsor" />
+          <input id="u8-bounty" type="number" min="100" value="1500" />
+          <button id="u8-create" type="button">Create Challenge</button>
+        </div>
+        <div class="row">
+          <input id="u8-challenge-id" placeholder="Challenge id" />
+          <input id="u8-dancer-name" placeholder="Dancer name" />
+          <input id="u8-clip-url" placeholder="Clip URL" />
+          <button id="u8-submit" type="button">Submit Entry</button>
+        </div>
+        <div class="row">
+          <input id="u8-submission-id" placeholder="Submission id" />
+          <input id="u8-score" type="number" min="0" max="100" value="92" />
+          <button id="u8-score-btn" type="button">Score</button>
+          <button id="u8-payout" type="button">Payout Winner</button>
+        </div>
+        <pre id="u8-output"></pre>
+      </section>
+
+      <section>
+        <h2>U4 - Crew Revenue Split Wallet</h2>
+        <div class="row">
+          <button id="u4-list-crews" type="button">List Crews</button>
+          <input id="u4-crew-name" placeholder="Crew name" />
+          <button id="u4-create-crew" type="button">Create Demo Crew</button>
+        </div>
+        <div class="row">
+          <input id="u4-crew-id" placeholder="Crew id" />
+          <input id="u4-split-amount" type="number" min="1" value="2500" />
+          <button id="u4-run-split" type="button">Run Split Settlement</button>
+        </div>
+        <pre id="u4-output"></pre>
+      </section>
+
+      <section>
+        <h2>U10 - Agent Merch Concierge</h2>
+        <div class="row">
+          <button id="u10-catalog" type="button">Load Catalog</button>
+          <input id="u10-style" placeholder="Style (aggressive, clean...)" />
+          <input id="u10-budget" type="number" min="0" value="5000" />
+          <button id="u10-recommend" type="button">Get Recommendations</button>
+        </div>
+        <div class="row">
+          <input id="u10-item-id" placeholder="merch-1" />
+          <input id="u10-qty" type="number" min="1" value="1" />
+          <input id="u10-buyer" placeholder="Buyer name" />
+          <button id="u10-checkout" type="button">Checkout</button>
+        </div>
+        <pre id="u10-output"></pre>
       </section>
     </main>
 

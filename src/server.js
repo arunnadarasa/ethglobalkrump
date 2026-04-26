@@ -14,7 +14,18 @@ const {
   payments,
   payouts,
   unlocks,
-  battleClosed,
+  feedbackRequests,
+  practiceRooms,
+  practiceBookings,
+  samplePacks,
+  issuedLicenses,
+  challenges,
+  challengeSubmissions,
+  challengePayouts,
+  crews,
+  crewSettlements,
+  merchCatalog,
+  merchOrders,
   helpers
 } = require("./state");
 const { makeAgentOrchestrator } = require("./agents/orchestrator");
@@ -661,7 +672,7 @@ app.post("/api/agents/sessions", (req, res) => {
   if (!intent || typeof intent !== "string") {
     return sendError(res, 400, "agent_intent_required", "intent is required and must be a string");
   }
-  const allowedIntents = new Set(["tip_dancer", "unlock_clip", "battle_entry"]);
+  const allowedIntents = new Set(["tip_dancer", "unlock_clip", "battle_entry", "merch_concierge_checkout"]);
   if (!allowedIntents.has(intent)) {
     return sendError(res, 400, "agent_intent_unsupported", `Unsupported intent: ${intent}`);
   }
@@ -1058,6 +1069,413 @@ app.post("/api/battle/declare-winner", async (req, res) => {
     track: "U5",
     payout: stored
   });
+});
+
+// U3: Judge feedback marketplace
+app.get("/api/judge-feedback", (_req, res) => {
+  return res.json({
+    track: "U3",
+    requests: feedbackRequests
+  });
+});
+
+app.post("/api/judge-feedback/requests", (req, res) => {
+  const { dancer_name, judge_name, topic, amount_minor, payment_mode, payment_ref } = req.body || {};
+  if (!dancer_name || !judge_name || !topic) {
+    return sendError(res, 400, "invalid_feedback_request", "dancer_name, judge_name, and topic are required");
+  }
+  if (!Number.isInteger(amount_minor) || amount_minor < 100) {
+    return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 100");
+  }
+  const requestId = helpers.makeId("feedback");
+  const record = {
+    id: requestId,
+    dancer_name,
+    judge_name,
+    topic,
+    amount_minor,
+    amount_usd: helpers.toUsd(amount_minor),
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    status: "requested",
+    feedback_packet: null,
+    created_at: helpers.nowIso(),
+    updated_at: helpers.nowIso()
+  };
+  feedbackRequests.push(record);
+  payments.push({
+    id: helpers.makeId("feedback-pay"),
+    type: "judge_feedback",
+    request_id: requestId,
+    amount_minor,
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    status: "authorized_offchain",
+    created_at: helpers.nowIso()
+  });
+  return res.status(201).json({ track: "U3", request: record });
+});
+
+app.post("/api/judge-feedback/:requestId/deliver", (req, res) => {
+  const request = feedbackRequests.find((item) => item.id === req.params.requestId);
+  if (!request) {
+    return sendError(res, 404, "feedback_request_not_found", "Unknown feedback request id");
+  }
+  const { strengths, improvements, drill_plan } = req.body || {};
+  request.feedback_packet = {
+    strengths: strengths || ["Timing and presence are strong."],
+    improvements: improvements || ["Work on smoother transitions."],
+    drill_plan: drill_plan || ["2x 5-minute isolation drills", "3x battle simulation rounds"]
+  };
+  request.status = "delivered";
+  request.updated_at = helpers.nowIso();
+  return res.json({ track: "U3", request });
+});
+
+app.post("/api/judge-feedback/:requestId/complete", (req, res) => {
+  const request = feedbackRequests.find((item) => item.id === req.params.requestId);
+  if (!request) {
+    return sendError(res, 404, "feedback_request_not_found", "Unknown feedback request id");
+  }
+  request.status = "completed";
+  request.updated_at = helpers.nowIso();
+  return res.json({ track: "U3", request });
+});
+
+// U6: Pay-per-session practice room booking
+app.get("/api/practice-rooms", (_req, res) => {
+  return res.json({
+    track: "U6",
+    rooms: practiceRooms
+  });
+});
+
+app.get("/api/practice-bookings", (_req, res) => {
+  return res.json({
+    track: "U6",
+    bookings: practiceBookings
+  });
+});
+
+app.post("/api/practice-bookings/reserve", (req, res) => {
+  const { room_id, dancer_name, planned_minutes, payment_mode, payment_ref } = req.body || {};
+  const room = practiceRooms.find((item) => item.id === room_id);
+  if (!room) {
+    return sendError(res, 404, "room_not_found", "Unknown room id");
+  }
+  if (!dancer_name || !Number.isInteger(planned_minutes) || planned_minutes < 5) {
+    return sendError(res, 400, "invalid_booking", "dancer_name and planned_minutes (>=5) are required");
+  }
+  const estimateMinor = room.rate_minor_per_min * planned_minutes;
+  if (ENABLE_VYPER_SETTLEMENT) {
+    const policy = vyperSettlement.evaluate({
+      agentId: "payments-agent",
+      amountMinor: estimateMinor,
+      intent: "practice_booking_reserve"
+    });
+    if (!policy.approved) {
+      return sendError(res, 422, "settlement_policy_blocked", policy.reasons.join(", "));
+    }
+  }
+  const booking = {
+    id: helpers.makeId("practice"),
+    room_id,
+    room_name: room.name,
+    dancer_name,
+    planned_minutes,
+    actual_minutes: null,
+    estimated_minor: estimateMinor,
+    estimated_usd: helpers.toUsd(estimateMinor),
+    final_minor: null,
+    final_usd: null,
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    status: "reserved",
+    started_at: null,
+    ended_at: null,
+    created_at: helpers.nowIso()
+  };
+  practiceBookings.push(booking);
+  return res.status(201).json({ track: "U6", booking });
+});
+
+app.post("/api/practice-bookings/:bookingId/start", (req, res) => {
+  const booking = practiceBookings.find((item) => item.id === req.params.bookingId);
+  if (!booking) {
+    return sendError(res, 404, "booking_not_found", "Unknown booking id");
+  }
+  booking.status = "active";
+  booking.started_at = helpers.nowIso();
+  return res.json({ track: "U6", booking });
+});
+
+app.post("/api/practice-bookings/:bookingId/end", (req, res) => {
+  const booking = practiceBookings.find((item) => item.id === req.params.bookingId);
+  if (!booking) {
+    return sendError(res, 404, "booking_not_found", "Unknown booking id");
+  }
+  const room = practiceRooms.find((item) => item.id === booking.room_id);
+  const fallbackMinutes = booking.planned_minutes;
+  const actualMinutes = Math.max(1, Number(req.body?.actual_minutes || fallbackMinutes));
+  const finalMinor = actualMinutes * (room?.rate_minor_per_min || 0);
+  booking.actual_minutes = actualMinutes;
+  booking.final_minor = finalMinor;
+  booking.final_usd = helpers.toUsd(finalMinor);
+  booking.ended_at = helpers.nowIso();
+  booking.status = "completed";
+  return res.json({ track: "U6", booking });
+});
+
+// U7: Krump sample pack licensing
+app.get("/api/sample-packs", (_req, res) => {
+  return res.json({
+    track: "U7",
+    packs: samplePacks
+  });
+});
+
+app.post("/api/sample-packs/:packId/purchase", (req, res) => {
+  const pack = samplePacks.find((item) => item.id === req.params.packId);
+  if (!pack) {
+    return sendError(res, 404, "pack_not_found", "Unknown pack id");
+  }
+  const { tier_id, buyer_name, payment_mode, payment_ref } = req.body || {};
+  const tier = (pack.tiers || []).find((item) => item.id === tier_id);
+  if (!tier) {
+    return sendError(res, 400, "tier_not_found", "tier_id is required and must match pack tier");
+  }
+  const license = {
+    id: helpers.makeId("license"),
+    pack_id: pack.id,
+    pack_title: pack.title,
+    tier_id: tier.id,
+    tier_name: tier.name,
+    buyer_name: buyer_name || "Anonymous",
+    amount_minor: tier.price_minor,
+    amount_usd: helpers.toUsd(tier.price_minor),
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    license_token: helpers.makeId("lictok"),
+    created_at: helpers.nowIso()
+  };
+  issuedLicenses.push(license);
+  return res.status(201).json({ track: "U7", license });
+});
+
+app.post("/api/sample-packs/licenses/verify", (req, res) => {
+  const { license_token } = req.body || {};
+  const license = issuedLicenses.find((item) => item.license_token === license_token);
+  if (!license) {
+    return sendError(res, 404, "license_not_found", "Unknown license token");
+  }
+  return res.json({ track: "U7", valid: true, license });
+});
+
+// U8: Skill challenges with sponsor bounties
+app.get("/api/challenges", (_req, res) => {
+  return res.json({
+    track: "U8",
+    challenges,
+    submissions: challengeSubmissions,
+    payouts: challengePayouts
+  });
+});
+
+app.post("/api/challenges", (req, res) => {
+  const { title, sponsor_name, bounty_minor } = req.body || {};
+  if (!title || !sponsor_name || !Number.isInteger(bounty_minor) || bounty_minor < 100) {
+    return sendError(res, 400, "invalid_challenge", "title, sponsor_name, bounty_minor>=100 are required");
+  }
+  const challenge = {
+    id: helpers.makeId("challenge"),
+    title,
+    sponsor_name,
+    bounty_minor,
+    bounty_usd: helpers.toUsd(bounty_minor),
+    status: "open",
+    created_at: helpers.nowIso()
+  };
+  challenges.push(challenge);
+  return res.status(201).json({ track: "U8", challenge });
+});
+
+app.post("/api/challenges/:challengeId/submit", (req, res) => {
+  const challenge = challenges.find((item) => item.id === req.params.challengeId);
+  if (!challenge) {
+    return sendError(res, 404, "challenge_not_found", "Unknown challenge id");
+  }
+  const { dancer_name, clip_url } = req.body || {};
+  if (!dancer_name || !clip_url) {
+    return sendError(res, 400, "invalid_submission", "dancer_name and clip_url are required");
+  }
+  const submission = {
+    id: helpers.makeId("submission"),
+    challenge_id: challenge.id,
+    dancer_name,
+    clip_url,
+    score: null,
+    status: "submitted",
+    created_at: helpers.nowIso()
+  };
+  challengeSubmissions.push(submission);
+  return res.status(201).json({ track: "U8", submission });
+});
+
+app.post("/api/challenges/:challengeId/score", (req, res) => {
+  const { submission_id, score } = req.body || {};
+  const submission = challengeSubmissions.find(
+    (item) => item.id === submission_id && item.challenge_id === req.params.challengeId
+  );
+  if (!submission) {
+    return sendError(res, 404, "submission_not_found", "Unknown submission id");
+  }
+  submission.score = Number(score || 0);
+  submission.status = "scored";
+  return res.json({ track: "U8", submission });
+});
+
+app.post("/api/challenges/:challengeId/payout", (req, res) => {
+  const challenge = challenges.find((item) => item.id === req.params.challengeId);
+  if (!challenge) {
+    return sendError(res, 404, "challenge_not_found", "Unknown challenge id");
+  }
+  const { winner_submission_id, payment_mode, payment_ref } = req.body || {};
+  const winner = challengeSubmissions.find(
+    (item) => item.id === winner_submission_id && item.challenge_id === challenge.id
+  );
+  if (!winner) {
+    return sendError(res, 404, "winner_submission_not_found", "Unknown winner submission id");
+  }
+  challenge.status = "paid_out";
+  const payout = {
+    id: helpers.makeId("challenge-payout"),
+    challenge_id: challenge.id,
+    winner_submission_id: winner.id,
+    winner_name: winner.dancer_name,
+    amount_minor: challenge.bounty_minor,
+    amount_usd: helpers.toUsd(challenge.bounty_minor),
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    created_at: helpers.nowIso()
+  };
+  challengePayouts.push(payout);
+  return res.status(201).json({ track: "U8", payout });
+});
+
+// U4: Crew revenue split wallet
+app.get("/api/crews", (_req, res) => {
+  return res.json({
+    track: "U4",
+    crews,
+    settlements: crewSettlements
+  });
+});
+
+app.post("/api/crews", (req, res) => {
+  const { name, members } = req.body || {};
+  if (!name || !Array.isArray(members) || members.length < 1) {
+    return sendError(res, 400, "invalid_crew", "name and members[] are required");
+  }
+  const totalShare = members.reduce((sum, member) => sum + Number(member.share_bps || 0), 0);
+  if (totalShare !== 10000) {
+    return sendError(res, 400, "invalid_split", "members share_bps must sum to 10000");
+  }
+  const crew = {
+    id: helpers.makeId("crew"),
+    name,
+    members: members.map((member) => ({
+      name: member.name,
+      wallet: member.wallet || null,
+      share_bps: Number(member.share_bps)
+    })),
+    created_at: helpers.nowIso()
+  };
+  crews.push(crew);
+  return res.status(201).json({ track: "U4", crew });
+});
+
+app.post("/api/crews/:crewId/split-settlement", (req, res) => {
+  const crew = crews.find((item) => item.id === req.params.crewId);
+  if (!crew) {
+    return sendError(res, 404, "crew_not_found", "Unknown crew id");
+  }
+  const { amount_minor, payment_ref, source } = req.body || {};
+  if (!Number.isInteger(amount_minor) || amount_minor < 1) {
+    return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
+  }
+  const shares = crew.members.map((member, idx) => {
+    const raw = Math.floor((amount_minor * member.share_bps) / 10000);
+    const isLast = idx === crew.members.length - 1;
+    return {
+      member_name: member.name,
+      wallet: member.wallet,
+      share_bps: member.share_bps,
+      amount_minor: isLast
+        ? amount_minor - crew.members.slice(0, idx).reduce((sum, m) => sum + Math.floor((amount_minor * m.share_bps) / 10000), 0)
+        : raw
+    };
+  });
+  const settlement = {
+    id: helpers.makeId("split"),
+    crew_id: crew.id,
+    source: source || "manual",
+    payment_ref: payment_ref || null,
+    amount_minor,
+    amount_usd: helpers.toUsd(amount_minor),
+    shares: shares.map((share) => ({ ...share, amount_usd: helpers.toUsd(share.amount_minor) })),
+    created_at: helpers.nowIso()
+  };
+  crewSettlements.push(settlement);
+  return res.status(201).json({ track: "U4", settlement });
+});
+
+// U10: Agent-based merch concierge
+app.get("/api/merch/catalog", (_req, res) => {
+  return res.json({
+    track: "U10",
+    items: merchCatalog.map((item) => ({ ...item, price_usd: helpers.toUsd(item.price_minor) }))
+  });
+});
+
+app.post("/api/merch/concierge/recommend", (req, res) => {
+  const { style, budget_minor } = req.body || {};
+  const budget = Number(budget_minor || 0);
+  const filtered = merchCatalog.filter((item) => (budget > 0 ? item.price_minor <= budget : true));
+  const picks = filtered.slice(0, 2);
+  return res.json({
+    track: "U10",
+    style: style || "all",
+    picks: picks.map((item) => ({
+      ...item,
+      price_usd: helpers.toUsd(item.price_minor),
+      rationale: "Matches budget and battle utility."
+    }))
+  });
+});
+
+app.post("/api/merch/checkout", (req, res) => {
+  const { item_id, quantity, buyer_name, payment_mode, payment_ref } = req.body || {};
+  const item = merchCatalog.find((row) => row.id === item_id);
+  if (!item) {
+    return sendError(res, 404, "merch_item_not_found", "Unknown merch item id");
+  }
+  const qty = Math.max(1, Number(quantity || 1));
+  const amountMinor = item.price_minor * qty;
+  const order = {
+    id: helpers.makeId("merch"),
+    item_id: item.id,
+    item_name: item.name,
+    quantity: qty,
+    buyer_name: buyer_name || "Anonymous",
+    amount_minor: amountMinor,
+    amount_usd: helpers.toUsd(amountMinor),
+    payment_mode: payment_mode || "offchain_demo",
+    payment_ref: payment_ref || null,
+    status: "authorized_offchain",
+    created_at: helpers.nowIso()
+  };
+  merchOrders.push(order);
+  return res.status(201).json({ track: "U10", order });
 });
 
 app.get("/api/health", (_req, res) => {

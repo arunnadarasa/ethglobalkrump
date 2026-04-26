@@ -770,6 +770,273 @@ document.getElementById("keeperhub-demo-transfer").addEventListener("click", asy
   }
 });
 
+// U3
+document.getElementById("u3-list-feedback").addEventListener("click", async () => {
+  const data = await request("/api/judge-feedback");
+  print("u3-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u3-request-feedback").addEventListener("click", async () => {
+  const payload = {
+    dancer_name: document.getElementById("u3-dancer-name").value || "Guest Dancer",
+    judge_name: document.getElementById("u3-judge-name").value || "Judge X",
+    topic: document.getElementById("u3-topic").value || "Battle breakdown",
+    amount_minor: Number(document.getElementById("u3-amount").value || 0),
+    payment_mode: "offchain_demo",
+    payment_ref: null
+  };
+  const data = await request("/api/judge-feedback/requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u3-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u3-deliver-feedback").addEventListener("click", async () => {
+  const requestId = document.getElementById("u3-request-id").value;
+  const data = await request(`/api/judge-feedback/${encodeURIComponent(requestId)}/deliver`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  print("u3-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u3-complete-feedback").addEventListener("click", async () => {
+  const requestId = document.getElementById("u3-request-id").value;
+  const data = await request(`/api/judge-feedback/${encodeURIComponent(requestId)}/complete`, {
+    method: "POST"
+  });
+  print("u3-output", { status: data.status, body: data.body });
+});
+
+// U6
+document.getElementById("u6-list-rooms").addEventListener("click", async () => {
+  const data = await request("/api/practice-rooms");
+  print("u6-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u6-list-bookings").addEventListener("click", async () => {
+  const data = await request("/api/practice-bookings");
+  print("u6-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u6-reserve").addEventListener("click", async () => {
+  const payload = {
+    room_id: document.getElementById("u6-room-id").value || "room-1",
+    dancer_name: document.getElementById("u6-dancer-name").value || "Guest Dancer",
+    planned_minutes: Number(document.getElementById("u6-minutes").value || 0),
+    payment_mode: "offchain_demo",
+    payment_ref: null
+  };
+  const data = await request("/api/practice-bookings/reserve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u6-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u6-start").addEventListener("click", async () => {
+  const bookingId = document.getElementById("u6-booking-id").value;
+  const data = await request(`/api/practice-bookings/${encodeURIComponent(bookingId)}/start`, {
+    method: "POST"
+  });
+  print("u6-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u6-end").addEventListener("click", async () => {
+  const bookingId = document.getElementById("u6-booking-id").value;
+  const payload = { actual_minutes: Number(document.getElementById("u6-actual-minutes").value || 0) };
+  const data = await request(`/api/practice-bookings/${encodeURIComponent(bookingId)}/end`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u6-output", { status: data.status, body: data.body });
+});
+
+// U7
+document.getElementById("u7-list-packs").addEventListener("click", async () => {
+  const data = await request("/api/sample-packs");
+  print("u7-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u7-purchase").addEventListener("click", async () => {
+  const packId = document.getElementById("u7-pack-id").value || "pack-1";
+  const payload = {
+    tier_id: document.getElementById("u7-tier-id").value || "tier-personal",
+    buyer_name: document.getElementById("u7-buyer-name").value || "Buyer",
+    payment_mode: "offchain_demo",
+    payment_ref: null
+  };
+  const data = await request(`/api/sample-packs/${encodeURIComponent(packId)}/purchase`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (data.body?.license?.license_token) {
+    document.getElementById("u7-license-token").value = data.body.license.license_token;
+  }
+  print("u7-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u7-verify").addEventListener("click", async () => {
+  const payload = { license_token: document.getElementById("u7-license-token").value };
+  const data = await request("/api/sample-packs/licenses/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u7-output", { status: data.status, body: data.body });
+});
+
+// U8
+document.getElementById("u8-list").addEventListener("click", async () => {
+  const data = await request("/api/challenges");
+  print("u8-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u8-create").addEventListener("click", async () => {
+  const payload = {
+    title: document.getElementById("u8-title").value || "Weekly challenge",
+    sponsor_name: document.getElementById("u8-sponsor").value || "Sponsor",
+    bounty_minor: Number(document.getElementById("u8-bounty").value || 0)
+  };
+  const data = await request("/api/challenges", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (data.body?.challenge?.id) {
+    document.getElementById("u8-challenge-id").value = data.body.challenge.id;
+  }
+  print("u8-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u8-submit").addEventListener("click", async () => {
+  const challengeId = document.getElementById("u8-challenge-id").value;
+  const payload = {
+    dancer_name: document.getElementById("u8-dancer-name").value || "Guest",
+    clip_url: document.getElementById("u8-clip-url").value || "https://example.com/clip"
+  };
+  const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (data.body?.submission?.id) {
+    document.getElementById("u8-submission-id").value = data.body.submission.id;
+  }
+  print("u8-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u8-score-btn").addEventListener("click", async () => {
+  const challengeId = document.getElementById("u8-challenge-id").value;
+  const payload = {
+    submission_id: document.getElementById("u8-submission-id").value,
+    score: Number(document.getElementById("u8-score").value || 0)
+  };
+  const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/score`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u8-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u8-payout").addEventListener("click", async () => {
+  const challengeId = document.getElementById("u8-challenge-id").value;
+  const payload = {
+    winner_submission_id: document.getElementById("u8-submission-id").value,
+    payment_mode: "offchain_demo",
+    payment_ref: null
+  };
+  const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u8-output", { status: data.status, body: data.body });
+});
+
+// U4
+document.getElementById("u4-list-crews").addEventListener("click", async () => {
+  const data = await request("/api/crews");
+  print("u4-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u4-create-crew").addEventListener("click", async () => {
+  const payload = {
+    name: document.getElementById("u4-crew-name").value || "Demo Crew",
+    members: [
+      { name: "NOVA", wallet: "0x1111111111111111111111111111111111111111", share_bps: 5000 },
+      { name: "SHADOW", wallet: "0x2222222222222222222222222222222222222222", share_bps: 3000 },
+      { name: "RAWFIRE", wallet: "0x3333333333333333333333333333333333333333", share_bps: 2000 }
+    ]
+  };
+  const data = await request("/api/crews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (data.body?.crew?.id) {
+    document.getElementById("u4-crew-id").value = data.body.crew.id;
+  }
+  print("u4-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u4-run-split").addEventListener("click", async () => {
+  const crewId = document.getElementById("u4-crew-id").value;
+  const payload = {
+    amount_minor: Number(document.getElementById("u4-split-amount").value || 0),
+    source: "ui_demo",
+    payment_ref: null
+  };
+  const data = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u4-output", { status: data.status, body: data.body });
+});
+
+// U10
+document.getElementById("u10-catalog").addEventListener("click", async () => {
+  const data = await request("/api/merch/catalog");
+  print("u10-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u10-recommend").addEventListener("click", async () => {
+  const payload = {
+    style: document.getElementById("u10-style").value || "all",
+    budget_minor: Number(document.getElementById("u10-budget").value || 0)
+  };
+  const data = await request("/api/merch/concierge/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u10-output", { status: data.status, body: data.body });
+});
+
+document.getElementById("u10-checkout").addEventListener("click", async () => {
+  const payload = {
+    item_id: document.getElementById("u10-item-id").value || "merch-1",
+    quantity: Number(document.getElementById("u10-qty").value || 1),
+    buyer_name: document.getElementById("u10-buyer").value || "Buyer",
+    payment_mode: "offchain_demo",
+    payment_ref: null
+  };
+  const data = await request("/api/merch/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  print("u10-output", { status: data.status, body: data.body });
+});
+
 async function bootstrap() {
   await loadConfig();
   hydrateSavedCircleWallet();

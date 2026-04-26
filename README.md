@@ -28,13 +28,19 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - `docs/lovable-mega-prompt.md` - full rebuild spec for tools such as Lovable
 - `docs/cursor-mega-prompt-self-hosted-keeperhub-arc.md` - Cursor mega prompt to fork KeeperHub open source and add Arc testnet for local linking to this app
 
-## Top 3 MVP Demo (Implemented)
+## Use Cases Implemented
 
-This repo now includes a runnable prototype for the three prioritized tracks:
+This repo now includes runnable API + UI flows for:
 
 - `U1` Live Battle Micro-Tipping
 - `U2` Pay-Per-Move Tutorial Unlock
+- `U3` Judge Feedback Marketplace
+- `U4` Crew Revenue Split Wallet (simulated split settlements)
 - `U5` Battle Entry + Instant Prize Pool Payout
+- `U6` Pay-Per-Session Practice Room Booking
+- `U7` Krump Sample Pack Licensing
+- `U8` Skill Challenges with Sponsor Bounties
+- `U10` Agent-Based Merch Concierge
 
 ## Official UCP Integration (Now Live)
 

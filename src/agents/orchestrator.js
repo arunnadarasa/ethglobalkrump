@@ -90,6 +90,9 @@ function makeAgentOrchestrator({
   }
 
   function resolveItemId(intent, context) {
+    if (intent === "merch_concierge_checkout") {
+      return context?.item_id || "merch-1";
+    }
     if (intent === "unlock_clip") {
       return context?.clip_id || "clip-1";
     }
@@ -180,7 +183,8 @@ function makeAgentOrchestrator({
       intents: [
         { id: "tip_dancer", description: "Fan to agent tip flow over UCP checkout" },
         { id: "unlock_clip", description: "Agent-driven tutorial unlock checkout" },
-        { id: "battle_entry", description: "Multi-agent coordination before checkout" }
+        { id: "battle_entry", description: "Multi-agent coordination before checkout" },
+        { id: "merch_concierge_checkout", description: "Agent-assisted merch checkout flow over UCP" }
       ],
       sub_agents: ["fan_agent", "dancer_agent", "payments_agent"],
       ucp_core_dependency: true
