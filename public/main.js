@@ -1023,7 +1023,7 @@ document.getElementById("u8-payout").addEventListener("click", async () => {
     document.getElementById("u8-challenge-id").value = challengeId;
     document.getElementById("u8-submission-id").value = submissionId;
     const mode = document.getElementById("u8-mode").value;
-    const payoutResponse = await request(`/api/challenges/${encodeURIComponent(challengeId)}`);
+    const payoutResponse = await request("/api/challenges");
     const challenge = (payoutResponse.body?.challenges || []).find((item) => item.id === challengeId);
     if (!challenge) {
       throw new Error("Challenge not found");
