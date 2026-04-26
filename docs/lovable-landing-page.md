@@ -8,6 +8,8 @@ The first UCP-native agent commerce app where humans and AI agents coordinate pa
 
 Krump Protocol Agents turns creator economy actions (tips, tutorial unlocks, battle entry payouts) into agent-driven commerce flows using Universal Commerce Protocol (UCP), Circle rails, Vyper-backed policy enforcement, and (for [ETHGlobal OpenAgents](https://ethglobal.com/events/openagents/prizes)) optional **KeeperHub** direct execution on Arc testnet.
 
+Top 6 MVP use cases now support live payment rail selection across MetaMask and Circle flows (with offchain demo fallback where needed), so judges can switch rails in-session without changing code.
+
 ## Problem
 
 Creator payments are fragmented across wallets, apps, and trust models.  
@@ -44,6 +46,7 @@ We built a full loop:
 - `POST /api/ucp/checkout/create`
 - `GET /api/ucp/orders/:orderId`
 - `GET /api/ucp/conformance/self-test`
+- Top 6 use-case payment execution paths in UI with `metamask` or `circle_wallet` options
 
 ### 3) Deep Settlement Credibility
 
@@ -78,10 +81,11 @@ We built a full loop:
 
 1. Load agent capabilities and identity (note `keeperhub_execution` when `KEEPERHUB_API_KEY` is set).
 2. Run `tip_dancer` session.
-3. Show session trace with settlement proof.
-4. Show UCP checkout/order responses.
-5. Show Arc deployment proof and Vyper fallback toggle.
-6. Optionally: KeeperHub status + one demo transfer or U5 payout with “Execute via KeeperHub” checked.
+3. Execute one MetaMask payment and one Circle payment in top 6 flows (for example U1 + U6 or U3 + U8).
+4. Show session trace with settlement proof.
+5. Show UCP checkout/order responses.
+6. Show Arc deployment proof and Vyper fallback toggle.
+7. Optionally: KeeperHub status + one demo transfer or U5 payout with “Execute via KeeperHub” checked.
 
 ## Credibility Proof
 

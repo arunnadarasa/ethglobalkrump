@@ -41,6 +41,7 @@ In one interface, users can:
 - Inspect live orchestration traces
 - Run settlement policy checks
 - View UCP discovery/conformance outputs
+- Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `offchain_demo`)
 
 Speaker note: Every action is explainable and auditable in real time.
 
@@ -95,9 +96,10 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 2. Show `GET /api/agents/identity` (ERC-8004 style metadata).
 3. Run `tip_dancer` agent session.
 4. Highlight trace events and settlement proof.
-5. Show UCP checkout/order endpoints.
-6. **KeeperHub:** `GET /api/keeperhub/status` (Arc in chain list), optional demo transfer or U5 payout with checkbox.
-7. Show Arc deployment proof in README.
+5. Trigger one payment flow with MetaMask and one with Circle (U1/U2/U5/U3/U4/U6/U8 now support live rail selection in UI where payment is required).
+6. Show UCP checkout/order endpoints.
+7. **KeeperHub:** `GET /api/keeperhub/status` (Arc in chain list), optional demo transfer or U5 payout with checkbox.
+8. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (KeeperHub executes; UCP decides commerce shape).
 
