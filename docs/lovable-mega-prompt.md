@@ -144,7 +144,7 @@ docs/*                        # optional marketing/pitch md
   Must include:
   - `identity_enabled` (true if `ERC8004_AGENT_REGISTRY` non-empty)
   - `settlement_mode` (`vyper_policy_enabled` if `ENABLE_VYPER_SETTLEMENT=true`, else `circle_default`)
-  - intents: `tip_dancer`, `unlock_clip`, `battle_entry`, `merch_concierge_checkout`
+  - intents: `tip_dancer`, `unlock_clip`, `battle_entry`, `judge_feedback_request`, `crew_split_settlement`, `practice_room_reserve`, `sample_pack_purchase`, `challenge_payout`, `merch_concierge_checkout`
   - `sub_agents`, `ucp_core_dependency: true`
   - Also include `version`, `model: "openclaw-style-inrepo"`, `optional_gateway_adapter: true` (parity with reference).
   - `keeperhub_execution: true` when `KEEPERHUB_API_KEY` is set (non-empty).
@@ -153,10 +153,13 @@ docs/*                        # optional marketing/pitch md
   Returns `{ ok, identity: { standard: "erc-8004-style", agent_registry, agent_id, token_uri, capabilities_uri } }` (nulls allowed).
 
 - `POST /api/agents/sessions` body `{ intent, context? }`  
-  - Validate intent allowlist.
+  - Validate intent allowlist from capabilities (dynamic from orchestrator intent list; do not hardcode only 3-4).
   - Create session with `trace[]` events.
   - Attach `identity` snapshot on session object.
   - Emit `identity` trace event if identity metadata exists.
+  - Accept payment rail context in `context`: `payment_mode`, `payment_ref`, `amount_minor`.
+  - If `payment_mode !== "offchain_demo"` and `payment_ref` is missing, fail session with an error trace.
+  - Emit an early `payments_agent` trace event recording accepted payment context (`payment_mode`, `payment_ref`, `amount_minor`).
   - For `tip_dancer`: fan agent proposes plan.
   - For `battle_entry`: dancer agent proposes details.
   - Payments agent must create UCP checkout via internal builder (not a second protocol).
@@ -389,10 +392,13 @@ Inputs/buttons as in reference:
 
 - `#agent-load-capabilities`, `#agent-load-identity`
 - `#agent-context-json` (optional JSON)
-- `#agent-intent` select (`tip_dancer|unlock_clip|battle_entry`)
+- `#agent-intent` select (must include all intents listed by `/api/agents/capabilities`; at minimum: `tip_dancer|unlock_clip|battle_entry|judge_feedback_request|crew_split_settlement|practice_room_reserve|sample_pack_purchase|challenge_payout|merch_concierge_checkout`)
+- `#agent-payment-mode` select (`metamask|circle_wallet|offchain_demo`)
 - `#agent-run-session`, `#agent-get-last-session`
 - settlement eval: `#settlement-amount-minor`, `#settlement-evaluate`
 - output `#agent-output`
+- On `#agent-load-capabilities`: repopulate the `#agent-intent` dropdown from response `body.agents.intents` (keep currently selected value when still available).
+- On `#agent-run-session`: before posting session, resolve payment via selected rail and include `{ payment_mode, payment_ref, amount_minor }` in context; show `payment_receipt` in output.
 
 ### U1/U2/U5 sections
 
@@ -462,7 +468,7 @@ Current reference code may include `fetch('http://127.0.0.1:7488/ingest/...')` b
 5. MetaMask chain switch + send works when treasury configured.
 6. Tutorial lock/unlock + battle flows behave as specified.
 7. U3/U6/U7/U8/U4/U10 flows are runnable from UI and return deterministic JSON records.
-8. Agent capabilities include `merch_concierge_checkout`.
+8. Agent capabilities include expanded intents (`judge_feedback_request`, `crew_split_settlement`, `practice_room_reserve`, `sample_pack_purchase`, `challenge_payout`, `merch_concierge_checkout`) and UI syncs dropdown from capabilities.
 9. CI jobs pass.
 10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
 
