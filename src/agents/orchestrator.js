@@ -49,6 +49,7 @@ function makeAgentOrchestrator({
 
   function paymentsAgentCheckout(itemId, quantity, context) {
     const previewAmountMinor = (tutorialClips.find((clip) => clip.id === itemId)?.priceMinor || 100) * quantity;
+    const paymentMode = context?.payment_mode || "offchain_demo";
     const settlement =
       typeof evaluateSettlementPolicy === "function"
         ? evaluateSettlementPolicy({
@@ -79,13 +80,15 @@ function makeAgentOrchestrator({
         selected_instrument_id: "agent-instrument-1"
       },
       metadata: {
-        session_hint: String(context?.session_hint || "")
+        session_hint: String(context?.session_hint || ""),
+        payment_mode: paymentMode
       }
     };
     const checkout = createCheckout(checkoutRequest);
     return {
       checkout,
-      settlement
+      settlement,
+      payment_mode: paymentMode
     };
   }
 
@@ -139,7 +142,8 @@ function makeAgentOrchestrator({
       const quantity = Math.max(1, Number(context?.quantity || 1));
       const checkoutResult = paymentsAgentCheckout(itemId, quantity, {
         intent,
-        session_hint: session.id
+        session_hint: session.id,
+        payment_mode: context?.payment_mode || "offchain_demo"
       });
       appendEvent(session, {
         kind: "payments_agent",
@@ -147,6 +151,7 @@ function makeAgentOrchestrator({
         data: {
           checkout_id: checkoutResult?.checkout?.checkout?.id || null,
           total_minor: checkoutResult?.checkout?.checkout?.total_minor || null,
+          payment_mode: checkoutResult?.payment_mode || "offchain_demo",
           settlement: checkoutResult?.settlement || null
         }
       });

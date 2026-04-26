@@ -253,7 +253,11 @@ async function loadAgentIdentityFromUi() {
 
 async function runAgentSessionFromUi() {
   const intent = document.getElementById("agent-intent").value;
-  const context = parseAgentContext();
+  const paymentMode = document.getElementById("agent-payment-mode").value || "offchain_demo";
+  const context = {
+    ...parseAgentContext(),
+    payment_mode: paymentMode
+  };
   const payload = { intent, context };
   const response = await request("/api/agents/sessions", {
     method: "POST",
