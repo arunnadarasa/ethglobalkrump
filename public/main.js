@@ -891,22 +891,39 @@ document.getElementById("u7-list-packs").addEventListener("click", async () => {
 });
 
 document.getElementById("u7-purchase").addEventListener("click", async () => {
-  const packId = document.getElementById("u7-pack-id").value || "pack-1";
-  const payload = {
-    tier_id: document.getElementById("u7-tier-id").value || "tier-personal",
-    buyer_name: document.getElementById("u7-buyer-name").value || "Buyer",
-    payment_mode: "offchain_demo",
-    payment_ref: null
-  };
-  const data = await request(`/api/sample-packs/${encodeURIComponent(packId)}/purchase`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  if (data.body?.license?.license_token) {
-    document.getElementById("u7-license-token").value = data.body.license.license_token;
+  try {
+    const packId = document.getElementById("u7-pack-id").value || "pack-1";
+    const tierId = document.getElementById("u7-tier-id").value || "tier-personal";
+    const mode = document.getElementById("u7-mode").value;
+    const packsResponse = await request("/api/sample-packs");
+    const pack = (packsResponse.body?.packs || []).find((item) => item.id === packId);
+    if (!pack) {
+      throw new Error("Sample pack not found");
+    }
+    const tier = (pack.tiers || []).find((item) => item.id === tierId);
+    if (!tier) {
+      throw new Error("Tier not found for selected sample pack");
+    }
+    const amountMinor = Number(tier.price_minor || 0);
+    const payment = await resolvePaymentReference(mode, amountMinor, "u7-license");
+    const payload = {
+      tier_id: tierId,
+      buyer_name: document.getElementById("u7-buyer-name").value || "Buyer",
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request(`/api/sample-packs/${encodeURIComponent(packId)}/purchase`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (data.body?.license?.license_token) {
+      document.getElementById("u7-license-token").value = data.body.license.license_token;
+    }
+    print("u7-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
+  } catch (error) {
+    print("u7-output", { error: error.message });
   }
-  print("u7-output", { status: data.status, body: data.body });
 });
 
 document.getElementById("u7-verify").addEventListener("click", async () => {
@@ -1069,19 +1086,33 @@ document.getElementById("u10-recommend").addEventListener("click", async () => {
 });
 
 document.getElementById("u10-checkout").addEventListener("click", async () => {
-  const payload = {
-    item_id: document.getElementById("u10-item-id").value || "merch-1",
-    quantity: Number(document.getElementById("u10-qty").value || 1),
-    buyer_name: document.getElementById("u10-buyer").value || "Buyer",
-    payment_mode: "offchain_demo",
-    payment_ref: null
-  };
-  const data = await request("/api/merch/checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  print("u10-output", { status: data.status, body: data.body });
+  try {
+    const itemId = document.getElementById("u10-item-id").value || "merch-1";
+    const quantity = Math.max(1, Number(document.getElementById("u10-qty").value || 1));
+    const mode = document.getElementById("u10-mode").value;
+    const catalogResponse = await request("/api/merch/catalog");
+    const item = (catalogResponse.body?.items || []).find((row) => row.id === itemId);
+    if (!item) {
+      throw new Error("Merch item not found");
+    }
+    const amountMinor = Number(item.price_minor || 0) * quantity;
+    const payment = await resolvePaymentReference(mode, amountMinor, "u10-checkout");
+    const payload = {
+      item_id: itemId,
+      quantity,
+      buyer_name: document.getElementById("u10-buyer").value || "Buyer",
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request("/api/merch/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    print("u10-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
+  } catch (error) {
+    print("u10-output", { error: error.message });
+  }
 });
 
 async function bootstrap() {
