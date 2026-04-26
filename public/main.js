@@ -14,6 +14,8 @@ let railConfig = null;
 let connectedAccount = "";
 let lastCreatedCircleWallet = null;
 let lastAgentSessionId = "";
+let lastU8ChallengeId = "";
+let lastU8SubmissionId = "";
 
 function extractCircleWalletDetails(payload) {
   const wallet =
@@ -958,13 +960,19 @@ document.getElementById("u8-create").addEventListener("click", async () => {
     body: JSON.stringify(payload)
   });
   if (data.body?.challenge?.id) {
-    document.getElementById("u8-challenge-id").value = data.body.challenge.id;
+    lastU8ChallengeId = data.body.challenge.id;
+    document.getElementById("u8-challenge-id").value = lastU8ChallengeId;
   }
   print("u8-output", { status: data.status, body: data.body });
 });
 
 document.getElementById("u8-submit").addEventListener("click", async () => {
-  const challengeId = document.getElementById("u8-challenge-id").value;
+  const challengeId = document.getElementById("u8-challenge-id").value || lastU8ChallengeId;
+  if (!challengeId) {
+    print("u8-output", { error: "Set or create a challenge first." });
+    return;
+  }
+  document.getElementById("u8-challenge-id").value = challengeId;
   const payload = {
     dancer_name: document.getElementById("u8-dancer-name").value || "Guest",
     clip_url: document.getElementById("u8-clip-url").value || "https://example.com/clip"
@@ -975,15 +983,24 @@ document.getElementById("u8-submit").addEventListener("click", async () => {
     body: JSON.stringify(payload)
   });
   if (data.body?.submission?.id) {
-    document.getElementById("u8-submission-id").value = data.body.submission.id;
+    lastU8SubmissionId = data.body.submission.id;
+    document.getElementById("u8-submission-id").value = lastU8SubmissionId;
   }
+  lastU8ChallengeId = challengeId;
   print("u8-output", { status: data.status, body: data.body });
 });
 
 document.getElementById("u8-score-btn").addEventListener("click", async () => {
-  const challengeId = document.getElementById("u8-challenge-id").value;
+  const challengeId = document.getElementById("u8-challenge-id").value || lastU8ChallengeId;
+  const submissionId = document.getElementById("u8-submission-id").value || lastU8SubmissionId;
+  if (!challengeId || !submissionId) {
+    print("u8-output", { error: "Challenge id and submission id are required. Submit an entry first." });
+    return;
+  }
+  document.getElementById("u8-challenge-id").value = challengeId;
+  document.getElementById("u8-submission-id").value = submissionId;
   const payload = {
-    submission_id: document.getElementById("u8-submission-id").value,
+    submission_id: submissionId,
     score: Number(document.getElementById("u8-score").value || 0)
   };
   const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/score`, {
@@ -991,12 +1008,20 @@ document.getElementById("u8-score-btn").addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
+  lastU8ChallengeId = challengeId;
+  lastU8SubmissionId = submissionId;
   print("u8-output", { status: data.status, body: data.body });
 });
 
 document.getElementById("u8-payout").addEventListener("click", async () => {
   try {
-    const challengeId = document.getElementById("u8-challenge-id").value;
+    const challengeId = document.getElementById("u8-challenge-id").value || lastU8ChallengeId;
+    const submissionId = document.getElementById("u8-submission-id").value || lastU8SubmissionId;
+    if (!challengeId || !submissionId) {
+      throw new Error("Challenge id and submission id are required. Submit and score an entry first.");
+    }
+    document.getElementById("u8-challenge-id").value = challengeId;
+    document.getElementById("u8-submission-id").value = submissionId;
     const mode = document.getElementById("u8-mode").value;
     const payoutResponse = await request(`/api/challenges/${encodeURIComponent(challengeId)}`);
     const challenge = (payoutResponse.body?.challenges || []).find((item) => item.id === challengeId);
@@ -1006,7 +1031,7 @@ document.getElementById("u8-payout").addEventListener("click", async () => {
     const amountMinor = Number(challenge.bounty_minor || 0);
     const payment = await resolvePaymentReference(mode, amountMinor, "u8-payout");
     const payload = {
-      winner_submission_id: document.getElementById("u8-submission-id").value,
+      winner_submission_id: submissionId,
       payment_mode: payment.mode,
       payment_ref: payment.ref
     };
@@ -1015,6 +1040,8 @@ document.getElementById("u8-payout").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    lastU8ChallengeId = challengeId;
+    lastU8SubmissionId = submissionId;
     print("u8-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
   } catch (error) {
     print("u8-output", { error: error.message });
