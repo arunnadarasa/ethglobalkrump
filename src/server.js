@@ -577,6 +577,9 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       amountMinor: amount_minor,
       network: summary.execute_network
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T4',location:'src/server.js:/api/keeperhub/execute-transfer',message:'KeeperHub transfer response received',data:{status:transfer?.status||null,executionId:transfer?.executionId||null,arcSupported:summary.arc_supported,executeNetwork:summary.execute_network},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     let execution_status = null;
     if (transfer?.executionId) {
       try {
@@ -587,6 +590,9 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     }
     return res.status(201).json({ ok: true, keeperhub: transfer, execution_status: execution_status, arc: summary });
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T5',location:'src/server.js:/api/keeperhub/execute-transfer:catch',message:'KeeperHub transfer route failed',data:{status:error.status||null,errorMessage:error.message||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return sendError(res, error.status || 502, "keeperhub_transfer_failed", error.message);
   }
 });
