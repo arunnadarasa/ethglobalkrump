@@ -9,8 +9,8 @@ Recreate the app **functionally equivalent** to this specification. Prefer clari
 ## Product name and story
 
 - **Name:** Krump Protocol Agents  
-- **Subtitle:** Krump x UCP MVP Demo (U1 / U2 / U5 tracks)  
-- **Pitch:** programmable creator-economy flows (tips, paid tutorials, battle entry + payout) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), **Arc credibility** via a deployed + verifiable Vyper policy contract, and **optional KeeperHub** on-chain execution (chains + `POST /execute/transfer`) that does not replace UCP or Circle as the commerce core.
+- **Subtitle:** Krump x UCP Demo (U1/U2/U3/U4/U5/U6/U7/U8/U10 tracks)  
+- **Pitch:** programmable creator-economy flows (tips, tutorials, feedback marketplace, room booking, battle payout, licensing, challenge bounties, crew split accounting, merch concierge) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), **Arc credibility** via a deployed + verifiable Vyper policy contract, and **optional KeeperHub** on-chain execution (chains + `POST /execute/transfer`) that does not replace UCP or Circle as the commerce core.
 
 ## Tech stack (must match)
 
@@ -144,7 +144,7 @@ docs/*                        # optional marketing/pitch md
   Must include:
   - `identity_enabled` (true if `ERC8004_AGENT_REGISTRY` non-empty)
   - `settlement_mode` (`vyper_policy_enabled` if `ENABLE_VYPER_SETTLEMENT=true`, else `circle_default`)
-  - intents: `tip_dancer`, `unlock_clip`, `battle_entry`
+  - intents: `tip_dancer`, `unlock_clip`, `battle_entry`, `merch_concierge_checkout`
   - `sub_agents`, `ucp_core_dependency: true`
   - Also include `version`, `model: "openclaw-style-inrepo"`, `optional_gateway_adapter: true` (parity with reference).
   - `keeperhub_execution: true` when `KEEPERHUB_API_KEY` is set (non-empty).
@@ -168,7 +168,7 @@ docs/*                        # optional marketing/pitch md
     - Trace events are `{ id: evt-<random>, at: ISO8601, ...fields }`.
     - `fanAgentForTip`: reads `context.dancer_id` default `dancer-1`, `context.amount_minor` default `25`, returns `{ action: "propose_tip", dancer_id, quantity: ceil(amount_minor/100) }` with quantity at least 1.
     - `dancerAgentForBattle`: returns `{ action: "confirm_battle_entry", dancer_name: context.dancer_name || "Guest Dancer", wallet: context.wallet || zero address }`.
-    - `resolveItemId`: `unlock_clip` uses `context.clip_id || "clip-1"`; `battle_entry` uses `context.clip_id || "clip-2"`; others default `context.clip_id || "clip-1"`.
+    - `resolveItemId`: `unlock_clip` uses `context.clip_id || "clip-1"`; `battle_entry` uses `context.clip_id || "clip-2"`; `merch_concierge_checkout` uses `context.item_id || "merch-1"`; others default `context.clip_id || "clip-1"`.
     - `quantity = max(1, Number(context.quantity || 1))`.
     - `previewAmountMinor = (clip.priceMinor || 100) * quantity` (clip lookup by id).
     - On success: `session.status = "completed"` and `session.summary` is a short human string; on error: `failed` + `{kind:"error", message}`.
@@ -231,6 +231,47 @@ docs/*                        # optional marketing/pitch md
 - `POST /api/battle/close`
 - `POST /api/battle/declare-winner` — body `{ winner_entry_id, execute_via_keeperhub?: boolean }`. When `execute_via_keeperhub` is true and `KEEPERHUB_API_KEY` is set, after pushing the payout record call KeeperHub transfer to `winner.wallet` for `amount_minor = totalPoolMinor`; merge `keeperhub` + optional `execution_status` onto payout; set `settlement_status` to `keeperhub_submitted` / `keeperhub_failed` / `keeperhub_error` as appropriate. When key missing but flag true, set `keeperhub.skipped` with message (do not fail the HTTP success of declare-winner).
 
+**U3 feedback marketplace**
+
+- `GET /api/judge-feedback`
+- `POST /api/judge-feedback/requests`
+- `POST /api/judge-feedback/:requestId/deliver`
+- `POST /api/judge-feedback/:requestId/complete`
+
+**U6 practice room booking**
+
+- `GET /api/practice-rooms`
+- `GET /api/practice-bookings`
+- `POST /api/practice-bookings/reserve`
+- `POST /api/practice-bookings/:bookingId/start`
+- `POST /api/practice-bookings/:bookingId/end`
+
+**U7 sample pack licensing**
+
+- `GET /api/sample-packs`
+- `POST /api/sample-packs/:packId/purchase`
+- `POST /api/sample-packs/licenses/verify`
+
+**U8 skill challenges + bounties**
+
+- `GET /api/challenges`
+- `POST /api/challenges`
+- `POST /api/challenges/:challengeId/submit`
+- `POST /api/challenges/:challengeId/score`
+- `POST /api/challenges/:challengeId/payout`
+
+**U4 crew revenue split**
+
+- `GET /api/crews`
+- `POST /api/crews`
+- `POST /api/crews/:crewId/split-settlement`
+
+**U10 merch concierge**
+
+- `GET /api/merch/catalog`
+- `POST /api/merch/concierge/recommend`
+- `POST /api/merch/checkout`
+
 ### In-memory seed data (must match)
 
 **Dancers (`dancers`)**
@@ -250,6 +291,11 @@ docs/*                        # optional marketing/pitch md
 - `payments[]`, `entries[]`, `payouts[]`
 - `unlocks` map: `unlockToken -> Set(clipId)`
 - `battleClosed` boolean toggled by `/api/battle/close`
+- `feedbackRequests[]`, `practiceRooms[]`, `practiceBookings[]`
+- `samplePacks[]`, `issuedLicenses[]`
+- `challenges[]`, `challengeSubmissions[]`, `challengePayouts[]`
+- `crews[]`, `crewSettlements[]`
+- `merchCatalog[]`, `merchOrders[]`
 
 ### Domain endpoint contracts (must match)
 
@@ -352,6 +398,16 @@ Inputs/buttons as in reference:
 
 Match forms and IDs from reference (`tip-form`, `register-form`, etc.) and print JSON to `<pre>` targets. U5 includes checkbox `#keeperhub-on-payout` — when checked, `declare-winner` POST includes `execute_via_keeperhub: true`.
 
+### U3/U6/U7/U8/U4/U10 sections
+
+- Add one section per use case with explicit action buttons and output panes:
+  - U3 output: `#u3-output`
+  - U6 output: `#u6-output`
+  - U7 output: `#u7-output`
+  - U8 output: `#u8-output`
+  - U4 output: `#u4-output`
+  - U10 output: `#u10-output`
+
 ## Client payment rail behavior (must match)
 
 Three modes:
@@ -405,8 +461,10 @@ Current reference code may include `fetch('http://127.0.0.1:7488/ingest/...')` b
 4. Circle wallet create + ciphertext generate + transfer path works when env configured.
 5. MetaMask chain switch + send works when treasury configured.
 6. Tutorial lock/unlock + battle flows behave as specified.
-7. CI jobs pass.
-8. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
+7. U3/U6/U7/U8/U4/U10 flows are runnable from UI and return deterministic JSON records.
+8. Agent capabilities include `merch_concierge_checkout`.
+9. CI jobs pass.
+10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
 
 ---
 
