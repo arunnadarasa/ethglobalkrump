@@ -172,6 +172,11 @@
           <input id="u3-judge-name" placeholder="Judge name" />
           <input id="u3-topic" placeholder="Feedback topic" />
           <input id="u3-amount" type="number" min="100" value="600" />
+          <select id="u3-mode">
+            <option value="metamask">MetaMask on-chain</option>
+            <option value="circle_wallet">Circle wallet</option>
+            <option value="offchain_demo">Offchain demo only</option>
+          </select>
           <button id="u3-request-feedback" type="button">Request Feedback</button>
           <button id="u3-list-feedback" type="button">List Requests</button>
         </div>
@@ -191,6 +196,11 @@
           <input id="u6-room-id" placeholder="room-1" />
           <input id="u6-dancer-name" placeholder="Dancer name" />
           <input id="u6-minutes" type="number" min="5" value="30" />
+          <select id="u6-mode">
+            <option value="metamask">MetaMask on-chain</option>
+            <option value="circle_wallet">Circle wallet</option>
+            <option value="offchain_demo">Offchain demo only</option>
+          </select>
           <button id="u6-reserve" type="button">Reserve</button>
         </div>
         <div class="row">
@@ -236,6 +246,11 @@
         <div class="row">
           <input id="u8-submission-id" placeholder="Submission id" />
           <input id="u8-score" type="number" min="0" max="100" value="92" />
+          <select id="u8-mode">
+            <option value="metamask">MetaMask on-chain</option>
+            <option value="circle_wallet">Circle wallet</option>
+            <option value="offchain_demo">Offchain demo only</option>
+          </select>
           <button id="u8-score-btn" type="button">Score</button>
           <button id="u8-payout" type="button">Payout Winner</button>
         </div>
@@ -252,6 +267,11 @@
         <div class="row">
           <input id="u4-crew-id" placeholder="Crew id" />
           <input id="u4-split-amount" type="number" min="1" value="2500" />
+          <select id="u4-mode">
+            <option value="metamask">MetaMask on-chain</option>
+            <option value="circle_wallet">Circle wallet</option>
+            <option value="offchain_demo">Offchain demo only</option>
+          </select>
           <button id="u4-run-split" type="button">Run Split Settlement</button>
         </div>
         <pre id="u4-output"></pre>

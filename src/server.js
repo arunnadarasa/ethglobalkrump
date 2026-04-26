@@ -1399,7 +1399,7 @@ app.post("/api/crews/:crewId/split-settlement", (req, res) => {
   if (!crew) {
     return sendError(res, 404, "crew_not_found", "Unknown crew id");
   }
-  const { amount_minor, payment_ref, source } = req.body || {};
+  const { amount_minor, payment_mode, payment_ref, source } = req.body || {};
   if (!Number.isInteger(amount_minor) || amount_minor < 1) {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
   }
@@ -1419,6 +1419,7 @@ app.post("/api/crews/:crewId/split-settlement", (req, res) => {
     id: helpers.makeId("split"),
     crew_id: crew.id,
     source: source || "manual",
+    payment_mode: payment_mode || "offchain_demo",
     payment_ref: payment_ref || null,
     amount_minor,
     amount_usd: helpers.toUsd(amount_minor),

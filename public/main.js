@@ -777,20 +777,27 @@ document.getElementById("u3-list-feedback").addEventListener("click", async () =
 });
 
 document.getElementById("u3-request-feedback").addEventListener("click", async () => {
-  const payload = {
-    dancer_name: document.getElementById("u3-dancer-name").value || "Guest Dancer",
-    judge_name: document.getElementById("u3-judge-name").value || "Judge X",
-    topic: document.getElementById("u3-topic").value || "Battle breakdown",
-    amount_minor: Number(document.getElementById("u3-amount").value || 0),
-    payment_mode: "offchain_demo",
-    payment_ref: null
-  };
-  const data = await request("/api/judge-feedback/requests", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  print("u3-output", { status: data.status, body: data.body });
+  try {
+    const amountMinor = Number(document.getElementById("u3-amount").value || 0);
+    const mode = document.getElementById("u3-mode").value;
+    const payment = await resolvePaymentReference(mode, amountMinor, "u3-feedback");
+    const payload = {
+      dancer_name: document.getElementById("u3-dancer-name").value || "Guest Dancer",
+      judge_name: document.getElementById("u3-judge-name").value || "Judge X",
+      topic: document.getElementById("u3-topic").value || "Battle breakdown",
+      amount_minor: amountMinor,
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request("/api/judge-feedback/requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    print("u3-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
+  } catch (error) {
+    print("u3-output", { error: error.message });
+  }
 });
 
 document.getElementById("u3-deliver-feedback").addEventListener("click", async () => {
@@ -823,19 +830,39 @@ document.getElementById("u6-list-bookings").addEventListener("click", async () =
 });
 
 document.getElementById("u6-reserve").addEventListener("click", async () => {
-  const payload = {
-    room_id: document.getElementById("u6-room-id").value || "room-1",
-    dancer_name: document.getElementById("u6-dancer-name").value || "Guest Dancer",
-    planned_minutes: Number(document.getElementById("u6-minutes").value || 0),
-    payment_mode: "offchain_demo",
-    payment_ref: null
-  };
-  const data = await request("/api/practice-bookings/reserve", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  print("u6-output", { status: data.status, body: data.body });
+  try {
+    const roomId = document.getElementById("u6-room-id").value || "room-1";
+    const plannedMinutes = Number(document.getElementById("u6-minutes").value || 0);
+    const mode = document.getElementById("u6-mode").value;
+
+    const roomsResponse = await request("/api/practice-rooms");
+    const room = (roomsResponse.body?.rooms || []).find((item) => item.id === roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+    const estimatedMinor = Number(room.rate_minor_per_min || 0) * plannedMinutes;
+    const payment = await resolvePaymentReference(mode, estimatedMinor, "u6-reserve");
+
+    const payload = {
+      room_id: roomId,
+      dancer_name: document.getElementById("u6-dancer-name").value || "Guest Dancer",
+      planned_minutes: plannedMinutes,
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request("/api/practice-bookings/reserve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    print("u6-output", {
+      status: data.status,
+      payment_receipt: payment.receipt,
+      body: data.body
+    });
+  } catch (error) {
+    print("u6-output", { error: error.message });
+  }
 });
 
 document.getElementById("u6-start").addEventListener("click", async () => {
@@ -947,18 +974,30 @@ document.getElementById("u8-score-btn").addEventListener("click", async () => {
 });
 
 document.getElementById("u8-payout").addEventListener("click", async () => {
-  const challengeId = document.getElementById("u8-challenge-id").value;
-  const payload = {
-    winner_submission_id: document.getElementById("u8-submission-id").value,
-    payment_mode: "offchain_demo",
-    payment_ref: null
-  };
-  const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  print("u8-output", { status: data.status, body: data.body });
+  try {
+    const challengeId = document.getElementById("u8-challenge-id").value;
+    const mode = document.getElementById("u8-mode").value;
+    const payoutResponse = await request(`/api/challenges/${encodeURIComponent(challengeId)}`);
+    const challenge = (payoutResponse.body?.challenges || []).find((item) => item.id === challengeId);
+    if (!challenge) {
+      throw new Error("Challenge not found");
+    }
+    const amountMinor = Number(challenge.bounty_minor || 0);
+    const payment = await resolvePaymentReference(mode, amountMinor, "u8-payout");
+    const payload = {
+      winner_submission_id: document.getElementById("u8-submission-id").value,
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    print("u8-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
+  } catch (error) {
+    print("u8-output", { error: error.message });
+  }
 });
 
 // U4
@@ -988,18 +1027,26 @@ document.getElementById("u4-create-crew").addEventListener("click", async () => 
 });
 
 document.getElementById("u4-run-split").addEventListener("click", async () => {
-  const crewId = document.getElementById("u4-crew-id").value;
-  const payload = {
-    amount_minor: Number(document.getElementById("u4-split-amount").value || 0),
-    source: "ui_demo",
-    payment_ref: null
-  };
-  const data = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  print("u4-output", { status: data.status, body: data.body });
+  try {
+    const crewId = document.getElementById("u4-crew-id").value;
+    const amountMinor = Number(document.getElementById("u4-split-amount").value || 0);
+    const mode = document.getElementById("u4-mode").value;
+    const payment = await resolvePaymentReference(mode, amountMinor, "u4-split");
+    const payload = {
+      amount_minor: amountMinor,
+      source: "ui_demo",
+      payment_mode: payment.mode,
+      payment_ref: payment.ref
+    };
+    const data = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    print("u4-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
+  } catch (error) {
+    print("u4-output", { error: error.message });
+  }
 });
 
 // U10
