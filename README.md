@@ -240,7 +240,22 @@ KeeperHub’s prize page asks for a demo, public repo with README, and a short w
 
 - U1 tips settle through selectable rails and update leaderboard in real time.
 - U2 keeps content locked behind payment and returns unlock tokens for access.
+- U3 runs a judge-feedback lifecycle with upfront payment intent and delivery/complete states.
+- U4 records deterministic crew split ledgers from one payment event.
 - U5 registers entrants, closes rounds, and computes winner payout paths (optional on-chain payout via KeeperHub when configured).
+- U6 reserves, starts, and settles practice rooms from planned to final minutes.
+- U7 issues sample pack license artifacts and verifies entitlement tokens.
+- U8 supports sponsor challenge creation, submissions, scoring, and winner payout records.
+- U10 provides merch recommendations and checkout records through an agent-friendly flow.
 - Circle and MetaMask balances are visible in the same demo for operational confidence.
 - Official UCP discovery/checkout/order responses are exposed with schema-backed validation.
 - KeeperHub status/chains and demo transfer UI exercise the sponsor integration without changing UCP semantics.
+
+## Additional API surface
+
+- U3: `GET /api/judge-feedback`, `POST /api/judge-feedback/requests`, `POST /api/judge-feedback/:requestId/deliver`, `POST /api/judge-feedback/:requestId/complete`
+- U6: `GET /api/practice-rooms`, `GET /api/practice-bookings`, `POST /api/practice-bookings/reserve`, `POST /api/practice-bookings/:bookingId/start`, `POST /api/practice-bookings/:bookingId/end`
+- U7: `GET /api/sample-packs`, `POST /api/sample-packs/:packId/purchase`, `POST /api/sample-packs/licenses/verify`
+- U8: `GET /api/challenges`, `POST /api/challenges`, `POST /api/challenges/:challengeId/submit`, `POST /api/challenges/:challengeId/score`, `POST /api/challenges/:challengeId/payout`
+- U4: `GET /api/crews`, `POST /api/crews`, `POST /api/crews/:crewId/split-settlement`
+- U10: `GET /api/merch/catalog`, `POST /api/merch/concierge/recommend`, `POST /api/merch/checkout`
