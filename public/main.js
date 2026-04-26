@@ -235,6 +235,21 @@ function parseAgentContext() {
 
 async function loadAgentCapabilitiesFromUi() {
   const response = await request("/api/agents/capabilities");
+  const intents = response.body?.agents?.intents || [];
+  if (Array.isArray(intents) && intents.length > 0) {
+    const select = document.getElementById("agent-intent");
+    const currentValue = select.value;
+    select.innerHTML = "";
+    intents.forEach((intent) => {
+      const option = document.createElement("option");
+      option.value = intent.id;
+      option.textContent = intent.id;
+      select.appendChild(option);
+    });
+    if (Array.from(select.options).some((opt) => opt.value === currentValue)) {
+      select.value = currentValue;
+    }
+  }
   print("agent-output", {
     route: "/api/agents/capabilities",
     ok: response.ok,
@@ -256,9 +271,25 @@ async function loadAgentIdentityFromUi() {
 async function runAgentSessionFromUi() {
   const intent = document.getElementById("agent-intent").value;
   const paymentMode = document.getElementById("agent-payment-mode").value || "offchain_demo";
+  const parsedContext = parseAgentContext();
+  const fallbackAmounts = {
+    tip_dancer: 25,
+    unlock_clip: 500,
+    battle_entry: 500,
+    judge_feedback_request: 600,
+    crew_split_settlement: 2500,
+    practice_room_reserve: 300,
+    sample_pack_purchase: 700,
+    challenge_payout: 1500,
+    merch_concierge_checkout: 5000
+  };
+  const amountMinor = Number(parsedContext.amount_minor || fallbackAmounts[intent] || 100);
+  const payment = await resolvePaymentReference(paymentMode, amountMinor, `agent-${intent}`);
   const context = {
-    ...parseAgentContext(),
-    payment_mode: paymentMode
+    ...parsedContext,
+    amount_minor: amountMinor,
+    payment_mode: payment.mode,
+    payment_ref: payment.ref
   };
   const payload = { intent, context };
   const response = await request("/api/agents/sessions", {
@@ -272,6 +303,7 @@ async function runAgentSessionFromUi() {
     ok: response.ok,
     status: response.status,
     request: payload,
+    payment_receipt: payment.receipt,
     body: response.body
   });
 }

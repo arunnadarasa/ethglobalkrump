@@ -128,6 +128,20 @@ function makeAgentOrchestrator({
     }
 
     try {
+      const paymentMode = context?.payment_mode || "offchain_demo";
+      if (paymentMode !== "offchain_demo" && !context?.payment_ref) {
+        throw new Error(`Missing payment_ref for payment_mode=${paymentMode}`);
+      }
+      appendEvent(session, {
+        kind: "payments_agent",
+        message: "Payment rail context accepted.",
+        data: {
+          payment_mode: paymentMode,
+          payment_ref: context?.payment_ref || null,
+          amount_minor: Number(context?.amount_minor || 0)
+        }
+      });
+
       if (intent === "tip_dancer") {
         const fanPlan = fanAgentForTip(context);
         appendEvent(session, { kind: "fan_agent", message: "Prepared tip plan.", data: fanPlan });
@@ -189,6 +203,11 @@ function makeAgentOrchestrator({
         { id: "tip_dancer", description: "Fan to agent tip flow over UCP checkout" },
         { id: "unlock_clip", description: "Agent-driven tutorial unlock checkout" },
         { id: "battle_entry", description: "Multi-agent coordination before checkout" },
+        { id: "judge_feedback_request", description: "Agent-mediated judge feedback purchase flow" },
+        { id: "crew_split_settlement", description: "Agent-assisted crew split settlement initiation" },
+        { id: "practice_room_reserve", description: "Agent-coordinated practice room reservation checkout" },
+        { id: "sample_pack_purchase", description: "Agent-assisted sample pack licensing checkout" },
+        { id: "challenge_payout", description: "Agent-guided challenge bounty payout flow" },
         { id: "merch_concierge_checkout", description: "Agent-assisted merch checkout flow over UCP" }
       ],
       sub_agents: ["fan_agent", "dancer_agent", "payments_agent"],

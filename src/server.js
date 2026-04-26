@@ -638,9 +638,10 @@ const agentOrchestrator = makeAgentOrchestrator({
 });
 
 app.get("/api/agents/capabilities", (_req, res) => {
+  const capabilities = agentOrchestrator.listCapabilities();
   return res.json({
     agents: {
-      ...agentOrchestrator.listCapabilities(),
+      ...capabilities,
       settlement_mode: ENABLE_VYPER_SETTLEMENT ? "vyper_policy_enabled" : "circle_default",
       keeperhub_execution: keeperhub.isConfigured()
     }
@@ -672,7 +673,7 @@ app.post("/api/agents/sessions", (req, res) => {
   if (!intent || typeof intent !== "string") {
     return sendError(res, 400, "agent_intent_required", "intent is required and must be a string");
   }
-  const allowedIntents = new Set(["tip_dancer", "unlock_clip", "battle_entry", "merch_concierge_checkout"]);
+  const allowedIntents = new Set((agentOrchestrator.listCapabilities().intents || []).map((entry) => entry.id));
   if (!allowedIntents.has(intent)) {
     return sendError(res, 400, "agent_intent_unsupported", `Unsupported intent: ${intent}`);
   }
