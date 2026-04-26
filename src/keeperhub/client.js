@@ -97,12 +97,14 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
 async function listChains({ includeDisabled = false } = {}) {
   const q = includeDisabled ? "?includeDisabled=true" : "";
   const out = await keeperhubFetch(`/chains${q}`, { method: "GET", executeRoute: false });
-  return Array.isArray(out?.data) ? out.data : [];
+  const parsedChains = Array.isArray(out) ? out : Array.isArray(out?.data) ? out.data : [];
+  return parsedChains;
 }
 
 function pickArcChain(chains, arcChainId) {
   const target = Number(arcChainId);
-  return chains.find((c) => Number(c.chainId) === target) || null;
+  const match = chains.find((c) => Number(c.chainId) === target) || null;
+  return match;
 }
 
 /**

@@ -92,6 +92,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 9. **KeeperHub API base and key type confusion**
    - Setting `KEEPERHUB_API_BASE` to `https://app.keeperhub.com` (missing `/api`) produced **HTML 404** responses because requests hit `/chains` instead of `/api/chains`. The client now normalizes that case.
    - **Organization keys (`kh_`)** are required for REST and direct execution; **user webhook keys (`wfb_`)** are for workflow webhooks only — using `wfb_` in `KEEPERHUB_API_KEY` fails with an explicit error.
+   - Local self-hosted `/api/chains` may return a **top-level array** instead of `{ data: [...] }`; strict parsers can silently produce empty chain lists and false `arc_supported: false`.
 
 ## Key Learnings
 
@@ -121,6 +122,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 
 9. **Sponsor REST integrations need the same discovery discipline as Circle**
    - Read upstream docs for **base URL**, **auth header** (Bearer vs `X-API-Key` on execute routes), and **key scope** before debugging “mystery HTML” errors.
+   - Normalize and validate response shapes at integration boundaries (`[]` vs `{data:[]}`) to avoid false-negative capability checks.
 
 ## Practical Recommendations for Next Iteration
 
@@ -150,3 +152,4 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - Circle tip transfer reliability: fixed for restart and payload-validation edge cases
 - Official UCP SDK/schema integration: enabled with discovery/checkout/order and self-test routes
 - KeeperHub (OpenAgents): optional Arc execution (`/api/keeperhub/*`, U5 checkbox, `kh_` org key); README and `.env.example` document setup
+- KeeperHub local compatibility hardening: `/chains` parser now accepts both root-array and wrapped-data shapes, restoring correct Arc detection in status + chains views
