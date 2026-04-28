@@ -16,6 +16,9 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@circle-fin/adapter-circle-wallets": "^1.2.7",
+    "@circle-fin/app-kit": "^1.4.1",
+    "@circle-fin/bridge-kit": "^1.8.3",
     "@ucp-js/sdk": "^0.1.0",
     "dotenv": "^16.6.1",
     "express": "^4.21.2"

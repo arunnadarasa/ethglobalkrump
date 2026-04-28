@@ -154,6 +154,7 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     throw new Error("Online execution requires recipient address");
   }
   let sourceWalletId = activeCircleWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
+  let sourceWalletAddress = "";
   if (!sourceWalletId) {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet',message:'No source Circle wallet configured; attempting auto-create',data:{hasCircleApiKey:Boolean(CIRCLE_API_KEY),hasEntitySecretRaw:Boolean(CIRCLE_ENTITY_SECRET_RAW),hasEntityCiphertext:Boolean(CIRCLE_ENTITY_SECRET_CIPHERTEXT||CIRCLE_ENTITY_SECRET),hasWalletSetId:Boolean(activeCircleWalletSetId||CIRCLE_WALLET_SET_ID)},timestamp:Date.now()})}).catch(()=>{});
@@ -167,6 +168,8 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     });
     sourceWalletId =
       created?.wallet?.id || created?.raw?.data?.wallets?.[0]?.id || activeCircleWalletId || CIRCLE_WALLET_ID || "";
+    sourceWalletAddress =
+      created?.wallet?.address || created?.raw?.data?.wallets?.[0]?.address || created?.raw?.data?.wallet?.address || "";
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet:result',message:'Auto-create source wallet attempt finished',data:{hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:sourceWalletId?String(sourceWalletId).slice(0,8):null,activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -177,7 +180,8 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     amountMinor,
     recipientAddress: destination,
     memo,
-    sourceWalletId
+    sourceWalletId,
+    sourceWalletAddress
   });
 }
 

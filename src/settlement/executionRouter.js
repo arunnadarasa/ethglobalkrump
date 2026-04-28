@@ -27,7 +27,15 @@ function resolveExecutionInput({ executionMode, executionNetwork, defaultNetwork
 }
 
 function createExecutionRouter({ keeperhub, defaultNetwork = "base-sepolia" }) {
-  async function execute({ executionMode, executionNetwork, amountMinor, recipientAddress, memo, sourceWalletId }) {
+  async function execute({
+    executionMode,
+    executionNetwork,
+    amountMinor,
+    recipientAddress,
+    memo,
+    sourceWalletId,
+    sourceWalletAddress
+  }) {
     const selected = resolveExecutionInput({ executionMode, executionNetwork, defaultNetwork });
     if (selected.mode === "local") {
       return {
@@ -46,6 +54,7 @@ function createExecutionRouter({ keeperhub, defaultNetwork = "base-sepolia" }) {
       destinationNetwork: selected.network,
       recipientAddress,
       sourceWalletId,
+      sourceWalletAddress,
       memo
     });
     // #region agent log
