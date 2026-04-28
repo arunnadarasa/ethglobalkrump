@@ -177,9 +177,6 @@ async function fetchAnyCircleWalletAddressOnBlockchain(blockchain) {
     body = { raw: text };
   }
   if (!response.ok) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H44',location:'src/settlement/cctpBridge.js:fetchAnyCircleWalletAddressOnBlockchain:http-error',message:'Destination wallet lookup failed at Circle wallets endpoint',data:{blockchain,status:response.status,hasMessage:Boolean(body?.message||body?.error)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return { address: "", body, status: response.status };
   }
   const wallets = body?.data?.wallets || body?.wallets || [];
@@ -191,9 +188,6 @@ async function fetchAnyCircleWalletAddressOnBlockchain(blockchain) {
         addressPrefix: String(w?.address || "").slice(0, 10)
       }))
     : [];
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H45',location:'src/settlement/cctpBridge.js:fetchAnyCircleWalletAddressOnBlockchain:ok',message:'Destination wallet lookup returned wallets',data:{requestedBlockchain:String(blockchain||'').toUpperCase(),walletCount:Array.isArray(wallets)?wallets.length:0,selectedWalletIdPrefix:String(wallet?.id||'').slice(0,8),selectedAddressPrefix:String(wallet?.address||'').slice(0,10),walletPreview},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return {
     walletId: wallet?.id || "",
     address: wallet?.address || "",
@@ -265,9 +259,6 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
   const signerAddress = destinationWalletLookup.address || resolvedFallback || "";
   const signerSource = destinationWalletLookup.address ? "destination_wallet" : "source_wallet_fallback";
   const signerMatchesSourceWallet = Boolean(resolvedFallback) && signerAddress.toLowerCase() === resolvedFallback.toLowerCase();
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H46',location:'src/settlement/cctpBridge.js:resolveDestinationSignerFundingHint:selection',message:'Destination signer selected for funding hint',data:{destinationNetwork:networkKey,circleBlockchain:network.circleBlockchain,lookupWalletIdPrefix:String(destinationWalletId||'').slice(0,8),lookupAddressPrefix:String(destinationWalletLookup.address||'').slice(0,10),fallbackAddressPrefix:String(fallbackAddress||'').slice(0,10),usedFallbackAddress:!destinationWalletLookup.address&&Boolean(fallbackAddress),signerAddressPrefix:String(signerAddress||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!signerAddress) {
     const error = new Error(
       `No destination signer wallet found for ${network.circleBlockchain}. Create/fund a Circle wallet on the destination chain first.`
@@ -505,12 +496,7 @@ async function bridgeUsdcFromArc({
   const destinationSignerAddressProbe = destinationRpcUrl
     ? await probeEvmRpcNativeBalance(destinationRpcUrl, destinationSignerAddress)
     : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v8',hypothesisId:'H33',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Bridge request with destination signer and dual destination probes',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,circleDestinationChain:network.circleBlockchain,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),destinationLookupStatus:destinationWalletLookup.status||null,recipientPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc,arcRpcProbeOk:Boolean(arcRpcProbe?.ok),arcRpcProbeStatus:arcRpcProbe?.status||null,arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationSourceAddressProbe:destinationSourceAddressProbe?.body||{},destinationSignerAddressProbe:destinationSignerAddressProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H19',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:balances',message:'Source wallet balances before bridge',data:{sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),balancesPreview:Array.isArray(balanceList)?balanceList.slice(0,5):[]},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+
   if (!balances?.ok || availableUsdcArc < requested) {
     const error = new Error(
       `Online bridge source wallet has insufficient Arc USDC (available ${availableUsdcArc.toFixed(
@@ -539,9 +525,6 @@ async function bridgeUsdcFromArc({
       token: "USDC"
     });
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v8',hypothesisId:'H34',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Bridge call failed after dual destination probes',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null,destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),recipientPrefix:destination.slice(0,10),arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationSourceAddressProbe:destinationSourceAddressProbe?.body||{},destinationSignerAddressProbe:destinationSignerAddressProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw error;
   }
   const state = String(bridgeResult?.state || bridgeResult?.status || "success").toLowerCase();
@@ -553,9 +536,6 @@ async function bridgeUsdcFromArc({
     throw error;
   }
   const transferId = extractBridgeTransferId(bridgeResult) || `arc-bridge-${Date.now().toString(36)}`;
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v1',hypothesisId:'H17',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:success',message:'Arc App Kit bridge request completed',data:{destinationNetwork,bridgeState:state,transferId},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return {
     transfer_id: transferId,
     transfer_path_used: "arc-app-kit-bridge",

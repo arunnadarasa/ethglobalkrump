@@ -33,9 +33,6 @@ function getApiKey() {
   const legacy = (process.env.KEEPERHUB_API_KEY || "").trim();
   const local = (process.env.KEEPERHUB_API_KEY_LOCAL || "").trim();
   const online = (process.env.KEEPERHUB_API_KEY_ONLINE || "").trim();
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'kh-key-debug-v1',hypothesisId:'H1',location:'src/keeperhub/client.js:getApiKey',message:'KeeperHub key env presence snapshot',data:{hasLegacy:Boolean(legacy),hasLocal:Boolean(local),hasOnline:Boolean(online)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return legacy;
 }
 
@@ -55,9 +52,6 @@ function assertOrgApiKeyForRest() {
 
 function isConfigured() {
   const configured = Boolean(getApiKey());
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'kh-key-debug-v1',hypothesisId:'H2',location:'src/keeperhub/client.js:isConfigured',message:'KeeperHub configured computed',data:{configured},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return configured;
 }
 
@@ -83,37 +77,13 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     headers["X-API-Key"] = key;
   }
   if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-exec-debug-v1',hypothesisId:'H13',location:'src/keeperhub/client.js:keeperhubFetch:entry',message:'KeeperHub execute route request starting',data:{path,url,method,hasBearer:Boolean(headers.Authorization),hasXApiKey:Boolean(headers["X-API-Key"]),bodyKeys:body&&typeof body==='object'?Object.keys(body):[]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }
   if (path === "/execute/transfer") {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W1',location:'src/keeperhub/client.js:keeperhubFetch:pre',message:'Outbound request to KeeperHub execute/transfer',data:{url,method,headerKeys:Object.keys(headers),authFormatOk:String(headers.Authorization||'').startsWith('Bearer kh_'),body:body||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }
   const defaultTimeoutMs = executeRoute ? 30000 : 10000;
   const timeoutMs = Number(process.env.KEEPERHUB_REQUEST_TIMEOUT_MS || defaultTimeoutMs);
   const startedAt = Date.now();
   if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    // #region agent log
-    fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "aded7a"
-      },
-      body: JSON.stringify({
-        sessionId: "aded7a",
-        runId: "krump-timeout-debug",
-        hypothesisId: "K1",
-        location: "src/keeperhub/client.js:keeperhubFetch:start",
-        message: "keeperhub_request_started",
-        data: { path, method, timeoutMs },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -127,34 +97,7 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     });
   } catch (error) {
     if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-      // #region agent log
-      fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "aded7a"
-        },
-        body: JSON.stringify({
-          sessionId: "aded7a",
-          runId: "krump-timeout-debug",
-          hypothesisId: "K2",
-          location: "src/keeperhub/client.js:keeperhubFetch:catch",
-          message: "keeperhub_request_exception",
-          data: {
-            path,
-            timeoutMs,
-            elapsedMs: Date.now() - startedAt,
-            errorName: error?.name || null,
-            errorMessage: error?.message || null
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {});
-      // #endregion
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W4',location:'src/keeperhub/client.js:keeperhubFetch:fetch-catch',message:'KeeperHub fetch threw before response',data:{path,url,timeoutMs,errorName:error?.name||null,errorMessage:error?.message||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (error?.name === "AbortError") {
       const err = new Error(`KeeperHub request timed out after ${timeoutMs}ms for ${method} ${path}`);
       err.status = 504;
@@ -167,33 +110,8 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   }
   const text = await response.text();
   if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    // #region agent log
-    fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "aded7a"
-      },
-      body: JSON.stringify({
-        sessionId: "aded7a",
-        runId: "krump-timeout-debug",
-        hypothesisId: "K3",
-        location: "src/keeperhub/client.js:keeperhubFetch:response",
-        message: "keeperhub_request_completed",
-        data: {
-          path,
-          status: response.status,
-          elapsedMs: Date.now() - startedAt
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
   }
   if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W2',location:'src/keeperhub/client.js:keeperhubFetch:post',message:'Inbound response from KeeperHub',data:{path,status:response.status,rawBody:text},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }
   let parsed = {};
   try {
@@ -203,16 +121,8 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   }
   if (!response.ok) {
     if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-exec-debug-v1',hypothesisId:'H14',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub execute route failed',data:{path,url,status:response.status,responseKeys:parsed&&typeof parsed==='object'?Object.keys(parsed):[],errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v1',hypothesisId:'H38',location:'src/keeperhub/client.js:keeperhubFetch:error-details',message:'KeeperHub execute error details for token-selection hypotheses',data:{path,status:response.status,rawError:parsed?.error||null,rawMessage:parsed?.message||null,noTokenSelectedHint:String(parsed?.error||parsed?.message||'').toLowerCase().includes('token')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T3',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub request failed',data:{method,url,status:response.status,executeRoute:Boolean(executeRoute),errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (text.trimStart().startsWith("<!") || text.includes("<title>Error</title>")) {
       const err = new Error(
         `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
@@ -293,9 +203,6 @@ function minorToTransferAmountString(amountMinor) {
 
 function resolveTokenAddress() {
   const resolved = (process.env.KEEPERHUB_TOKEN_ADDRESS || process.env.CIRCLE_TOKEN_ADDRESS || "").trim();
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T1',location:'src/keeperhub/client.js:resolveTokenAddress',message:'Resolved token address from env',data:{hasKeeperhubToken:Boolean(process.env.KEEPERHUB_TOKEN_ADDRESS),hasCircleToken:Boolean(process.env.CIRCLE_TOKEN_ADDRESS),resolvedPrefix:resolved?resolved.slice(0,10):null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return resolved;
 }
 
@@ -325,18 +232,7 @@ async function executeTransferPayout({ recipientAddress, amountMinor, network, i
       payload.tokenConfig = JSON.stringify(tokenConfigPayload);
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T2',location:'src/keeperhub/client.js:executeTransferPayout:payload',message:'Prepared execute/transfer payload',data:{network:payload.network,hasTokenAddress:Boolean(payload.tokenAddress),hasTokenConfig:Boolean(payload.tokenConfig),tokenAddressPrefix:payload.tokenAddress?String(payload.tokenAddress).slice(0,10):null,amount:payload.amount,recipientPrefix:String(payload.recipientAddress||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v3',hypothesisId:'H37',location:'src/keeperhub/client.js:executeTransferPayout:token-selection',message:'Token selection inputs for keeperhub execute route',data:{network:payload.network,resolvedTokenAddress:payload.tokenAddress||null,expectedUsdcForNetwork:expectedTokenAddress,tokenAddressMatchesExpected:Boolean(tokenAddressNormalized&&expectedTokenAddressNormalized&&tokenAddressNormalized===expectedTokenAddressNormalized),includeTokenConfig:Boolean(includeTokenConfig),tokenConfigType:typeof payload.tokenConfig,tokenConfigPreview:String(payload.tokenConfig||'').slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v1',hypothesisId:'H39',location:'src/keeperhub/client.js:executeTransferPayout:token-source',message:'Token address source chosen for keeperhub execute route',data:{network:payload.network,usedMappedNetworkToken:Boolean(mappedNetworkTokenAddress),mappedTokenPrefix:mappedNetworkTokenAddress?String(mappedNetworkTokenAddress).slice(0,10):null,fallbackEnvTokenPrefix:resolveTokenAddress()?String(resolveTokenAddress()).slice(0,10):null,finalTokenPrefix:payload.tokenAddress?String(payload.tokenAddress).slice(0,10):null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W3',location:'src/keeperhub/client.js:executeTransferPayout',message:'Payload shape before keeperhubFetch call',data:{tokenConfigType:typeof payload.tokenConfig,tokenConfigValue:payload.tokenConfig||null,tokenAddress:payload.tokenAddress||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+
   return keeperhubFetch("/execute/transfer", {
     method: "POST",
     body: payload,

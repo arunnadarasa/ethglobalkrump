@@ -153,6 +153,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Syncing newly created Arc wallets into online-source runtime state removed wallet drift in the KeeperHub panel.
    - Showing source and destination balances in-context reduced operator confusion during live debugging.
 
+14. **Signer-source transparency prevents false debugging loops**
+   - Explicitly surfacing `destination_wallet` vs `source_wallet_fallback` in the UI removed ambiguity when source and destination addresses looked identical.
+   - Unified EVM addressing can legitimately produce equal addresses across chains; this should be explained inline rather than treated as an error signal.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -173,6 +177,8 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 12. Add a "demo payment rail" selector to all execution-only tools and keep response payloads echoing `payment_mode`/`payment_ref` for easier audit trails.
 13. Add a KeeperHub execution-wallet preflight check endpoint to verify destination-network token availability/balance before calling `/execute/transfer`.
 14. Persist dynamic online-source wallet choice across restarts (or explicit override policy) to avoid surprise source-wallet drift in demos.
+15. Keep a one-click KeeperHub "Refresh balances" control so operators can re-check source/destination funding without opening faucet pages.
+16. Pre-provision destination signer wallets for all target chains in demo environments to avoid fallback-mode confusion during judging.
 
 ## Outcome Snapshot
 
@@ -192,3 +198,6 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - KeeperHub token routing: destination-network USDC token mapping added (Base/Ethereum/Arbitrum/Avalanche/Polygon testnets)
 - KeeperHub execution reliability: resolved `No token selected` path with network token mapping + fallback request shape retry
 - End-to-end online path: Circle payment receipt + Arc->Base bridge + KeeperHub transfer now reaches `execution_status: completed` with on-chain tx hash
+- KeeperHub destination signer UX: source-vs-destination signer mode, wallet-id hints, and fallback warnings are now shown inline in the demo panel
+- Multi-chain destination wallet provisioning: destination Circle wallets were provisioned for Base Sepolia, Ethereum Sepolia, Polygon Amoy, Arbitrum Sepolia, and Avalanche Fuji
+- KeeperHub operator ergonomics: added "Refresh balances" action in panel to reload Arc source and destination signer funding state without launching faucets

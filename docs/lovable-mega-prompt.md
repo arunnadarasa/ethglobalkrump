@@ -376,6 +376,7 @@ Serve static from `/`.
 
 Inputs/buttons as in reference:
 - `#circle-wallet-name`, `#circle-blockchain`, `#circle-wallet-set-id`, `#create-circle-wallet`
+- `#circle-blockchain` options should include at least: `ARC-TESTNET`, `BASE-SEPOLIA`, `ETH-SEPOLIA`, `ARB-SEPOLIA`, `MATIC-AMOY`, `AVAX-FUJI`
 - `#circle-entity-secret-raw`, `#generate-ciphertext`, `#circle-entity-ciphertext`
 - `#save-circle-wallet`, `#circle-wallet-save-status`
 - outputs: `#circle-wallet-output`, funding cue `#circle-funding-cue`
@@ -395,6 +396,13 @@ Inputs/buttons as in reference:
 ### KeeperHub (UI)
 
 - `#keeperhub-load-status`, `#keeperhub-load-chains`, `#keeperhub-demo-recipient`, `#keeperhub-demo-amount`, `#keeperhub-demo-transfer`
+- Add `#keeperhub-refresh-balances` button to re-fetch source + destination balances without opening faucet links.
+- Include inline hints:
+  - source balance (`#keeperhub-source-balance-hint`)
+  - destination balance (`#keeperhub-destination-balance-hint`)
+  - signer source mode (`#keeperhub-signer-source-hint`)
+  - signer wallet id (`#keeperhub-signer-wallet-id-hint`)
+  - gas warning chip (`#keeperhub-gas-warning`) and fallback warning chip (`#keeperhub-signer-warning`)
 - Output `#keeperhub-output`
 
 ### Agent orchestration
@@ -444,6 +452,7 @@ Three modes:
   - `polygon-amoy`
   - `arbitrum-sepolia`
   - `avalanche-fuji`
+- Native-symbol labels in UX should be chain-accurate (`POL` for Polygon Amoy, `AVAX` for Avalanche Fuji).
 - Online mode backend behavior:
   1. bridge USDC from Arc testnet to target network via CCTP
   2. execute KeeperHub transfer on target network

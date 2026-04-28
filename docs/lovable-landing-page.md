@@ -62,6 +62,10 @@ We built a full loop:
 - `GET /api/keeperhub/status` and `GET /api/keeperhub/chains` for Arc discovery
 - `POST /api/keeperhub/execute-transfer` for demos; U5 **declare winner** with `execute_via_keeperhub` for prize pool → winner wallet
 - Documented in `README.md` and `docs/hackathon-learnings-retrospective.md`
+- Live operator UX includes:
+  - one-click `Refresh balances` for source Arc USDC + destination signer balances
+  - explicit destination signer source mode (`destination wallet` vs `source fallback`)
+  - destination signer wallet-id hints per chain
 
 ## Architecture (high level)
 
@@ -71,6 +75,16 @@ We built a full loop:
 4. Settlement policy evaluates risk/limits.
 5. Trace + outcome returned to user.
 6. For U5 on-chain payout (optional): server calls KeeperHub direct execution after pool math — commerce logic stays in-app; execution is delegated.
+
+### 5) Multi-chain destination wallet readiness
+
+- Destination signer wallets are provisioned for all target online chains:
+  - `BASE-SEPOLIA`
+  - `ETH-SEPOLIA`
+  - `MATIC-AMOY`
+  - `ARB-SEPOLIA`
+  - `AVAX-FUJI`
+- Polygon Amoy native gas labeling uses `POL` in UX hints and warnings.
 
 ## Who this is for
 
