@@ -2,11 +2,11 @@
 
 const DEFAULT_BASE = "https://app.keeperhub.com/api";
 const ONLINE_EXECUTE_NETWORKS = {
-  "ethereum-sepolia": "ethereum-sepolia",
-  "base-sepolia": "base-sepolia",
-  "polygon-amoy": "polygon-amoy",
-  "arbitrum-sepolia": "arbitrum-sepolia",
-  "avalanche-fuji": "avalanche-fuji"
+  "ethereum-sepolia": "11155111",
+  "base-sepolia": "84532",
+  "polygon-amoy": "80002",
+  "arbitrum-sepolia": "421614",
+  "avalanche-fuji": "43113"
 };
 const NETWORK_USDC_ADDRESSES = {
   "base-sepolia": "0x036cbd53842c5426634e7929541ec2318f3dcf7e",
@@ -119,6 +119,26 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   } catch (_e) {
     parsed = { raw: text };
   }
+  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+    const executionId = parsed?.executionId || parsed?.data?.executionId || parsed?.id || null;
+    const status = parsed?.status || parsed?.data?.status || null;
+    const errorText = parsed?.error?.message || parsed?.error || parsed?.message || null;
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "post-fix",
+        hypothesisId: "H-G",
+        location: "keeperhub/client.js:keeperhubFetch:execute_response",
+        message: "keeperhub execute endpoint response",
+        data: { path, httpStatus: response.status, ok: response.ok, executionId, status, errorText },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  }
   if (!response.ok) {
     if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
 
@@ -194,6 +214,12 @@ function listOnlineExecuteNetworks() {
   }));
 }
 
+function resolveKeeperhubExecuteNetwork(network) {
+  const raw = String(network || "").trim();
+  const key = raw.toLowerCase();
+  return ONLINE_EXECUTE_NETWORKS[key] || raw;
+}
+
 /**
  * Human-readable amount for /execute/transfer (same minor→USD mapping as the rest of the app).
  */
@@ -211,14 +237,30 @@ function resolveTokenAddress() {
  */
 async function executeTransferPayout({ recipientAddress, amountMinor, network, includeTokenConfig = true }) {
   const amount = minorToTransferAmountString(amountMinor);
+  const executeNetwork = resolveKeeperhubExecuteNetwork(network);
   const networkKey = String(network || "").toLowerCase();
   const mappedNetworkTokenAddress = NETWORK_USDC_ADDRESSES[networkKey] || "";
   const tokenAddress = mappedNetworkTokenAddress || resolveTokenAddress();
   const expectedTokenAddress = NETWORK_USDC_ADDRESSES[String(network || "").toLowerCase()] || null;
   const tokenAddressNormalized = String(tokenAddress || "").toLowerCase();
   const expectedTokenAddressNormalized = String(expectedTokenAddress || "").toLowerCase();
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "post-fix",
+      hypothesisId: "H-F",
+      location: "keeperhub/client.js:executeTransferPayout:network_map",
+      message: "mapped keeperhub execute network",
+      data: { inputNetwork: network, executeNetwork },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   const payload = {
-    network,
+    network: executeNetwork,
     recipientAddress,
     amount,
     gasLimitMultiplier: process.env.KEEPERHUB_GAS_LIMIT_MULTIPLIER || "1.2"

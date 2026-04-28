@@ -10,8 +10,13 @@ const CIRCLE_API_KEY = (process.env.CIRCLE_API_KEY || "").trim();
 const CIRCLE_ENTITY_SECRET = (process.env.CIRCLE_ENTITY_SECRET || "").trim();
 const CIRCLE_ENTITY_SECRET_RAW = (process.env.CIRCLE_ENTITY_SECRET_RAW || "").trim();
 const ARC_RPC_URL = (process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network").trim();
-/** Optional; first endpoint used for Amoy probes + Bridge Kit mint when set (helps flaky public RPC). */
+/** Optional; merged into Amoy `rpcEndpoints` for probes + Bridge Kit mint. */
 const POLYGON_AMOY_RPC_URL = (process.env.POLYGON_AMOY_RPC_URL || "").trim();
+/** When true (default), stable public Amoy RPCs are tried before `POLYGON_AMOY_RPC_URL` (helps Alchemy/server-side failures). */
+const POLYGON_AMOY_RPC_PUBLIC_FIRST =
+  String(process.env.POLYGON_AMOY_RPC_PUBLIC_FIRST || "true")
+    .trim()
+    .toLowerCase() !== "false";
 const ALLOW_LOW_DESTINATION_GAS = String(process.env.ALLOW_LOW_DESTINATION_GAS || "")
   .trim()
   .toLowerCase() === "true";
@@ -223,6 +228,33 @@ function parseEvmNativeFromHexNumber(hexValue) {
   }
 }
 
+const POLYGON_AMOY_PUBLIC_RPC = [
+  "https://polygon-amoy-bor-rpc.publicnode.com",
+  "https://rpc-amoy.polygon.technology"
+];
+
+function uniqRpcEndpoints(urls) {
+  const seen = new Set();
+  const out = [];
+  for (const u of urls) {
+    const s = String(u || "").trim();
+    if (!s || seen.has(s)) {
+      continue;
+    }
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+function redactRpcUrlForDebug(value) {
+  const s = String(value || "");
+  if (/alchemy\.com\/v2\//i.test(s)) {
+    return s.replace(/\/v2\/[^/?]+/i, "/v2/***");
+  }
+  return s;
+}
+
 function safeDebugPayload(value, depth = 0) {
   const maxDepth = 6;
   if (depth > maxDepth) {
@@ -235,8 +267,11 @@ function safeDebugPayload(value, depth = 0) {
   if (t === "bigint") {
     return value.toString();
   }
-  if (t === "string" || t === "number" || t === "boolean") {
+  if (t === "number" || t === "boolean") {
     return value;
+  }
+  if (t === "string") {
+    return redactRpcUrlForDebug(value);
   }
   if (t === "function") {
     return "[fn]";
@@ -280,10 +315,13 @@ function resolveBridgeDestinationChain(network, destinationNetworkKey) {
   if (!base) {
     return base;
   }
-  if (key === "polygon-amoy" && POLYGON_AMOY_RPC_URL) {
+  if (key === "polygon-amoy") {
     const rest = Array.isArray(base.rpcEndpoints) ? [...base.rpcEndpoints] : [];
-    const merged = [POLYGON_AMOY_RPC_URL, ...rest.filter((u) => u && u !== POLYGON_AMOY_RPC_URL)];
-    return { ...base, rpcEndpoints: merged };
+    const custom = POLYGON_AMOY_RPC_URL;
+    const ordered = POLYGON_AMOY_RPC_PUBLIC_FIRST
+      ? [...POLYGON_AMOY_PUBLIC_RPC, ...(custom ? [custom] : []), ...rest]
+      : [...(custom ? [custom] : []), ...POLYGON_AMOY_PUBLIC_RPC, ...rest];
+    return { ...base, rpcEndpoints: uniqRpcEndpoints(ordered) };
   }
   return base;
 }
@@ -607,6 +645,12 @@ async function bridgeUsdcFromArc({
   const sourceOnDestNativeWei = destinationSourceAddressProbe?.body?.result;
   const signerNativeNumber = parseEvmNativeFromHexNumber(signerNativeWei || "0x0");
   const sourceOnDestNativeNumber = parseEvmNativeFromHexNumber(sourceOnDestNativeWei || "0x0");
+  let rpcProbeHost = "";
+  try {
+    rpcProbeHost = destinationRpcUrl ? new URL(destinationRpcUrl).hostname : "";
+  } catch (_e) {
+    rpcProbeHost = "";
+  }
   // #region agent log
   debugIngest({
     hypothesisId: "H-A",
@@ -620,7 +664,14 @@ async function bridgeUsdcFromArc({
       belowMinSigner: signerNativeNumber < minNativeRecommended,
       amount,
       requested,
-      availableUsdcArc
+      availableUsdcArc,
+      rpcProbeHost,
+      polygonAmoyPublicFirst:
+        String(destinationNetwork || "")
+          .trim()
+          .toLowerCase() === "polygon-amoy"
+          ? POLYGON_AMOY_RPC_PUBLIC_FIRST
+          : null
     }
   });
   // #endregion
