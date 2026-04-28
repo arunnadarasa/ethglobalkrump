@@ -843,6 +843,36 @@ function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcB
   target.textContent = `Destination signer balances on ${resolvedChain}: ${resolvedNative} ${resolvedSymbol}, ${resolvedUsdc} USDC.`;
 }
 
+function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, minRecommended, isSufficient }) {
+  const target = document.getElementById("keeperhub-gas-warning");
+  if (!target) {
+    return;
+  }
+  if (typeof isSufficient !== "boolean") {
+    target.classList.add("hidden");
+    target.classList.remove("warning", "success");
+    return;
+  }
+  if (!isSufficient) {
+    target.classList.remove("hidden", "success");
+    target.classList.add("warning");
+    target.textContent = `Action needed: destination gas is low (${nativeBalance || "0"} ${nativeSymbol || "ETH"}). Recommended >= ${minRecommended || 0}.`;
+    return;
+  }
+  target.classList.remove("hidden", "warning");
+  target.classList.add("success");
+  target.textContent = `Destination gas is sufficient (${nativeBalance || "0"} ${nativeSymbol || "ETH"}).`;
+}
+
+function setKeeperhubSourceBalanceHint({ usdcBalance }) {
+  const target = document.getElementById("keeperhub-source-balance-hint");
+  if (!target) {
+    return;
+  }
+  const resolvedUsdc = typeof usdcBalance === "number" ? usdcBalance.toString() : usdcBalance || "0";
+  target.textContent = `Source wallet balance on ARC-TESTNET: ${resolvedUsdc} USDC.`;
+}
+
 async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
   const data = await request("/api/keeperhub/online-source-wallet/fund-hint", {
     method: "POST",
@@ -851,6 +881,9 @@ async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
   });
   const walletAddress = data.body?.wallet_address || "";
   setKeeperhubOnlineSourceWalletAddress(walletAddress);
+  setKeeperhubSourceBalanceHint({
+    usdcBalance: data.body?.source_usdc_balance ?? 0
+  });
   let copied = false;
   if (walletAddress && navigator.clipboard?.writeText) {
     try {
@@ -883,6 +916,12 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
     nativeSymbol: data.body?.native_symbol || "ETH",
     usdcBalance: data.body?.signer_usdc_balance ?? 0,
     destinationChain: data.body?.destination_chain || "BASE-SEPOLIA"
+  });
+  setKeeperhubDestinationGasReadinessHint({
+    nativeBalance: data.body?.signer_native_balance || "0",
+    nativeSymbol: data.body?.native_symbol || "ETH",
+    minRecommended: data.body?.signer_native_min_recommended ?? 0,
+    isSufficient: Boolean(data.body?.signer_native_is_sufficient)
   });
   let copied = false;
   if (walletAddress && navigator.clipboard?.writeText) {

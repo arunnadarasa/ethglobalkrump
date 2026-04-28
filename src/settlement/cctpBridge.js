@@ -59,6 +59,14 @@ const DESTINATION_GAS_FAUCETS = {
   "avalanche-fuji": "https://core.app/tools/testnet-faucet/?subnet=c&token=c"
 };
 
+const DESTINATION_MIN_NATIVE_GAS = {
+  "base-sepolia": 0.001,
+  "ethereum-sepolia": 0.001,
+  "polygon-amoy": 0.1,
+  "arbitrum-sepolia": 0.001,
+  "avalanche-fuji": 0.01
+};
+
 function listOnlineNetworks() {
   return Object.keys(NETWORKS).map((id) => ({
     id,
@@ -194,6 +202,15 @@ function formatEvmNativeFromHex(hexValue) {
   }
 }
 
+function parseEvmNativeFromHexNumber(hexValue) {
+  try {
+    const raw = BigInt(String(hexValue || "0x0"));
+    return Number(raw) / 1e18;
+  } catch (_err) {
+    return 0;
+  }
+}
+
 function extractUsdcBalanceForBlockchain(balanceList, blockchain) {
   if (!Array.isArray(balanceList)) {
     return 0;
@@ -247,6 +264,8 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
   const nativeProbe = destinationRpcUrl
     ? await probeEvmRpcNativeBalance(destinationRpcUrl, signerAddress)
     : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
+  const nativeBalanceNumber = parseEvmNativeFromHexNumber(nativeProbe?.body?.result || "0x0");
+  const minNativeRecommended = Number(DESTINATION_MIN_NATIVE_GAS[networkKey] || 0.001);
   let usdcBalance = 0;
   if (destinationWalletId) {
     const destinationBalances = await fetchCircleWalletBalances(destinationWalletId);
@@ -264,6 +283,9 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
     signer_address: signerAddress,
     signer_wallet_id: destinationWalletId,
     signer_native_balance: formatEvmNativeFromHex(nativeProbe?.body?.result || "0x0"),
+    signer_native_balance_number: Number(nativeBalanceNumber.toFixed(8)),
+    signer_native_min_recommended: minNativeRecommended,
+    signer_native_is_sufficient: nativeBalanceNumber >= minNativeRecommended,
     signer_usdc_balance: Number(usdcBalance.toFixed(6)),
     faucet_url: DESTINATION_GAS_FAUCETS[networkKey] || "",
     lookup_status: destinationWalletLookup.status || null

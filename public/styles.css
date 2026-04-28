@@ -82,3 +82,29 @@ pre {
 #circle-funding-cue a {
   color: #7fb1ff;
 }
+
+.hint-chip {
+  margin-top: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #4b5d7f;
+  background: #0f182a;
+  color: #d8e6ff;
+  font-size: 13px;
+}
+
+.hint-chip.warning {
+  border-color: #9f6b00;
+  background: #2a1f07;
+  color: #ffd78a;
+}
+
+.hint-chip.success {
+  border-color: #1f6f3e;
+  background: #0f2217;
+  color: #9ee5bb;
+}
+
+.hidden {
+  display: none;
+}

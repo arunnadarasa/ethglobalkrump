@@ -84,6 +84,36 @@ function sendError(res, status, code, message) {
   });
 }
 
+function normalizeForJson(value) {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeForJson(entry));
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = normalizeForJson(entry);
+    }
+    return out;
+  }
+  return value;
+}
+
+function containsBigInt(value) {
+  if (typeof value === "bigint") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsBigInt(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).some((entry) => containsBigInt(entry));
+  }
+  return false;
+}
+
 function listLeaderboard() {
   return dancers
     .map((dancer) => ({
@@ -250,6 +280,30 @@ async function resolveOnlineBridgeSourceWallet({ createIfMissing = true } = {}) 
     wallet_id: walletId,
     wallet_address: walletAddress
   };
+}
+
+function extractArcUsdcBalance(balanceList) {
+  if (!Array.isArray(balanceList)) {
+    return 0;
+  }
+  const row = balanceList.find((item) => {
+    const symbol = String(item?.tokenSymbol || item?.symbol || item?.token?.symbol || item?.token || "").toUpperCase();
+    const blockchain = String(item?.blockchain || item?.chain || item?.token?.blockchain || "").toUpperCase();
+    return symbol === "USDC" && (blockchain === "ARC-TESTNET" || blockchain === "ARC_TESTNET");
+  });
+  if (!row) {
+    return 0;
+  }
+  const raw = row?.availableAmount || row?.amount || row?.balance || row?.amountFormatted || row?.amounts?.[0] || "0";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  const decimals = Number(row?.token?.decimals);
+  if (Number.isFinite(decimals) && decimals > 6 && parsed >= 1_000_000) {
+    return parsed / 10 ** decimals;
+  }
+  return parsed;
 }
 
 function getAgentIdentityMetadata() {
@@ -759,7 +813,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
         execution_status = null;
       }
     }
-    return res.status(201).json({
+    const responsePayload = {
       ok: true,
       payment_mode: payment_mode || "offchain_demo",
       payment_ref: payment_ref || null,
@@ -769,8 +823,15 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       keeperhub: transfer,
       execution_status: execution_status,
       arc: summary
-    });
+    };
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-response-serialize-v1',hypothesisId:'H35',location:'src/server.js:/api/keeperhub/execute-transfer:pre-response',message:'KeeperHub response payload serialization check',data:{selectedMode,bigintInBridge:containsBigInt(responsePayload.bridge),bigintInKeeperhub:containsBigInt(responsePayload.keeperhub),bigintInExecutionStatus:containsBigInt(responsePayload.execution_status)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return res.status(201).json(normalizeForJson(responsePayload));
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-response-serialize-v1',hypothesisId:'H36',location:'src/server.js:/api/keeperhub/execute-transfer:catch',message:'KeeperHub execute-transfer route failed',data:{errorName:error?.name||null,errorMessage:error?.message||null,errorCode:error?.code||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T5',location:'src/server.js:/api/keeperhub/execute-transfer:catch',message:'KeeperHub transfer route failed',data:{status:error.status||null,errorMessage:error.message||null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -783,12 +844,20 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
 app.post("/api/keeperhub/online-source-wallet/fund-hint", async (_req, res) => {
   try {
     const source = await resolveOnlineBridgeSourceWallet({ createIfMissing: true });
+    let sourceUsdcBalance = 0;
+    try {
+      const balances = await getCircleWalletBalances(source.wallet_id);
+      sourceUsdcBalance = extractArcUsdcBalance(balances?.balances || []);
+    } catch (_err) {
+      sourceUsdcBalance = 0;
+    }
     return res.status(200).json({
       ok: true,
       wallet_id: source.wallet_id,
       wallet_address: source.wallet_address,
       blockchain: "ARC-TESTNET",
       token: "USDC",
+      source_usdc_balance: Number(sourceUsdcBalance.toFixed(6)),
       faucet_url: "https://faucet.circle.com/",
       instructions:
         "Fund this wallet with Arc Testnet USDC from Circle Faucet, then retry KeeperHub online transfer."
