@@ -887,6 +887,35 @@ function setKeeperhubSignerFallbackWarning({ signerSource, destinationChain }) {
   target.textContent = `No Circle wallet found on ${resolvedChain}. Using ARC source wallet address as temporary signer fallback.`;
 }
 
+function setKeeperhubSignerWalletIdHint({ destinationNetwork, destinationChain, signerWalletId, signerSource }) {
+  const target = document.getElementById("keeperhub-signer-wallet-id-hint");
+  if (!target) {
+    return;
+  }
+  const expectedWalletIds = {
+    "arbitrum-sepolia": "dc2f5925-5047-50d9-bbbc-15d8d219eba8",
+    "polygon-amoy": "386cfa97-2e87-59d3-87bc-e769dc6a5c22"
+  };
+  const networkKey = String(destinationNetwork || "").trim().toLowerCase();
+  const chain = destinationChain || "UNKNOWN";
+  const walletId = signerWalletId || "none";
+  const expected = expectedWalletIds[networkKey] || "";
+  if (!expected) {
+    target.textContent = `Destination signer wallet id on ${chain}: ${walletId}.`;
+    return;
+  }
+  if (signerSource !== "destination_wallet") {
+    target.textContent =
+      `Destination signer wallet id on ${chain}: ${walletId}. Expected for ${chain}: ${expected} ` +
+      `(not active because signer source is fallback).`;
+    return;
+  }
+  const matches = walletId === expected;
+  target.textContent =
+    `Destination signer wallet id on ${chain}: ${walletId}. Expected for ${chain}: ${expected}. ` +
+    `Match: ${matches ? "yes" : "no"}.`;
+}
+
 function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, minRecommended, isSufficient }) {
   const target = document.getElementById("keeperhub-gas-warning");
   if (!target) {
@@ -969,6 +998,12 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
   setKeeperhubSignerFallbackWarning({
     signerSource: data.body?.signer_source || "",
     destinationChain: data.body?.destination_chain || "BASE-SEPOLIA"
+  });
+  setKeeperhubSignerWalletIdHint({
+    destinationNetwork: data.body?.destination_network || executionNetwork,
+    destinationChain: data.body?.destination_chain || "BASE-SEPOLIA",
+    signerWalletId: data.body?.signer_wallet_id || "",
+    signerSource: data.body?.signer_source || ""
   });
   setKeeperhubDestinationGasReadinessHint({
     nativeBalance: data.body?.signer_native_balance || "0",

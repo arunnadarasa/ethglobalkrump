@@ -33,7 +33,7 @@ const NETWORKS = {
     bridgeChain: PolygonAmoy,
     bridgeChainId: "Polygon_Amoy",
     circleBlockchain: "MATIC-AMOY",
-    nativeSymbol: "MATIC"
+    nativeSymbol: "POL"
   },
   "arbitrum-sepolia": {
     keeperhubNetwork: "arbitrum-sepolia",
