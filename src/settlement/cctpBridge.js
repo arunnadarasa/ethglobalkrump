@@ -177,10 +177,23 @@ async function fetchAnyCircleWalletAddressOnBlockchain(blockchain) {
     body = { raw: text };
   }
   if (!response.ok) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H44',location:'src/settlement/cctpBridge.js:fetchAnyCircleWalletAddressOnBlockchain:http-error',message:'Destination wallet lookup failed at Circle wallets endpoint',data:{blockchain,status:response.status,hasMessage:Boolean(body?.message||body?.error)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return { address: "", body, status: response.status };
   }
   const wallets = body?.data?.wallets || body?.wallets || [];
   const wallet = Array.isArray(wallets) ? wallets.find((w) => Boolean(w?.address)) : null;
+  const walletPreview = Array.isArray(wallets)
+    ? wallets.slice(0, 3).map((w) => ({
+        idPrefix: String(w?.id || "").slice(0, 8),
+        blockchain: String(w?.blockchain || "").toUpperCase(),
+        addressPrefix: String(w?.address || "").slice(0, 10)
+      }))
+    : [];
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H45',location:'src/settlement/cctpBridge.js:fetchAnyCircleWalletAddressOnBlockchain:ok',message:'Destination wallet lookup returned wallets',data:{requestedBlockchain:String(blockchain||'').toUpperCase(),walletCount:Array.isArray(wallets)?wallets.length:0,selectedWalletIdPrefix:String(wallet?.id||'').slice(0,8),selectedAddressPrefix:String(wallet?.address||'').slice(0,10),walletPreview},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return {
     walletId: wallet?.id || "",
     address: wallet?.address || "",
@@ -248,7 +261,13 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
   }
   const destinationWalletLookup = await fetchAnyCircleWalletAddressOnBlockchain(network.circleBlockchain);
   const destinationWalletId = destinationWalletLookup.walletId || "";
-  const signerAddress = destinationWalletLookup.address || String(fallbackAddress || "").trim() || "";
+  const resolvedFallback = String(fallbackAddress || "").trim();
+  const signerAddress = destinationWalletLookup.address || resolvedFallback || "";
+  const signerSource = destinationWalletLookup.address ? "destination_wallet" : "source_wallet_fallback";
+  const signerMatchesSourceWallet = Boolean(resolvedFallback) && signerAddress.toLowerCase() === resolvedFallback.toLowerCase();
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-lookup-v1',hypothesisId:'H46',location:'src/settlement/cctpBridge.js:resolveDestinationSignerFundingHint:selection',message:'Destination signer selected for funding hint',data:{destinationNetwork:networkKey,circleBlockchain:network.circleBlockchain,lookupWalletIdPrefix:String(destinationWalletId||'').slice(0,8),lookupAddressPrefix:String(destinationWalletLookup.address||'').slice(0,10),fallbackAddressPrefix:String(fallbackAddress||'').slice(0,10),usedFallbackAddress:!destinationWalletLookup.address&&Boolean(fallbackAddress),signerAddressPrefix:String(signerAddress||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!signerAddress) {
     const error = new Error(
       `No destination signer wallet found for ${network.circleBlockchain}. Create/fund a Circle wallet on the destination chain first.`
@@ -282,6 +301,8 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
     native_symbol: network.nativeSymbol,
     signer_address: signerAddress,
     signer_wallet_id: destinationWalletId,
+    signer_source: signerSource,
+    signer_matches_source_wallet: signerMatchesSourceWallet,
     signer_native_balance: formatEvmNativeFromHex(nativeProbe?.body?.result || "0x0"),
     signer_native_balance_number: Number(nativeBalanceNumber.toFixed(8)),
     signer_native_min_recommended: minNativeRecommended,

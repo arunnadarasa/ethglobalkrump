@@ -843,6 +843,50 @@ function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcB
   target.textContent = `Destination signer balances on ${resolvedChain}: ${resolvedNative} ${resolvedSymbol}, ${resolvedUsdc} USDC.`;
 }
 
+function setKeeperhubSignerSourceHint({ signerSource, destinationChain, signerMatchesSourceWallet }) {
+  const target = document.getElementById("keeperhub-signer-source-hint");
+  if (!target) {
+    return;
+  }
+  const resolvedChain = destinationChain || "BASE-SEPOLIA";
+  if (signerSource === "destination_wallet") {
+    if (signerMatchesSourceWallet) {
+      target.textContent =
+        `Destination signer source on ${resolvedChain}: destination-chain Circle wallet. Address matches ARC source ` +
+        `(expected with unified EVM wallet addressing).`;
+      return;
+    }
+    target.textContent =
+      `Destination signer source on ${resolvedChain}: destination-chain Circle wallet. ` +
+      `Address is distinct from ARC source.`;
+    return;
+  }
+  if (signerSource === "source_wallet_fallback") {
+    target.textContent =
+      `Destination signer source on ${resolvedChain}: source wallet fallback. ` +
+      `Address matches ARC source because no destination-chain wallet was found.`;
+    return;
+  }
+  target.textContent = `Destination signer source on ${resolvedChain}: unknown.`;
+}
+
+function setKeeperhubSignerFallbackWarning({ signerSource, destinationChain }) {
+  const target = document.getElementById("keeperhub-signer-warning");
+  if (!target) {
+    return;
+  }
+  if (signerSource !== "source_wallet_fallback") {
+    target.classList.add("hidden");
+    target.classList.remove("warning");
+    target.textContent = "";
+    return;
+  }
+  const resolvedChain = destinationChain || "BASE-SEPOLIA";
+  target.classList.remove("hidden");
+  target.classList.add("warning");
+  target.textContent = `No Circle wallet found on ${resolvedChain}. Using ARC source wallet address as temporary signer fallback.`;
+}
+
 function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, minRecommended, isSufficient }) {
   const target = document.getElementById("keeperhub-gas-warning");
   if (!target) {
@@ -915,6 +959,15 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
     nativeBalance: data.body?.signer_native_balance || "0",
     nativeSymbol: data.body?.native_symbol || "ETH",
     usdcBalance: data.body?.signer_usdc_balance ?? 0,
+    destinationChain: data.body?.destination_chain || "BASE-SEPOLIA"
+  });
+  setKeeperhubSignerSourceHint({
+    signerSource: data.body?.signer_source || "",
+    destinationChain: data.body?.destination_chain || "BASE-SEPOLIA",
+    signerMatchesSourceWallet: Boolean(data.body?.signer_matches_source_wallet)
+  });
+  setKeeperhubSignerFallbackWarning({
+    signerSource: data.body?.signer_source || "",
     destinationChain: data.body?.destination_chain || "BASE-SEPOLIA"
   });
   setKeeperhubDestinationGasReadinessHint({

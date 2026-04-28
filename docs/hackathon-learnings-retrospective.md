@@ -103,6 +103,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - After the SDK bridge migration, failures moved from "resource/path not found" to concrete balance constraints (e.g. insufficient Arc USDC).
    - This was healthier than the prior state: the system now fails for real economic reasons, not integration mismatches.
 
+11. **Cross-system token assumptions caused KeeperHub execution failures**
+   - Even when bridge and recipient-side balances were healthy, KeeperHub direct execution failed with `No token selected` and later `Insufficient USDC balance` in its own execution wallet context.
+   - Root cause required proving destination-network token address and request shape independently from Circle bridge success.
+
 ## Key Learnings
 
 1. **Discovery-first beats assumption-first**
@@ -137,6 +141,18 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - For CCTP-style bridging, SDK abstraction (Arc App Kit / Bridge Kit) avoids brittle assumptions about private or evolving REST routes.
    - Keep domain errors explicit (`insufficient balance`, invalid recipient) so operators can act immediately.
 
+11. **Bridge success does not imply downstream executor readiness**
+   - Online execution has two balances to satisfy: source bridge wallet + executor wallet on destination (KeeperHub org wallet).
+   - Instrumenting each stage (bridge, execute request, execution status) is essential to avoid chasing the wrong subsystem.
+
+12. **Token selection should be network-explicit and runtime-verified**
+   - Mapping USDC by destination network fixed misrouting from Arc token address to Base Sepolia token address.
+   - A fallback retry without optional `tokenConfig` reduced API ambiguity and exposed true KeeperHub-side balance errors.
+
+13. **Dynamic wallet UX must align with backend source-selection priority**
+   - Syncing newly created Arc wallets into online-source runtime state removed wallet drift in the KeeperHub panel.
+   - Showing source and destination balances in-context reduced operator confusion during live debugging.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -155,6 +171,8 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 10. Document KeeperHub org wallet funding and `KEEPERHUB_EXECUTE_NETWORK` once Arc slug is confirmed from live `GET /api/chains`.
 11. Add a funding preflight panel for online mode (source wallet balance + minimum required amount) before bridge execution.
 12. Add a "demo payment rail" selector to all execution-only tools and keep response payloads echoing `payment_mode`/`payment_ref` for easier audit trails.
+13. Add a KeeperHub execution-wallet preflight check endpoint to verify destination-network token availability/balance before calling `/execute/transfer`.
+14. Persist dynamic online-source wallet choice across restarts (or explicit override policy) to avoid surprise source-wallet drift in demos.
 
 ## Outcome Snapshot
 
@@ -170,3 +188,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - KeeperHub local compatibility hardening: `/chains` parser now accepts both root-array and wrapped-data shapes, restoring correct Arc detection in status + chains views
 - Online bridge migration: custom CCTP REST calls replaced by Arc App Kit Bridge Kit + Circle Wallets adapter
 - KeeperHub demo payment UX: now includes MetaMask/Circle/offchain payment mode selection with payment reference echoing in API output
+- Online source wallet behavior: dynamic Arc wallet creation now syncs into KeeperHub online source selection path
+- KeeperHub token routing: destination-network USDC token mapping added (Base/Ethereum/Arbitrum/Avalanche/Polygon testnets)
+- KeeperHub execution reliability: resolved `No token selected` path with network token mapping + fallback request shape retry
+- End-to-end online path: Circle payment receipt + Arc->Base bridge + KeeperHub transfer now reaches `execution_status: completed` with on-chain tx hash
