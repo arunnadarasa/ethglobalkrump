@@ -232,12 +232,14 @@ The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes)
 - `GET /api/keeperhub/status` — whether a key is set, whether Arc appears in KeeperHub’s chain list, and the resolved execute `network` slug when possible
 - `GET /api/keeperhub/chains` — proxied chain list (auth: Bearer `kh_…`, per [Authentication](https://docs.keeperhub.com/api/authentication))
 - `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; local mode uses Arc execution directly, online mode uses CCTP bridge then [transfer](https://docs.keeperhub.com/api/direct-execution) on selected target network
+- `POST /api/keeperhub/online-source-wallet/fund-hint` — resolves/creates the Arc online source wallet and returns wallet address + faucet hint to fund bridge source USDC
 - `POST /api/battle/declare-winner` — optional body flag `execute_via_keeperhub: true` with the same semantics as the UI checkbox (pushes pool to winner wallet via KeeperHub when configured)
 - `GET /api/execution/networks` — supported execution modes and online destination networks
 
 ### UI
 
 - **KeeperHub** section: status, chain list, and a small **demo transfer** form (minor units match the rest of the app: `amount_minor / 100` is the human token amount sent to KeeperHub).
+- **KeeperHub** section includes **Fund online source (Arc USDC)** to copy the exact source wallet address and open [Circle Faucet](https://faucet.circle.com/) before online bridging.
 - Every payment action now includes `Execution local|online` selector and destination network selector for online mode.
 - **U5**: checkbox **Execute winner payout on-chain via KeeperHub** on declare winner.
 
