@@ -138,8 +138,8 @@ function extractUsdcArcBalance(balanceList) {
     return 0;
   }
   const row = balanceList.find((item) => {
-    const symbol = String(item?.tokenSymbol || item?.symbol || item?.token || "").toUpperCase();
-    const blockchain = String(item?.blockchain || item?.chain || "").toUpperCase();
+    const symbol = String(item?.tokenSymbol || item?.symbol || item?.token?.symbol || item?.token || "").toUpperCase();
+    const blockchain = String(item?.blockchain || item?.chain || item?.token?.blockchain || "").toUpperCase();
     return symbol === "USDC" && (blockchain === "ARC-TESTNET" || blockchain === "ARC_TESTNET");
   });
   if (!row) {
@@ -153,7 +153,14 @@ function extractUsdcArcBalance(balanceList) {
     row?.amounts?.[0] ||
     "0";
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  const decimals = Number(row?.token?.decimals);
+  if (Number.isFinite(decimals) && decimals > 6 && parsed >= 1_000_000) {
+    return parsed / 10 ** decimals;
+  }
+  return parsed;
 }
 
 function extractBridgeTransferId(result) {

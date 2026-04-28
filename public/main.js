@@ -800,13 +800,21 @@ async function loadKeeperHubChainsFromUi() {
   print("keeperhub-output", { status: data.status, body: data.body });
 }
 
-async function fundKeeperhubOnlineSourceFromUi() {
+function setKeeperhubOnlineSourceWalletAddress(address) {
+  const input = document.getElementById("keeperhub-online-source-wallet");
+  if (input) {
+    input.value = address || "";
+  }
+}
+
+async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
   const data = await request("/api/keeperhub/online-source-wallet/fund-hint", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({})
   });
   const walletAddress = data.body?.wallet_address || "";
+  setKeeperhubOnlineSourceWalletAddress(walletAddress);
   let copied = false;
   if (walletAddress && navigator.clipboard?.writeText) {
     try {
@@ -815,7 +823,7 @@ async function fundKeeperhubOnlineSourceFromUi() {
     } catch (_err) {}
   }
   const faucetUrl = data.body?.faucet_url || "https://faucet.circle.com/";
-  if (faucetUrl) {
+  if (openFaucet && faucetUrl) {
     window.open(faucetUrl, "_blank", "noopener,noreferrer");
   }
   print("keeperhub-output", {
@@ -863,7 +871,7 @@ document.getElementById("keeperhub-load-chains").addEventListener("click", async
 
 document.getElementById("keeperhub-fund-online-source").addEventListener("click", async () => {
   try {
-    await fundKeeperhubOnlineSourceFromUi();
+    await fundKeeperhubOnlineSourceFromUi({ openFaucet: true });
   } catch (error) {
     print("keeperhub-output", { error: error.message });
   }
@@ -1268,6 +1276,9 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
 async function bootstrap() {
   applyDefaultExecutionMode();
   await loadConfig();
+  try {
+    await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
+  } catch (_error) {}
   hydrateSavedCircleWallet();
   print("balances-output", {
     info: "Connect MetaMask and click Refresh Balances to load MetaMask and Circle wallet USDC balances."
