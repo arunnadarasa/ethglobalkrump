@@ -64,6 +64,8 @@ const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NE
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
+let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
+let activeOnlineSourceWalletAddress = "";
 const vyperSettlement = createVyperSettlementPolicy();
 const executionRouter = createExecutionRouter({
   keeperhub,
@@ -148,13 +150,22 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
   }
   const destination = String(recipientAddress || "").trim();
   // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v1',hypothesisId:'H4',location:'src/server.js:maybeExecuteOnlineTransfer:entry',message:'Online transfer source wallet resolution snapshot',data:{executionMode:selected.mode,executionNetwork:selected.network,hasActiveCircleWalletId:Boolean(activeCircleWalletId),hasEnvCircleWalletId:Boolean(CIRCLE_WALLET_ID),activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null,envCircleWalletIdPrefix:CIRCLE_WALLET_ID?String(CIRCLE_WALLET_ID).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v1',hypothesisId:'H4',location:'src/server.js:maybeExecuteOnlineTransfer:entry',message:'Online transfer source wallet resolution snapshot',data:{executionMode:selected.mode,executionNetwork:selected.network,hasActiveCircleWalletId:Boolean(activeCircleWalletId),hasActiveOnlineSourceWalletId:Boolean(activeOnlineSourceWalletId),hasEnvCircleWalletId:Boolean(CIRCLE_WALLET_ID),hasEnvOnlineCircleWalletId:Boolean(CIRCLE_WALLET_ID_ONLINE),activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null,activeOnlineSourceWalletIdPrefix:activeOnlineSourceWalletId?String(activeOnlineSourceWalletId).slice(0,8):null,envCircleWalletIdPrefix:CIRCLE_WALLET_ID?String(CIRCLE_WALLET_ID).slice(0,8):null,envOnlineCircleWalletIdPrefix:CIRCLE_WALLET_ID_ONLINE?String(CIRCLE_WALLET_ID_ONLINE).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
   if (!destination) {
     throw new Error("Online execution requires recipient address");
   }
-  let sourceWalletId = activeCircleWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
-  let sourceWalletAddress = "";
+  let sourceWalletId = CIRCLE_WALLET_ID_ONLINE || activeOnlineSourceWalletId || CIRCLE_WALLET_ID || "";
+  let sourceWalletAddress = activeOnlineSourceWalletAddress || "";
+  if (sourceWalletId && !sourceWalletAddress) {
+    try {
+      const walletBody = await circleGet(`/v1/w3s/wallets/${encodeURIComponent(sourceWalletId)}`);
+      sourceWalletAddress =
+        walletBody?.data?.wallet?.address || walletBody?.data?.wallets?.[0]?.address || walletBody?.wallet?.address || "";
+    } catch (_err) {
+      sourceWalletAddress = "";
+    }
+  }
   if (!sourceWalletId) {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet',message:'No source Circle wallet configured; attempting auto-create',data:{hasCircleApiKey:Boolean(CIRCLE_API_KEY),hasEntitySecretRaw:Boolean(CIRCLE_ENTITY_SECRET_RAW),hasEntityCiphertext:Boolean(CIRCLE_ENTITY_SECRET_CIPHERTEXT||CIRCLE_ENTITY_SECRET),hasWalletSetId:Boolean(activeCircleWalletSetId||CIRCLE_WALLET_SET_ID)},timestamp:Date.now()})}).catch(()=>{});
@@ -167,9 +178,20 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
       entitySecretRaw: CIRCLE_ENTITY_SECRET_RAW || ""
     });
     sourceWalletId =
-      created?.wallet?.id || created?.raw?.data?.wallets?.[0]?.id || activeCircleWalletId || CIRCLE_WALLET_ID || "";
+      created?.wallet?.id ||
+      created?.raw?.data?.wallets?.[0]?.id ||
+      activeOnlineSourceWalletId ||
+      CIRCLE_WALLET_ID_ONLINE ||
+      CIRCLE_WALLET_ID ||
+      "";
     sourceWalletAddress =
       created?.wallet?.address || created?.raw?.data?.wallets?.[0]?.address || created?.raw?.data?.wallet?.address || "";
+    if (sourceWalletId) {
+      activeOnlineSourceWalletId = sourceWalletId;
+    }
+    if (sourceWalletAddress) {
+      activeOnlineSourceWalletAddress = sourceWalletAddress;
+    }
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet:result',message:'Auto-create source wallet attempt finished',data:{hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:sourceWalletId?String(sourceWalletId).slice(0,8):null,activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -186,8 +208,8 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
 }
 
 async function resolveOnlineBridgeSourceWallet({ createIfMissing = true } = {}) {
-  let walletId = activeCircleWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
-  let walletAddress = "";
+  let walletId = CIRCLE_WALLET_ID_ONLINE || activeOnlineSourceWalletId || CIRCLE_WALLET_ID || "";
+  let walletAddress = activeOnlineSourceWalletAddress || "";
   if (walletId) {
     try {
       const walletBody = await circleGet(`/v1/w3s/wallets/${encodeURIComponent(walletId)}`);
@@ -222,6 +244,8 @@ async function resolveOnlineBridgeSourceWallet({ createIfMissing = true } = {}) 
     error.status = 400;
     throw error;
   }
+  activeOnlineSourceWalletId = walletId;
+  activeOnlineSourceWalletAddress = walletAddress;
   return {
     wallet_id: walletId,
     wallet_address: walletAddress
@@ -785,7 +809,7 @@ app.post("/api/keeperhub/online-destination-gas/fund-hint", async (req, res) => 
     return res.status(200).json({
       ok: true,
       ...hint,
-      token: "ETH",
+      token: hint.native_symbol || "ETH",
       instructions: `Fund signer wallet on ${hint.destination_network} with native gas token, then retry KeeperHub online transfer.`
     });
   } catch (error) {

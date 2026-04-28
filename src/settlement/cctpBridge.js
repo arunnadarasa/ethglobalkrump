@@ -18,31 +18,36 @@ const NETWORKS = {
     keeperhubNetwork: "ethereum-sepolia",
     bridgeChain: EthereumSepolia,
     bridgeChainId: "Ethereum_Sepolia",
-    circleBlockchain: "ETH-SEPOLIA"
+    circleBlockchain: "ETH-SEPOLIA",
+    nativeSymbol: "ETH"
   },
   "base-sepolia": {
     keeperhubNetwork: "base-sepolia",
     bridgeChain: BaseSepolia,
     bridgeChainId: "Base_Sepolia",
-    circleBlockchain: "BASE-SEPOLIA"
+    circleBlockchain: "BASE-SEPOLIA",
+    nativeSymbol: "ETH"
   },
   "polygon-amoy": {
     keeperhubNetwork: "polygon-amoy",
     bridgeChain: PolygonAmoy,
     bridgeChainId: "Polygon_Amoy",
-    circleBlockchain: "MATIC-AMOY"
+    circleBlockchain: "MATIC-AMOY",
+    nativeSymbol: "MATIC"
   },
   "arbitrum-sepolia": {
     keeperhubNetwork: "arbitrum-sepolia",
     bridgeChain: ArbitrumSepolia,
     bridgeChainId: "Arbitrum_Sepolia",
-    circleBlockchain: "ARB-SEPOLIA"
+    circleBlockchain: "ARB-SEPOLIA",
+    nativeSymbol: "ETH"
   },
   "avalanche-fuji": {
     keeperhubNetwork: "avalanche-fuji",
     bridgeChain: AvalancheFuji,
     bridgeChainId: "Avalanche_Fuji",
-    circleBlockchain: "AVAX-FUJI"
+    circleBlockchain: "AVAX-FUJI",
+    nativeSymbol: "AVAX"
   }
 };
 
@@ -169,10 +174,49 @@ async function fetchAnyCircleWalletAddressOnBlockchain(blockchain) {
   const wallets = body?.data?.wallets || body?.wallets || [];
   const wallet = Array.isArray(wallets) ? wallets.find((w) => Boolean(w?.address)) : null;
   return {
+    walletId: wallet?.id || "",
     address: wallet?.address || "",
     body,
     status: response.status
   };
+}
+
+function formatEvmNativeFromHex(hexValue) {
+  try {
+    const raw = BigInt(String(hexValue || "0x0"));
+    const base = 10n ** 18n;
+    const whole = raw / base;
+    const frac = raw % base;
+    const fracText = frac.toString().padStart(18, "0").slice(0, 6).replace(/0+$/, "");
+    return fracText ? `${whole.toString()}.${fracText}` : whole.toString();
+  } catch (_err) {
+    return "0";
+  }
+}
+
+function extractUsdcBalanceForBlockchain(balanceList, blockchain) {
+  if (!Array.isArray(balanceList)) {
+    return 0;
+  }
+  const targetChain = String(blockchain || "").toUpperCase();
+  const row = balanceList.find((item) => {
+    const symbol = String(item?.tokenSymbol || item?.symbol || item?.token?.symbol || item?.token || "").toUpperCase();
+    const chain = String(item?.blockchain || item?.chain || item?.token?.blockchain || "").toUpperCase();
+    return symbol === "USDC" && chain === targetChain;
+  });
+  if (!row) {
+    return 0;
+  }
+  const raw = row?.availableAmount || row?.amount || row?.balance || row?.amountFormatted || row?.amounts?.[0] || "0";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  const decimals = Number(row?.token?.decimals);
+  if (Number.isFinite(decimals) && decimals > 6 && parsed >= 1_000_000) {
+    return parsed / 10 ** decimals;
+  }
+  return parsed;
 }
 
 async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackAddress = "") {
@@ -186,6 +230,7 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
     throw error;
   }
   const destinationWalletLookup = await fetchAnyCircleWalletAddressOnBlockchain(network.circleBlockchain);
+  const destinationWalletId = destinationWalletLookup.walletId || "";
   const signerAddress = destinationWalletLookup.address || String(fallbackAddress || "").trim() || "";
   if (!signerAddress) {
     const error = new Error(
@@ -195,10 +240,31 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
     error.status = 400;
     throw error;
   }
+  const destinationRpcUrl =
+    Array.isArray(network?.bridgeChain?.rpcEndpoints) && network.bridgeChain.rpcEndpoints.length > 0
+      ? String(network.bridgeChain.rpcEndpoints[0])
+      : "";
+  const nativeProbe = destinationRpcUrl
+    ? await probeEvmRpcNativeBalance(destinationRpcUrl, signerAddress)
+    : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
+  let usdcBalance = 0;
+  if (destinationWalletId) {
+    const destinationBalances = await fetchCircleWalletBalances(destinationWalletId);
+    const destinationBalanceList =
+      destinationBalances?.body?.data?.tokenBalances ||
+      destinationBalances?.body?.data?.balances ||
+      destinationBalances?.body?.balances ||
+      [];
+    usdcBalance = extractUsdcBalanceForBlockchain(destinationBalanceList, network.circleBlockchain);
+  }
   return {
     destination_network: networkKey,
     destination_chain: network.circleBlockchain,
+    native_symbol: network.nativeSymbol,
     signer_address: signerAddress,
+    signer_wallet_id: destinationWalletId,
+    signer_native_balance: formatEvmNativeFromHex(nativeProbe?.body?.result || "0x0"),
+    signer_usdc_balance: Number(usdcBalance.toFixed(6)),
     faucet_url: DESTINATION_GAS_FAUCETS[networkKey] || "",
     lookup_status: destinationWalletLookup.status || null
   };
@@ -386,15 +452,18 @@ async function bridgeUsdcFromArc({
     Array.isArray(network?.bridgeChain?.rpcEndpoints) && network.bridgeChain.rpcEndpoints.length > 0
       ? String(network.bridgeChain.rpcEndpoints[0])
       : "";
-  const destinationRpcProbe = destinationRpcUrl
-    ? await probeEvmRpcNativeBalance(destinationRpcUrl, sourceAddress)
-    : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
   const adapter = getBridgeKitAdapter();
   const bridgeKit = getBridgeKit();
   const destinationWalletLookup = await fetchAnyCircleWalletAddressOnBlockchain(network.circleBlockchain);
   const destinationSignerAddress = destinationWalletLookup.address || sourceAddress;
+  const destinationSourceAddressProbe = destinationRpcUrl
+    ? await probeEvmRpcNativeBalance(destinationRpcUrl, sourceAddress)
+    : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
+  const destinationSignerAddressProbe = destinationRpcUrl
+    ? await probeEvmRpcNativeBalance(destinationRpcUrl, destinationSignerAddress)
+    : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
   // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v7',hypothesisId:'H30',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Bridge request with destination chain signer lookup',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,circleDestinationChain:network.circleBlockchain,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),destinationLookupStatus:destinationWalletLookup.status||null,recipientPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc,arcRpcProbeOk:Boolean(arcRpcProbe?.ok),arcRpcProbeStatus:arcRpcProbe?.status||null,arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationRpcProbeOk:Boolean(destinationRpcProbe?.ok),destinationRpcProbeStatus:destinationRpcProbe?.status||null,destinationRpcProbeBody:destinationRpcProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v8',hypothesisId:'H33',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Bridge request with destination signer and dual destination probes',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,circleDestinationChain:network.circleBlockchain,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),destinationLookupStatus:destinationWalletLookup.status||null,recipientPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc,arcRpcProbeOk:Boolean(arcRpcProbe?.ok),arcRpcProbeStatus:arcRpcProbe?.status||null,arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationSourceAddressProbe:destinationSourceAddressProbe?.body||{},destinationSignerAddressProbe:destinationSignerAddressProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
   // #region agent log
   fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H19',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:balances',message:'Source wallet balances before bridge',data:{sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),balancesPreview:Array.isArray(balanceList)?balanceList.slice(0,5):[]},timestamp:Date.now()})}).catch(()=>{});
@@ -428,7 +497,7 @@ async function bridgeUsdcFromArc({
     });
   } catch (error) {
     // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v7',hypothesisId:'H31',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Bridge call failed after destination signer lookup',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null,destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),recipientPrefix:destination.slice(0,10),arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationRpcProbeBody:destinationRpcProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v8',hypothesisId:'H34',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Bridge call failed after dual destination probes',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null,destinationSignerPrefix:destinationSignerAddress.slice(0,10),destinationSignerFromLookup:Boolean(destinationWalletLookup.address),recipientPrefix:destination.slice(0,10),arcRpcProbeBody:arcRpcProbe?.body||{},destinationRpcUrl,destinationSourceAddressProbe:destinationSourceAddressProbe?.body||{},destinationSignerAddressProbe:destinationSignerAddressProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     throw error;
   }

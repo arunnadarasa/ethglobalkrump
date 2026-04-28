@@ -122,6 +122,16 @@
           <input id="keeperhub-destination-gas-wallet" placeholder="Destination signer wallet (native gas)" readonly style="min-width: 420px" />
         </div>
         <div class="row">
+          <small id="keeperhub-chain-hint">
+            Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: BASE-SEPOLIA (native gas token).
+          </small>
+        </div>
+        <div class="row">
+          <small id="keeperhub-destination-balance-hint">
+            Destination signer balances: native gas 0, USDC 0.
+          </small>
+        </div>
+        <div class="row">
           <input id="keeperhub-demo-recipient" placeholder="Recipient 0x… (Arc testnet)" style="min-width: 280px" />
           <input id="keeperhub-demo-amount" type="number" min="1" value="100" />
           <select id="keeperhub-demo-mode">

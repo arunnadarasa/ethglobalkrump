@@ -814,6 +814,35 @@ function setKeeperhubDestinationGasWalletAddress(address) {
   }
 }
 
+function updateKeeperhubChainHint() {
+  const target = document.getElementById("keeperhub-chain-hint");
+  if (!target) {
+    return;
+  }
+  const network = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
+  const chainMap = {
+    "base-sepolia": "BASE-SEPOLIA",
+    "ethereum-sepolia": "ETH-SEPOLIA",
+    "polygon-amoy": "MATIC-AMOY",
+    "arbitrum-sepolia": "ARB-SEPOLIA",
+    "avalanche-fuji": "AVAX-FUJI"
+  };
+  const destinationChain = chainMap[network] || String(network || "").toUpperCase();
+  target.textContent = `Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: ${destinationChain} (native gas token).`;
+}
+
+function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcBalance, destinationChain }) {
+  const target = document.getElementById("keeperhub-destination-balance-hint");
+  if (!target) {
+    return;
+  }
+  const resolvedNative = nativeBalance || "0";
+  const resolvedSymbol = nativeSymbol || "ETH";
+  const resolvedUsdc = typeof usdcBalance === "number" ? usdcBalance.toString() : usdcBalance || "0";
+  const resolvedChain = destinationChain || "BASE-SEPOLIA";
+  target.textContent = `Destination signer balances on ${resolvedChain}: ${resolvedNative} ${resolvedSymbol}, ${resolvedUsdc} USDC.`;
+}
+
 async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
   const data = await request("/api/keeperhub/online-source-wallet/fund-hint", {
     method: "POST",
@@ -849,6 +878,12 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
   });
   const walletAddress = data.body?.signer_address || "";
   setKeeperhubDestinationGasWalletAddress(walletAddress);
+  setKeeperhubDestinationBalanceHint({
+    nativeBalance: data.body?.signer_native_balance || "0",
+    nativeSymbol: data.body?.native_symbol || "ETH",
+    usdcBalance: data.body?.signer_usdc_balance ?? 0,
+    destinationChain: data.body?.destination_chain || "BASE-SEPOLIA"
+  });
   let copied = false;
   if (walletAddress && navigator.clipboard?.writeText) {
     try {
@@ -925,6 +960,11 @@ document.getElementById("keeperhub-demo-transfer").addEventListener("click", asy
   } catch (error) {
     print("keeperhub-output", { error: error.message });
   }
+});
+
+document.getElementById("keeperhub-execution-network").addEventListener("change", () => {
+  updateKeeperhubChainHint();
+  fundKeeperhubDestinationGasFromUi({ openFaucet: false }).catch(() => {});
 });
 
 // U3
@@ -1324,6 +1364,7 @@ async function bootstrap() {
   try {
     await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
   } catch (_error) {}
+  updateKeeperhubChainHint();
   hydrateSavedCircleWallet();
   print("balances-output", {
     info: "Connect MetaMask and click Refresh Balances to load MetaMask and Circle wallet USDC balances."
