@@ -10,6 +10,11 @@ const CIRCLE_API_KEY = (process.env.CIRCLE_API_KEY || "").trim();
 const CIRCLE_ENTITY_SECRET = (process.env.CIRCLE_ENTITY_SECRET || "").trim();
 const CIRCLE_ENTITY_SECRET_RAW = (process.env.CIRCLE_ENTITY_SECRET_RAW || "").trim();
 const ARC_RPC_URL = (process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network").trim();
+/** Optional; first endpoint used for Amoy probes + Bridge Kit mint when set (helps flaky public RPC). */
+const POLYGON_AMOY_RPC_URL = (process.env.POLYGON_AMOY_RPC_URL || "").trim();
+const ALLOW_LOW_DESTINATION_GAS = String(process.env.ALLOW_LOW_DESTINATION_GAS || "")
+  .trim()
+  .toLowerCase() === "true";
 let adapterInstance = null;
 let bridgeKitInstance = null;
 
@@ -216,6 +221,95 @@ function parseEvmNativeFromHexNumber(hexValue) {
   } catch (_err) {
     return 0;
   }
+}
+
+function safeDebugPayload(value, depth = 0) {
+  const maxDepth = 6;
+  if (depth > maxDepth) {
+    return "[max-depth]";
+  }
+  if (value === null || value === undefined) {
+    return value;
+  }
+  const t = typeof value;
+  if (t === "bigint") {
+    return value.toString();
+  }
+  if (t === "string" || t === "number" || t === "boolean") {
+    return value;
+  }
+  if (t === "function") {
+    return "[fn]";
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 30).map((v) => safeDebugPayload(v, depth + 1));
+  }
+  if (t === "object") {
+    const out = {};
+    for (const k of Object.keys(value).slice(0, 45)) {
+      try {
+        out[k] = safeDebugPayload(value[k], depth + 1);
+      } catch (_e) {
+        out[k] = "[unreadable]";
+      }
+    }
+    return out;
+  }
+  return String(value);
+}
+
+function debugIngest(payload) {
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: payload.runId || "run1",
+      hypothesisId: payload.hypothesisId,
+      location: payload.location,
+      message: payload.message,
+      data: payload.data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+}
+
+function resolveBridgeDestinationChain(network, destinationNetworkKey) {
+  const key = String(destinationNetworkKey || "").trim().toLowerCase();
+  const base = network?.bridgeChain;
+  if (!base) {
+    return base;
+  }
+  if (key === "polygon-amoy" && POLYGON_AMOY_RPC_URL) {
+    const rest = Array.isArray(base.rpcEndpoints) ? [...base.rpcEndpoints] : [];
+    const merged = [POLYGON_AMOY_RPC_URL, ...rest.filter((u) => u && u !== POLYGON_AMOY_RPC_URL)];
+    return { ...base, rpcEndpoints: merged };
+  }
+  return base;
+}
+
+function summarizeBridgeStepFailure(bridgeResult) {
+  const steps = bridgeResult?.steps;
+  if (!Array.isArray(steps)) {
+    return null;
+  }
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const step = steps[i];
+    if (String(step?.state || "").toLowerCase() !== "error") {
+      continue;
+    }
+    const err = step.error || {};
+    const msg = String(step.errorMessage || err.shortMessage || err.message || "").trim();
+    return {
+      stepName: String(step.name || "unknown"),
+      errorMessage: msg,
+      errorCode: err.code,
+      errorName: err.name,
+      errorType: err.type,
+      recoverability: err.recoverability
+    };
+  }
+  return null;
 }
 
 function extractUsdcBalanceForBlockchain(balanceList, blockchain) {
@@ -482,9 +576,10 @@ async function bridgeUsdcFromArc({
   const amount = (Number(amountMinor || 0) / 100).toFixed(2);
   const requested = Number(amount);
   const arcRpcProbe = await probeArcRpcNativeBalance(sourceAddress);
+  const bridgeDestinationChain = resolveBridgeDestinationChain(network, destinationNetwork);
   const destinationRpcUrl =
-    Array.isArray(network?.bridgeChain?.rpcEndpoints) && network.bridgeChain.rpcEndpoints.length > 0
-      ? String(network.bridgeChain.rpcEndpoints[0])
+    Array.isArray(bridgeDestinationChain?.rpcEndpoints) && bridgeDestinationChain.rpcEndpoints.length > 0
+      ? String(bridgeDestinationChain.rpcEndpoints[0])
       : "";
   const adapter = getBridgeKitAdapter();
   const bridgeKit = getBridgeKit();
@@ -507,6 +602,75 @@ async function bridgeUsdcFromArc({
     error.status = 400;
     throw error;
   }
+  const minNativeRecommended = Number(DESTINATION_MIN_NATIVE_GAS[String(destinationNetwork || "").trim().toLowerCase()] || 0.001);
+  const signerNativeWei = destinationSignerAddressProbe?.body?.result;
+  const sourceOnDestNativeWei = destinationSourceAddressProbe?.body?.result;
+  const signerNativeNumber = parseEvmNativeFromHexNumber(signerNativeWei || "0x0");
+  const sourceOnDestNativeNumber = parseEvmNativeFromHexNumber(sourceOnDestNativeWei || "0x0");
+  // #region agent log
+  debugIngest({
+    hypothesisId: "H-A",
+    location: "cctpBridge.js:bridgeUsdcFromArc:pre_bridge_gas",
+    message: "pre-bridge native gas vs threshold",
+    data: {
+      destinationNetwork,
+      minNativeRecommended,
+      signerNativeNumber,
+      sourceOnDestNativeNumber,
+      belowMinSigner: signerNativeNumber < minNativeRecommended,
+      amount,
+      requested,
+      availableUsdcArc
+    }
+  });
+  // #endregion
+  // #region agent log
+  debugIngest({
+    hypothesisId: "H-C",
+    location: "cctpBridge.js:bridgeUsdcFromArc:pre_bridge_signer",
+    message: "signer routing",
+    data: {
+      destinationNetwork,
+      circleBlockchain: network.circleBlockchain,
+      walletIdPrefix: String(destinationWalletLookup.walletId || "").slice(0, 8),
+      destSignerTail: String(destinationSignerAddress).slice(-8),
+      sourceTail: String(sourceAddress).slice(-8),
+      recipientTail: String(destination).slice(-8),
+      signerIsSourceFallback: destinationSignerAddress.toLowerCase() === sourceAddress.toLowerCase()
+    }
+  });
+  // #endregion
+  if (signerNativeNumber < minNativeRecommended) {
+    // #region agent log
+    debugIngest({
+      hypothesisId: "H-A",
+      location: "cctpBridge.js:bridgeUsdcFromArc:preflight_low_gas",
+      message: "low destination native gas before bridgeKit.bridge",
+      runId: "post-fix",
+      data: {
+        destinationNetwork,
+        signerNativeNumber,
+        minNativeRecommended,
+        nativeSymbol: network.nativeSymbol,
+        allowLowDestinationGas: ALLOW_LOW_DESTINATION_GAS
+      }
+    });
+    // #endregion
+    if (!ALLOW_LOW_DESTINATION_GAS) {
+      const error = new Error(
+        `Destination signer has ~${signerNativeNumber.toFixed(4)} ${network.nativeSymbol} on ${network.keeperhubNetwork}; at least ${minNativeRecommended} ${network.nativeSymbol} is recommended before CCTP mint (avoids burn succeeding then mint failing). Fund the destination gas wallet or set ALLOW_LOW_DESTINATION_GAS=true to try anyway.`
+      );
+      error.code = "arc_bridge_insufficient_destination_gas";
+      error.status = 400;
+      error.details = {
+        destination_network: destinationNetwork,
+        signer_native: signerNativeNumber,
+        min_native_recommended: minNativeRecommended,
+        native_symbol: network.nativeSymbol
+      };
+      throw error;
+    }
+  }
   let bridgeResult;
   try {
     bridgeResult = await bridgeKit.bridge({
@@ -517,7 +681,7 @@ async function bridgeUsdcFromArc({
       },
       to: {
         adapter,
-        chain: network.bridgeChain,
+        chain: bridgeDestinationChain,
         address: destinationSignerAddress,
         recipientAddress: destination
       },
@@ -525,14 +689,49 @@ async function bridgeUsdcFromArc({
       token: "USDC"
     });
   } catch (error) {
+    // #region agent log
+    debugIngest({
+      hypothesisId: "H-E",
+      location: "cctpBridge.js:bridgeUsdcFromArc:bridge_threw",
+      message: "bridgeKit.bridge threw",
+      data: {
+        destinationNetwork,
+        name: error?.name,
+        code: error?.code,
+        message: String(error?.message || "").slice(0, 500)
+      }
+    });
+    // #endregion
     throw error;
   }
   const state = String(bridgeResult?.state || bridgeResult?.status || "success").toLowerCase();
+  // #region agent log
+  debugIngest({
+    hypothesisId: "H-B",
+    location: "cctpBridge.js:bridgeUsdcFromArc:post_bridge",
+    message: "bridgeKit.bridge returned",
+    data: {
+      destinationNetwork,
+      stateRaw: bridgeResult?.state ?? bridgeResult?.status,
+      stateNormalized: state,
+      bridgeSummary: safeDebugPayload(bridgeResult)
+    }
+  });
+  // #endregion
   if (!["success", "succeeded", "complete", "completed"].includes(state)) {
-    const error = new Error(`Arc App Kit bridge did not complete successfully (state=${state})`);
+    const stepFailure = summarizeBridgeStepFailure(bridgeResult);
+    const suffix = stepFailure?.errorMessage
+      ? ` — ${stepFailure.stepName}: ${stepFailure.errorMessage}${
+          stepFailure.errorName ? ` (${stepFailure.errorName})` : ""
+        }`
+      : "";
+    const error = new Error(`Arc App Kit bridge did not complete successfully (state=${state})${suffix}`);
     error.code = "arc_bridge_failed";
     error.status = 502;
     error.bridge = bridgeResult;
+    if (stepFailure) {
+      error.bridge_step_failure = stepFailure;
+    }
     throw error;
   }
   const transferId = extractBridgeTransferId(bridgeResult) || `arc-bridge-${Date.now().toString(36)}`;
