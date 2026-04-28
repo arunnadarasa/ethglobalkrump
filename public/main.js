@@ -1029,6 +1029,12 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
   });
 }
 
+async function refreshKeeperhubBalancesFromUi() {
+  updateKeeperhubChainHint();
+  await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
+  await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
+}
+
 async function keeperHubDemoTransferFromUi() {
   const recipient_address = document.getElementById("keeperhub-demo-recipient").value.trim();
   const amount_minor = Number(document.getElementById("keeperhub-demo-amount").value);
@@ -1060,6 +1066,14 @@ document.getElementById("keeperhub-load-status").addEventListener("click", async
 document.getElementById("keeperhub-load-chains").addEventListener("click", async () => {
   try {
     await loadKeeperHubChainsFromUi();
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
+document.getElementById("keeperhub-refresh-balances").addEventListener("click", async () => {
+  try {
+    await refreshKeeperhubBalancesFromUi();
   } catch (error) {
     print("keeperhub-output", { error: error.message });
   }
