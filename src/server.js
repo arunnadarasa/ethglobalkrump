@@ -185,7 +185,7 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
   if (!destination) {
     throw new Error("Online execution requires recipient address");
   }
-  let sourceWalletId = CIRCLE_WALLET_ID_ONLINE || activeOnlineSourceWalletId || CIRCLE_WALLET_ID || "";
+  let sourceWalletId = activeOnlineSourceWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
   let sourceWalletAddress = activeOnlineSourceWalletAddress || "";
   if (sourceWalletId && !sourceWalletAddress) {
     try {
@@ -238,7 +238,7 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
 }
 
 async function resolveOnlineBridgeSourceWallet({ createIfMissing = true } = {}) {
-  let walletId = CIRCLE_WALLET_ID_ONLINE || activeOnlineSourceWalletId || CIRCLE_WALLET_ID || "";
+  let walletId = activeOnlineSourceWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
   let walletAddress = activeOnlineSourceWalletAddress || "";
   if (walletId) {
     try {
@@ -587,6 +587,18 @@ async function createCircleWallet({ blockchain, walletSetId, walletName, entityS
     throw new Error("Circle wallet creation succeeded but no wallet id was returned");
   }
   activeCircleWalletId = createdWalletId;
+  const createdBlockchain = String(blockchain || "ARC-TESTNET").trim().toUpperCase();
+  if (createdBlockchain === "ARC-TESTNET") {
+    activeOnlineSourceWalletId = createdWalletId;
+    activeOnlineSourceWalletAddress = createdWallet?.address || "";
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-source-dynamic-v1',hypothesisId:'H40',location:'src/server.js:createCircleWallet:arc-online-source-sync',message:'Dynamic online source wallet synced from newly created Arc wallet',data:{createdBlockchain,walletIdPrefix:String(createdWalletId||'').slice(0,8),walletAddressPrefix:String(createdWallet?.address||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  } else {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-source-dynamic-v1',hypothesisId:'H41',location:'src/server.js:createCircleWallet:non-arc-skip-sync',message:'Skipped online source sync for non-Arc wallet creation',data:{createdBlockchain,walletIdPrefix:String(createdWalletId||'').slice(0,8)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }
   activeCircleWalletSetId = resolvedWalletSetId;
   return {
     wallet: createdWallet,
@@ -774,6 +786,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     let transfer = null;
     let summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
     let online = null;
+    let execution_status = null;
     if (selectedMode === "online") {
       online = await maybeExecuteOnlineTransfer({
         executionMode: selectedMode,
@@ -787,6 +800,33 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
         ...summary,
         execute_network: online.network
       };
+      if (transfer?.executionId) {
+        try {
+          execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+        } catch (_e) {
+          execution_status = null;
+        }
+      }
+      const noTokenSelected = String(execution_status?.error || "")
+        .toLowerCase()
+        .includes("no token selected");
+      if (noTokenSelected) {
+        // #region agent log
+        fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-retry-v2',hypothesisId:'H43',location:'src/server.js:/api/keeperhub/execute-transfer:online-retry',message:'Retrying KeeperHub transfer without tokenConfig after no-token-selected',data:{executionNetwork:online?.network||null,firstExecutionId:transfer?.executionId||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        const retryTransfer = await keeperhub.executeTransferPayout({
+          recipientAddress: recipient_address.trim(),
+          amountMinor: amount_minor,
+          network: online.keeperhub?.network || online.network,
+          includeTokenConfig: false
+        });
+        transfer = retryTransfer;
+        try {
+          execution_status = retryTransfer?.executionId ? await keeperhub.getExecutionStatus(retryTransfer.executionId) : null;
+        } catch (_e) {
+          execution_status = null;
+        }
+      }
     } else {
       if (!summary.execute_network) {
         return sendError(
@@ -805,8 +845,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T4',location:'src/server.js:/api/keeperhub/execute-transfer',message:'KeeperHub transfer response received',data:{status:transfer?.status||null,executionId:transfer?.executionId||null,arcSupported:summary.arc_supported,executeNetwork:summary.execute_network},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
-    let execution_status = null;
-    if (transfer?.executionId) {
+    if (!execution_status && transfer?.executionId) {
       try {
         execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
       } catch (_e) {
@@ -825,7 +864,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       arc: summary
     };
     // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-response-serialize-v1',hypothesisId:'H35',location:'src/server.js:/api/keeperhub/execute-transfer:pre-response',message:'KeeperHub response payload serialization check',data:{selectedMode,bigintInBridge:containsBigInt(responsePayload.bridge),bigintInKeeperhub:containsBigInt(responsePayload.keeperhub),bigintInExecutionStatus:containsBigInt(responsePayload.execution_status)},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-response-serialize-v1',hypothesisId:'H35',location:'src/server.js:/api/keeperhub/execute-transfer:pre-response',message:'KeeperHub response payload serialization check',data:{selectedMode,bigintInBridge:containsBigInt(responsePayload.bridge),bigintInKeeperhub:containsBigInt(responsePayload.keeperhub),bigintInExecutionStatus:containsBigInt(responsePayload.execution_status),keeperhubStatus:responsePayload?.keeperhub?.status||null,executionStatusState:responsePayload?.execution_status?.status||null,executionStatusError:responsePayload?.execution_status?.error||null,noTokenSelectedHint:String(responsePayload?.execution_status?.error||'').toLowerCase().includes('no token selected')},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     return res.status(201).json(normalizeForJson(responsePayload));
   } catch (error) {

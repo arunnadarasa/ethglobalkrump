@@ -8,6 +8,13 @@ const ONLINE_EXECUTE_NETWORKS = {
   "arbitrum-sepolia": "arbitrum-sepolia",
   "avalanche-fuji": "avalanche-fuji"
 };
+const NETWORK_USDC_ADDRESSES = {
+  "base-sepolia": "0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+  "ethereum-sepolia": "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
+  "polygon-amoy": "0x41e94eb019c0762f9bfcf9fb1e58725bfb0e7582",
+  "arbitrum-sepolia": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "avalanche-fuji": "0x5425890298aed601595a70ab815c96711a31bc65"
+};
 
 /**
  * KeeperHub docs use host `app.keeperhub.com` with API root `/api`.
@@ -199,6 +206,9 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
       // #region agent log
       fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-exec-debug-v1',hypothesisId:'H14',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub execute route failed',data:{path,url,status:response.status,responseKeys:parsed&&typeof parsed==='object'?Object.keys(parsed):[],errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
+      // #region agent log
+      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v1',hypothesisId:'H38',location:'src/keeperhub/client.js:keeperhubFetch:error-details',message:'KeeperHub execute error details for token-selection hypotheses',data:{path,status:response.status,rawError:parsed?.error||null,rawMessage:parsed?.message||null,noTokenSelectedHint:String(parsed?.error||parsed?.message||'').toLowerCase().includes('token')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     }
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T3',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub request failed',data:{method,url,status:response.status,executeRoute:Boolean(executeRoute),errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
@@ -292,9 +302,14 @@ function resolveTokenAddress() {
 /**
  * Transfer ERC-20 (e.g. USDC on Arc) or native if no token address.
  */
-async function executeTransferPayout({ recipientAddress, amountMinor, network }) {
+async function executeTransferPayout({ recipientAddress, amountMinor, network, includeTokenConfig = true }) {
   const amount = minorToTransferAmountString(amountMinor);
-  const tokenAddress = resolveTokenAddress();
+  const networkKey = String(network || "").toLowerCase();
+  const mappedNetworkTokenAddress = NETWORK_USDC_ADDRESSES[networkKey] || "";
+  const tokenAddress = mappedNetworkTokenAddress || resolveTokenAddress();
+  const expectedTokenAddress = NETWORK_USDC_ADDRESSES[String(network || "").toLowerCase()] || null;
+  const tokenAddressNormalized = String(tokenAddress || "").toLowerCase();
+  const expectedTokenAddressNormalized = String(expectedTokenAddress || "").toLowerCase();
   const payload = {
     network,
     recipientAddress,
@@ -303,12 +318,21 @@ async function executeTransferPayout({ recipientAddress, amountMinor, network })
   };
   if (tokenAddress) {
     payload.tokenAddress = tokenAddress;
-    const decimals = (process.env.KEEPERHUB_TOKEN_DECIMALS || "6").trim();
-    const symbol = (process.env.KEEPERHUB_TOKEN_SYMBOL || "USDC").trim();
-    payload.tokenConfig = JSON.stringify({ decimals: Number(decimals), symbol });
+    if (includeTokenConfig) {
+      const decimals = (process.env.KEEPERHUB_TOKEN_DECIMALS || "6").trim();
+      const symbol = (process.env.KEEPERHUB_TOKEN_SYMBOL || "USDC").trim();
+      const tokenConfigPayload = { decimals: Number(decimals), symbol };
+      payload.tokenConfig = JSON.stringify(tokenConfigPayload);
+    }
   }
   // #region agent log
   fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T2',location:'src/keeperhub/client.js:executeTransferPayout:payload',message:'Prepared execute/transfer payload',data:{network:payload.network,hasTokenAddress:Boolean(payload.tokenAddress),hasTokenConfig:Boolean(payload.tokenConfig),tokenAddressPrefix:payload.tokenAddress?String(payload.tokenAddress).slice(0,10):null,amount:payload.amount,recipientPrefix:String(payload.recipientAddress||'').slice(0,10)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v3',hypothesisId:'H37',location:'src/keeperhub/client.js:executeTransferPayout:token-selection',message:'Token selection inputs for keeperhub execute route',data:{network:payload.network,resolvedTokenAddress:payload.tokenAddress||null,expectedUsdcForNetwork:expectedTokenAddress,tokenAddressMatchesExpected:Boolean(tokenAddressNormalized&&expectedTokenAddressNormalized&&tokenAddressNormalized===expectedTokenAddressNormalized),includeTokenConfig:Boolean(includeTokenConfig),tokenConfigType:typeof payload.tokenConfig,tokenConfigPreview:String(payload.tokenConfig||'').slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-token-select-v1',hypothesisId:'H39',location:'src/keeperhub/client.js:executeTransferPayout:token-source',message:'Token address source chosen for keeperhub execute route',data:{network:payload.network,usedMappedNetworkToken:Boolean(mappedNetworkTokenAddress),mappedTokenPrefix:mappedNetworkTokenAddress?String(mappedNetworkTokenAddress).slice(0,10):null,fallbackEnvTokenPrefix:resolveTokenAddress()?String(resolveTokenAddress()).slice(0,10):null,finalTokenPrefix:payload.tokenAddress?String(payload.tokenAddress).slice(0,10):null},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
   // #region agent log
   fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W3',location:'src/keeperhub/client.js:executeTransferPayout',message:'Payload shape before keeperhubFetch call',data:{tokenConfigType:typeof payload.tokenConfig,tokenConfigValue:payload.tokenConfig||null,tokenAddress:payload.tokenAddress||null},timestamp:Date.now()})}).catch(()=>{});
