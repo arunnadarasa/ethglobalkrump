@@ -9,6 +9,7 @@ const CIRCLE_API_BASE = (process.env.CIRCLE_API_BASE || "https://api.circle.com"
 const CIRCLE_API_KEY = (process.env.CIRCLE_API_KEY || "").trim();
 const CIRCLE_ENTITY_SECRET = (process.env.CIRCLE_ENTITY_SECRET || "").trim();
 const CIRCLE_ENTITY_SECRET_RAW = (process.env.CIRCLE_ENTITY_SECRET_RAW || "").trim();
+const ARC_RPC_URL = (process.env.ARC_RPC_URL || "https://rpc.testnet.arc.network").trim();
 let adapterInstance = null;
 let bridgeKitInstance = null;
 
@@ -184,6 +185,41 @@ function extractBridgeTransferId(result) {
   return null;
 }
 
+async function probeArcRpcNativeBalance(address) {
+  try {
+    const response = await fetch(ARC_RPC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_getBalance",
+        params: [address, "latest"]
+      })
+    });
+    const text = await response.text();
+    let body = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch (_err) {
+      body = { raw: text };
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      body
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: -1,
+      body: { error: error?.message || "rpc_probe_failed" }
+    };
+  }
+}
+
 async function bridgeUsdcFromArc({
   amountMinor,
   destinationNetwork,
@@ -218,10 +254,12 @@ async function bridgeUsdcFromArc({
   const availableUsdcArc = extractUsdcArcBalance(balanceList);
   const amount = (Number(amountMinor || 0) / 100).toFixed(2);
   const requested = Number(amount);
+  const arcRpcProbe = await probeArcRpcNativeBalance(sourceAddress);
   const adapter = getBridgeKitAdapter();
   const bridgeKit = getBridgeKit();
+  const destinationSignerAddress = sourceAddress;
   // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H18',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Arc App Kit bridge request starting',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc},timestamp:Date.now()})}).catch(()=>{});
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v5',hypothesisId:'H26',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Arc App Kit bridge request starting with rpc probe',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationSignerPrefix:destinationSignerAddress.slice(0,10),recipientPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc,arcRpcProbeOk:Boolean(arcRpcProbe?.ok),arcRpcProbeStatus:arcRpcProbe?.status||null,arcRpcProbeBody:arcRpcProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
   // #region agent log
   fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H19',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:balances',message:'Source wallet balances before bridge',data:{sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),balancesPreview:Array.isArray(balanceList)?balanceList.slice(0,5):[]},timestamp:Date.now()})}).catch(()=>{});
@@ -247,14 +285,15 @@ async function bridgeUsdcFromArc({
       to: {
         adapter,
         chain: network.bridgeChain,
-        address: destination
+        address: destinationSignerAddress,
+        recipientAddress: destination
       },
       amount,
       token: "USDC"
     });
   } catch (error) {
     // #region agent log
-    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H20',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Arc App Kit bridge call failed',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v5',hypothesisId:'H27',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Arc App Kit bridge call failed after rpc probe',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null,destinationSignerPrefix:destinationSignerAddress.slice(0,10),recipientPrefix:destination.slice(0,10),arcRpcProbeBody:arcRpcProbe?.body||{}},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     throw error;
   }
