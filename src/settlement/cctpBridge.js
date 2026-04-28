@@ -111,6 +111,51 @@ async function fetchCircleWalletAddress(walletId) {
   return resolved;
 }
 
+async function fetchCircleWalletBalances(walletId) {
+  const response = await fetch(`${CIRCLE_API_BASE}/v1/w3s/wallets/${encodeURIComponent(walletId)}/balances`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${CIRCLE_API_KEY}`,
+      "Content-Type": "application/json"
+    }
+  });
+  const text = await response.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch (_err) {
+    body = { raw: text };
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    body
+  };
+}
+
+function extractUsdcArcBalance(balanceList) {
+  if (!Array.isArray(balanceList)) {
+    return 0;
+  }
+  const row = balanceList.find((item) => {
+    const symbol = String(item?.tokenSymbol || item?.symbol || item?.token || "").toUpperCase();
+    const blockchain = String(item?.blockchain || item?.chain || "").toUpperCase();
+    return symbol === "USDC" && (blockchain === "ARC-TESTNET" || blockchain === "ARC_TESTNET");
+  });
+  if (!row) {
+    return 0;
+  }
+  const raw =
+    row?.availableAmount ||
+    row?.amount ||
+    row?.balance ||
+    row?.amountFormatted ||
+    row?.amounts?.[0] ||
+    "0";
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function extractBridgeTransferId(result) {
   const direct =
     result?.transactionHash ||
@@ -160,26 +205,52 @@ async function bridgeUsdcFromArc({
     }
     sourceAddress = await fetchCircleWalletAddress(sourceWalletId);
   }
+  const balances = await fetchCircleWalletBalances(sourceWalletId);
+  const balanceList =
+    balances?.body?.data?.tokenBalances || balances?.body?.data?.balances || balances?.body?.balances || [];
+  const availableUsdcArc = extractUsdcArcBalance(balanceList);
   const amount = (Number(amountMinor || 0) / 100).toFixed(2);
+  const requested = Number(amount);
   const adapter = getBridgeKitAdapter();
   const bridgeKit = getBridgeKit();
   // #region agent log
-  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v1',hypothesisId:'H16',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Arc App Kit bridge request starting',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceAddressPrefix:sourceAddress.slice(0,10),destinationPrefix:destination.slice(0,10),hasMemo:Boolean(memo)},timestamp:Date.now()})}).catch(()=>{});
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H18',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:entry',message:'Arc App Kit bridge request starting',data:{destinationNetwork,bridgeChainId:network.bridgeChainId,amount,hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),sourceAddressPrefix:sourceAddress.slice(0,10),destinationPrefix:destination.slice(0,10),hasMemo:Boolean(memo),balanceQueryOk:Boolean(balances?.ok),balanceQueryStatus:balances?.status||null,balanceCount:Array.isArray(balanceList)?balanceList.length:0,availableUsdcArc},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
-  const bridgeResult = await bridgeKit.bridge({
-    from: {
-      adapter,
-      chain: ArcTestnet,
-      address: sourceAddress
-    },
-    to: {
-      adapter,
-      chain: network.bridgeChain,
-      address: destination
-    },
-    amount,
-    token: "USDC"
-  });
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H19',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:balances',message:'Source wallet balances before bridge',data:{sourceWalletIdPrefix:String(sourceWalletId||'').slice(0,8),balancesPreview:Array.isArray(balanceList)?balanceList.slice(0,5):[]},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!balances?.ok || availableUsdcArc < requested) {
+    const error = new Error(
+      `Online bridge source wallet has insufficient Arc USDC (available ${availableUsdcArc.toFixed(
+        2
+      )}, required ${requested.toFixed(2)}). Fund the Circle source wallet on Arc Testnet first.`
+    );
+    error.code = "arc_bridge_insufficient_source_balance";
+    error.status = 400;
+    throw error;
+  }
+  let bridgeResult;
+  try {
+    bridgeResult = await bridgeKit.bridge({
+      from: {
+        adapter,
+        chain: ArcTestnet,
+        address: sourceAddress
+      },
+      to: {
+        adapter,
+        chain: network.bridgeChain,
+        address: destination
+      },
+      amount,
+      token: "USDC"
+    });
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-arc-bridge-v2',hypothesisId:'H20',location:'src/settlement/cctpBridge.js:bridgeUsdcFromArc:error',message:'Arc App Kit bridge call failed',data:{errorName:error?.name||null,errorCode:error?.code||null,errorMessage:error?.message||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw error;
+  }
   const state = String(bridgeResult?.state || bridgeResult?.status || "success").toLowerCase();
   if (!["success", "succeeded", "complete", "completed"].includes(state)) {
     const error = new Error(`Arc App Kit bridge did not complete successfully (state=${state})`);

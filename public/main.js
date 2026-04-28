@@ -800,6 +800,31 @@ async function loadKeeperHubChainsFromUi() {
   print("keeperhub-output", { status: data.status, body: data.body });
 }
 
+async function fundKeeperhubOnlineSourceFromUi() {
+  const data = await request("/api/keeperhub/online-source-wallet/fund-hint", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  const walletAddress = data.body?.wallet_address || "";
+  let copied = false;
+  if (walletAddress && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      copied = true;
+    } catch (_err) {}
+  }
+  const faucetUrl = data.body?.faucet_url || "https://faucet.circle.com/";
+  if (faucetUrl) {
+    window.open(faucetUrl, "_blank", "noopener,noreferrer");
+  }
+  print("keeperhub-output", {
+    status: data.status,
+    copied_wallet_address: copied,
+    body: data.body
+  });
+}
+
 async function keeperHubDemoTransferFromUi() {
   const recipient_address = document.getElementById("keeperhub-demo-recipient").value.trim();
   const amount_minor = Number(document.getElementById("keeperhub-demo-amount").value);
@@ -831,6 +856,14 @@ document.getElementById("keeperhub-load-status").addEventListener("click", async
 document.getElementById("keeperhub-load-chains").addEventListener("click", async () => {
   try {
     await loadKeeperHubChainsFromUi();
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
+document.getElementById("keeperhub-fund-online-source").addEventListener("click", async () => {
+  try {
+    await fundKeeperhubOnlineSourceFromUi();
   } catch (error) {
     print("keeperhub-output", { error: error.message });
   }

@@ -185,6 +185,49 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
   });
 }
 
+async function resolveOnlineBridgeSourceWallet({ createIfMissing = true } = {}) {
+  let walletId = activeCircleWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
+  let walletAddress = "";
+  if (walletId) {
+    try {
+      const walletBody = await circleGet(`/v1/w3s/wallets/${encodeURIComponent(walletId)}`);
+      walletAddress =
+        walletBody?.data?.wallet?.address || walletBody?.data?.wallets?.[0]?.address || walletBody?.wallet?.address || "";
+    } catch (_err) {
+      walletAddress = "";
+    }
+  }
+  if (!walletId && createIfMissing) {
+    const created = await createCircleWallet({
+      blockchain: "ARC-TESTNET",
+      walletSetId: activeCircleWalletSetId || CIRCLE_WALLET_SET_ID || "",
+      walletName: "krump-online-cctp-source",
+      entitySecretCiphertext: CIRCLE_ENTITY_SECRET_CIPHERTEXT || CIRCLE_ENTITY_SECRET || "",
+      entitySecretRaw: CIRCLE_ENTITY_SECRET_RAW || ""
+    });
+    walletId =
+      created?.wallet?.id || created?.raw?.data?.wallets?.[0]?.id || activeCircleWalletId || CIRCLE_WALLET_ID || "";
+    walletAddress =
+      created?.wallet?.address || created?.raw?.data?.wallets?.[0]?.address || created?.raw?.data?.wallet?.address || "";
+  }
+  if (!walletId) {
+    const error = new Error("No online bridge source wallet is configured and auto-create failed.");
+    error.code = "online_source_wallet_missing";
+    error.status = 400;
+    throw error;
+  }
+  if (!walletAddress) {
+    const error = new Error("Online bridge source wallet address unavailable.");
+    error.code = "online_source_wallet_address_missing";
+    error.status = 400;
+    throw error;
+  }
+  return {
+    wallet_id: walletId,
+    wallet_address: walletAddress
+  };
+}
+
 function getAgentIdentityMetadata() {
   return {
     standard: "erc-8004-style",
@@ -640,6 +683,9 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY");
     }
     const { recipient_address, amount_minor, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-payment-mode-v1',hypothesisId:'H21',location:'src/server.js:/api/keeperhub/execute-transfer:entry',message:'KeeperHub execute transfer request received',data:{paymentMode:payment_mode||null,hasPaymentRef:Boolean(payment_ref),executionMode:execution_mode||null,executionNetwork:execution_network||null,amountMinor:amount_minor||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!recipient_address || typeof recipient_address !== "string") {
       return sendError(res, 400, "invalid_recipient", "recipient_address is required");
     }
@@ -707,6 +753,24 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     const errorCode =
       typeof error?.code === "string" && error.code.trim() ? error.code.trim() : "keeperhub_transfer_failed";
     return sendError(res, error.status || 502, errorCode, error.message);
+  }
+});
+
+app.post("/api/keeperhub/online-source-wallet/fund-hint", async (_req, res) => {
+  try {
+    const source = await resolveOnlineBridgeSourceWallet({ createIfMissing: true });
+    return res.status(200).json({
+      ok: true,
+      wallet_id: source.wallet_id,
+      wallet_address: source.wallet_address,
+      blockchain: "ARC-TESTNET",
+      token: "USDC",
+      faucet_url: "https://faucet.circle.com/",
+      instructions:
+        "Fund this wallet with Arc Testnet USDC from Circle Faucet, then retry KeeperHub online transfer."
+    });
+  } catch (error) {
+    return sendError(res, error.status || 502, error.code || "online_source_fund_hint_failed", error.message);
   }
 });
 
