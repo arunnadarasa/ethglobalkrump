@@ -42,6 +42,7 @@ const CIRCLE_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET || "";
 const CIRCLE_ENTITY_SECRET_CIPHERTEXT = process.env.CIRCLE_ENTITY_SECRET_CIPHERTEXT || "";
 const CIRCLE_ENTITY_SECRET_RAW = process.env.CIRCLE_ENTITY_SECRET_RAW || "";
 const CIRCLE_WALLET_ID = process.env.CIRCLE_WALLET_ID || "";
+const CIRCLE_WALLET_ID_ONLINE = process.env.CIRCLE_WALLET_ID_ONLINE || "";
 const CIRCLE_DESTINATION_ADDRESS = process.env.CIRCLE_DESTINATION_ADDRESS || "";
 const CIRCLE_TOKEN_ID = process.env.CIRCLE_TOKEN_ID || "";
 const CIRCLE_TOKEN_ADDRESS = process.env.CIRCLE_TOKEN_ADDRESS || "";
@@ -60,6 +61,7 @@ const ERC8004_AGENT_ID = process.env.ERC8004_AGENT_ID || "";
 const ERC8004_AGENT_TOKEN_URI = process.env.ERC8004_AGENT_TOKEN_URI || "";
 const ERC8004_AGENT_CAPABILITIES_URI = process.env.ERC8004_AGENT_CAPABILITIES_URI || "";
 const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NETWORK || "base-sepolia";
+const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 const vyperSettlement = createVyperSettlementPolicy();
@@ -145,8 +147,29 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     return { mode: "local", network: null, bridge: null, keeperhub: null, payment_ref: null };
   }
   const destination = String(recipientAddress || "").trim();
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v1',hypothesisId:'H4',location:'src/server.js:maybeExecuteOnlineTransfer:entry',message:'Online transfer source wallet resolution snapshot',data:{executionMode:selected.mode,executionNetwork:selected.network,hasActiveCircleWalletId:Boolean(activeCircleWalletId),hasEnvCircleWalletId:Boolean(CIRCLE_WALLET_ID),activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null,envCircleWalletIdPrefix:CIRCLE_WALLET_ID?String(CIRCLE_WALLET_ID).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!destination) {
     throw new Error("Online execution requires recipient address");
+  }
+  let sourceWalletId = activeCircleWalletId || CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
+  if (!sourceWalletId) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet',message:'No source Circle wallet configured; attempting auto-create',data:{hasCircleApiKey:Boolean(CIRCLE_API_KEY),hasEntitySecretRaw:Boolean(CIRCLE_ENTITY_SECRET_RAW),hasEntityCiphertext:Boolean(CIRCLE_ENTITY_SECRET_CIPHERTEXT||CIRCLE_ENTITY_SECRET),hasWalletSetId:Boolean(activeCircleWalletSetId||CIRCLE_WALLET_SET_ID)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const created = await createCircleWallet({
+      blockchain: "ARC-TESTNET",
+      walletSetId: activeCircleWalletSetId || CIRCLE_WALLET_SET_ID || "",
+      walletName: "krump-online-cctp-source",
+      entitySecretCiphertext: CIRCLE_ENTITY_SECRET_CIPHERTEXT || CIRCLE_ENTITY_SECRET || "",
+      entitySecretRaw: CIRCLE_ENTITY_SECRET_RAW || ""
+    });
+    sourceWalletId =
+      created?.wallet?.id || created?.raw?.data?.wallets?.[0]?.id || activeCircleWalletId || CIRCLE_WALLET_ID || "";
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-wallet-debug-v2',hypothesisId:'H7',location:'src/server.js:maybeExecuteOnlineTransfer:auto-create-wallet:result',message:'Auto-create source wallet attempt finished',data:{hasSourceWalletId:Boolean(sourceWalletId),sourceWalletIdPrefix:sourceWalletId?String(sourceWalletId).slice(0,8):null,activeCircleWalletIdPrefix:activeCircleWalletId?String(activeCircleWalletId).slice(0,8):null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }
   return executionRouter.execute({
     executionMode: selected.mode,
@@ -154,7 +177,7 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     amountMinor,
     recipientAddress: destination,
     memo,
-    sourceWalletId: activeCircleWalletId || CIRCLE_WALLET_ID || ""
+    sourceWalletId
   });
 }
 
@@ -571,6 +594,7 @@ app.get("/api/execution/networks", (_req, res) => {
   return res.json({
     ok: true,
     modes: ["local", "online"],
+    default_mode: DEFAULT_EXECUTION_MODE,
     online_default_network: ONLINE_EXECUTION_DEFAULT_NETWORK,
     online_networks: executionRouter.listOnlineNetworks()
   });
@@ -578,6 +602,9 @@ app.get("/api/execution/networks", (_req, res) => {
 
 app.get("/api/keeperhub/status", async (_req, res) => {
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'kh-key-debug-v1',hypothesisId:'H3',location:'src/server.js:/api/keeperhub/status',message:'KeeperHub status route called',data:{configured:keeperhub.isConfigured(),apiBase:keeperhub.getBaseUrl()},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
     return res.json({ ok: true, ...summary });
   } catch (error) {
@@ -615,7 +642,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     if (!Number.isInteger(amount_minor) || amount_minor < 1) {
       return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
     }
-    const selectedMode = String(execution_mode || "local").toLowerCase();
+    const selectedMode = String(execution_mode || DEFAULT_EXECUTION_MODE).toLowerCase();
     let transfer = null;
     let summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
     let online = null;
@@ -671,7 +698,9 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T5',location:'src/server.js:/api/keeperhub/execute-transfer:catch',message:'KeeperHub transfer route failed',data:{status:error.status||null,errorMessage:error.message||null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
-    return sendError(res, error.status || 502, "keeperhub_transfer_failed", error.message);
+    const errorCode =
+      typeof error?.code === "string" && error.code.trim() ? error.code.trim() : "keeperhub_transfer_failed";
+    return sendError(res, error.status || 502, errorCode, error.message);
   }
 });
 
@@ -903,7 +932,7 @@ app.post("/api/tips", async (req, res) => {
   }
 
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: amount_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1000,7 +1029,7 @@ app.post("/api/tutorials/:clipId/pay", async (req, res) => {
     return sendError(res, 404, "clip_not_found", "Unknown clip id");
   }
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: clip.priceMinor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1067,7 +1096,7 @@ app.post("/api/battle/register", async (req, res) => {
   }
 
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: entry_fee_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1190,7 +1219,7 @@ app.post("/api/judge-feedback/requests", async (req, res) => {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 100");
   }
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: amount_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1281,7 +1310,7 @@ app.post("/api/practice-bookings/reserve", async (req, res) => {
   }
   const estimateMinor = room.rate_minor_per_min * planned_minutes;
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: estimateMinor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1368,7 +1397,7 @@ app.post("/api/sample-packs/:packId/purchase", async (req, res) => {
     return sendError(res, 400, "tier_not_found", "tier_id is required and must match pack tier");
   }
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: tier.price_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1480,7 +1509,7 @@ app.post("/api/challenges/:challengeId/payout", async (req, res) => {
     return sendError(res, 404, "winner_submission_not_found", "Unknown winner submission id");
   }
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: challenge.bounty_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1547,7 +1576,7 @@ app.post("/api/crews/:crewId/split-settlement", async (req, res) => {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
   }
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor: amount_minor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,
@@ -1616,7 +1645,7 @@ app.post("/api/merch/checkout", async (req, res) => {
   const qty = Math.max(1, Number(quantity || 1));
   const amountMinor = item.price_minor * qty;
   const execution = await maybeExecuteOnlineTransfer({
-    executionMode: execution_mode || "local",
+    executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
     executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
     amountMinor,
     recipientAddress: ONCHAIN_TREASURY_ADDRESS,

@@ -23,7 +23,13 @@ function getBaseUrl() {
 }
 
 function getApiKey() {
-  return (process.env.KEEPERHUB_API_KEY || "").trim();
+  const legacy = (process.env.KEEPERHUB_API_KEY || "").trim();
+  const local = (process.env.KEEPERHUB_API_KEY_LOCAL || "").trim();
+  const online = (process.env.KEEPERHUB_API_KEY_ONLINE || "").trim();
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'kh-key-debug-v1',hypothesisId:'H1',location:'src/keeperhub/client.js:getApiKey',message:'KeeperHub key env presence snapshot',data:{hasLegacy:Boolean(legacy),hasLocal:Boolean(local),hasOnline:Boolean(online)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return legacy;
 }
 
 function assertOrgApiKeyForRest() {
@@ -41,7 +47,11 @@ function assertOrgApiKeyForRest() {
 }
 
 function isConfigured() {
-  return Boolean(getApiKey());
+  const configured = Boolean(getApiKey());
+  // #region agent log
+  fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'kh-key-debug-v1',hypothesisId:'H2',location:'src/keeperhub/client.js:isConfigured',message:'KeeperHub configured computed',data:{configured},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return configured;
 }
 
 /**
@@ -64,6 +74,11 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   };
   if (executeRoute) {
     headers["X-API-Key"] = key;
+  }
+  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-exec-debug-v1',hypothesisId:'H13',location:'src/keeperhub/client.js:keeperhubFetch:entry',message:'KeeperHub execute route request starting',data:{path,url,method,hasBearer:Boolean(headers.Authorization),hasXApiKey:Boolean(headers["X-API-Key"]),bodyKeys:body&&typeof body==='object'?Object.keys(body):[]},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }
   if (path === "/execute/transfer") {
     // #region agent log
@@ -180,6 +195,11 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     parsed = { raw: text };
   }
   if (!response.ok) {
+    if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'keeperhub-exec-debug-v1',hypothesisId:'H14',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub execute route failed',data:{path,url,status:response.status,responseKeys:parsed&&typeof parsed==='object'?Object.keys(parsed):[],errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T3',location:'src/keeperhub/client.js:keeperhubFetch:error',message:'KeeperHub request failed',data:{method,url,status:response.status,executeRoute:Boolean(executeRoute),errorCode:parsed?.code||parsed?.error?.code||null,errorMessage:parsed?.error?.message||parsed?.error||parsed?.message||null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion

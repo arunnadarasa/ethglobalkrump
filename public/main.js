@@ -235,9 +235,17 @@ function parseAgentContext() {
 
 function getExecutionSelection(modeElementId, networkElementId) {
   return {
-    execution_mode: document.getElementById(modeElementId)?.value || "local",
+    execution_mode: document.getElementById(modeElementId)?.value || "online",
     execution_network: document.getElementById(networkElementId)?.value || "base-sepolia"
   };
+}
+
+function applyDefaultExecutionMode() {
+  document.querySelectorAll('select[id$="execution-mode"]').forEach((select) => {
+    if (Array.from(select.options).some((option) => option.value === "online")) {
+      select.value = "online";
+    }
+  });
 }
 
 async function loadAgentCapabilitiesFromUi() {
@@ -1217,6 +1225,7 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
 });
 
 async function bootstrap() {
+  applyDefaultExecutionMode();
   await loadConfig();
   hydrateSavedCircleWallet();
   print("balances-output", {
