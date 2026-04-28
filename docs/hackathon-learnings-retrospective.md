@@ -55,6 +55,11 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - REST client in `src/keeperhub/client.js`: chains discovery, direct `POST /execute/transfer`, execution status.
    - UI section plus U5 checkbox; `declare-winner` accepts `execute_via_keeperhub` without breaking the off-chain payout record.
 
+10. **Online execution architecture successfully pivoted to SDK**
+   - Replaced custom Circle CCTP REST assumptions with Arc/Circle SDK flow using App Kit + Bridge Kit.
+   - Kept existing execution-mode UX and KeeperHub destination payout contract intact.
+   - Migration reduced endpoint fragility and aligned implementation with official docs.
+
 ## What Failed / Pain Points
 
 1. **Repository assumption mismatch**
@@ -94,6 +99,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - **Organization keys (`kh_`)** are required for REST and direct execution; **user webhook keys (`wfb_`)** are for workflow webhooks only — using `wfb_` in `KEEPERHUB_API_KEY` fails with an explicit error.
    - Local self-hosted `/api/chains` may return a **top-level array** instead of `{ data: [...] }`; strict parsers can silently produce empty chain lists and false `arc_supported: false`.
 
+10. **Runtime funding limits surfaced as the next blocker after migration**
+   - After the SDK bridge migration, failures moved from "resource/path not found" to concrete balance constraints (e.g. insufficient Arc USDC).
+   - This was healthier than the prior state: the system now fails for real economic reasons, not integration mismatches.
+
 ## Key Learnings
 
 1. **Discovery-first beats assumption-first**
@@ -124,6 +133,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Read upstream docs for **base URL**, **auth header** (Bearer vs `X-API-Key` on execute routes), and **key scope** before debugging “mystery HTML” errors.
    - Normalize and validate response shapes at integration boundaries (`[]` vs `{data:[]}`) to avoid false-negative capability checks.
 
+10. **Prefer protocol SDKs over guessed REST surfaces for cross-chain flows**
+   - For CCTP-style bridging, SDK abstraction (Arc App Kit / Bridge Kit) avoids brittle assumptions about private or evolving REST routes.
+   - Keep domain errors explicit (`insufficient balance`, invalid recipient) so operators can act immediately.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -140,6 +153,8 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 8. Add CI step to call `/api/ucp/conformance/self-test` and fail fast on schema regressions.
 9. Add sample UCP request/response fixtures under `docs/` for judge walkthroughs.
 10. Document KeeperHub org wallet funding and `KEEPERHUB_EXECUTE_NETWORK` once Arc slug is confirmed from live `GET /api/chains`.
+11. Add a funding preflight panel for online mode (source wallet balance + minimum required amount) before bridge execution.
+12. Add a "demo payment rail" selector to all execution-only tools and keep response payloads echoing `payment_mode`/`payment_ref` for easier audit trails.
 
 ## Outcome Snapshot
 
@@ -153,3 +168,5 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - Official UCP SDK/schema integration: enabled with discovery/checkout/order and self-test routes
 - KeeperHub (OpenAgents): optional Arc execution (`/api/keeperhub/*`, U5 checkbox, `kh_` org key); README and `.env.example` document setup
 - KeeperHub local compatibility hardening: `/chains` parser now accepts both root-array and wrapped-data shapes, restoring correct Arc detection in status + chains views
+- Online bridge migration: custom CCTP REST calls replaced by Arc App Kit Bridge Kit + Circle Wallets adapter
+- KeeperHub demo payment UX: now includes MetaMask/Circle/offchain payment mode selection with payment reference echoing in API output

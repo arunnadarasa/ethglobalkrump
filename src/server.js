@@ -639,7 +639,7 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     if (!keeperhub.isConfigured()) {
       return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY");
     }
-    const { recipient_address, amount_minor, execution_mode, execution_network } = req.body || {};
+    const { recipient_address, amount_minor, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
     if (!recipient_address || typeof recipient_address !== "string") {
       return sendError(res, 400, "invalid_recipient", "recipient_address is required");
     }
@@ -691,6 +691,8 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     }
     return res.status(201).json({
       ok: true,
+      payment_mode: payment_mode || "offchain_demo",
+      payment_ref: payment_ref || null,
       execution_mode: selectedMode,
       execution_network: selectedMode === "online" ? online?.network || null : summary.execute_network || null,
       bridge: online?.bridge || null,

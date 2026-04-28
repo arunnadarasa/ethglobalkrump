@@ -118,6 +118,11 @@
         <div class="row">
           <input id="keeperhub-demo-recipient" placeholder="Recipient 0x… (Arc testnet)" style="min-width: 280px" />
           <input id="keeperhub-demo-amount" type="number" min="1" value="100" />
+          <select id="keeperhub-demo-mode">
+            <option value="metamask">MetaMask on-chain</option>
+            <option value="circle_wallet">Circle wallet</option>
+            <option value="offchain_demo">Offchain demo only</option>
+          </select>
           <select id="keeperhub-execution-mode">
             <option value="local">KeeperHub local (Arc)</option>
             <option value="online">KeeperHub online (CCTP + target)</option>

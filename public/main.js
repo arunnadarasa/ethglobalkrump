@@ -803,13 +803,21 @@ async function loadKeeperHubChainsFromUi() {
 async function keeperHubDemoTransferFromUi() {
   const recipient_address = document.getElementById("keeperhub-demo-recipient").value.trim();
   const amount_minor = Number(document.getElementById("keeperhub-demo-amount").value);
+  const mode = document.getElementById("keeperhub-demo-mode").value || "offchain_demo";
   const execution = getExecutionSelection("keeperhub-execution-mode", "keeperhub-execution-network");
+  const payment = await resolvePaymentReference(mode, amount_minor, "keeperhub-demo");
   const data = await request("/api/keeperhub/execute-transfer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient_address, amount_minor, ...execution })
+    body: JSON.stringify({
+      recipient_address,
+      amount_minor,
+      payment_mode: payment.mode,
+      payment_ref: payment.ref,
+      ...execution
+    })
   });
-  print("keeperhub-output", { status: data.status, body: data.body });
+  print("keeperhub-output", { status: data.status, payment_receipt: payment.receipt, body: data.body });
 }
 
 document.getElementById("keeperhub-load-status").addEventListener("click", async () => {
