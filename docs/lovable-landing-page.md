@@ -9,6 +9,7 @@ The first UCP-native agent commerce app where humans and AI agents coordinate pa
 Krump Protocol Agents turns creator economy actions (tips, tutorial unlocks, battle entry payouts) into agent-driven commerce flows using Universal Commerce Protocol (UCP), Circle rails, Vyper-backed policy enforcement, and (for [ETHGlobal OpenAgents](https://ethglobal.com/events/openagents/prizes)) optional **KeeperHub** direct execution on Arc testnet.
 
 Top 6 MVP use cases now support live payment rail selection across MetaMask and Circle flows (with offchain demo fallback where needed), so judges can switch rails in-session without changing code.
+Per-request execution mode is also available: local Arc testnet path or online mode that bridges USDC from Arc via CCTP and executes on KeeperHub-supported testnets.
 
 ## Problem
 
@@ -47,6 +48,7 @@ We built a full loop:
 - `GET /api/ucp/orders/:orderId`
 - `GET /api/ucp/conformance/self-test`
 - Top 6 use-case payment execution paths in UI with `metamask` or `circle_wallet` options
+- Per-request execution selectors (`local` vs `online`) with destination testnet options (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji)
 
 ### 3) Deep Settlement Credibility
 

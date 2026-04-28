@@ -2,7 +2,7 @@
 
 ---
 
-You are building **Krump Protocol Agents**: a single-page hackathon demo + Express API that proves **UCP-first commerce** with **human↔agent orchestration** and **optional deep settlement** (Vyper policy + Arc testnet proof), plus **dual payment rails** (MetaMask on Arc + Circle developer-controlled wallets), and **optional KeeperHub** ([ETHGlobal OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor) **direct execution** on Arc for demos and U5 winner payout when an org API key (`kh_…`) is configured.
+You are building **Krump Protocol Agents**: a single-page hackathon demo + Express API that proves **UCP-first commerce** with **human↔agent orchestration** and **optional deep settlement** (Vyper policy + Arc testnet proof), plus **dual payment rails** (MetaMask on Arc + Circle developer-controlled wallets), and **optional KeeperHub** ([ETHGlobal OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor) execution in two modes: local Arc testnet and online testnets via CCTP bridge.
 
 Recreate the app **functionally equivalent** to this specification. Prefer clarity and parity over clever refactors. If you must choose, preserve **API shapes**, **UCP schema validation behavior**, and **UI flows**.
 
@@ -10,7 +10,7 @@ Recreate the app **functionally equivalent** to this specification. Prefer clari
 
 - **Name:** Krump Protocol Agents  
 - **Subtitle:** Krump x UCP Demo (U1/U2/U3/U4/U5/U6/U7/U8/U10 tracks)  
-- **Pitch:** programmable creator-economy flows (tips, tutorials, feedback marketplace, room booking, battle payout, licensing, challenge bounties, crew split accounting, merch concierge) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), **Arc credibility** via a deployed + verifiable Vyper policy contract, and **optional KeeperHub** on-chain execution (chains + `POST /execute/transfer`) that does not replace UCP or Circle as the commerce core.
+- **Pitch:** programmable creator-economy flows (tips, tutorials, feedback marketplace, room booking, battle payout, licensing, challenge bounties, crew split accounting, merch concierge) with **official UCP** checkout semantics, **agent orchestration** (H2A / A2A / A2H traces), **Arc credibility** via a deployed + verifiable Vyper policy contract, and **optional KeeperHub** on-chain execution in local/online mode (`POST /execute/transfer`) that does not replace UCP or Circle as the commerce core.
 
 ## Tech stack (must match)
 
@@ -93,6 +93,14 @@ docs/*                        # optional marketing/pitch md
 - `KEEPERHUB_EXECUTE_NETWORK` — optional slug override for `POST /execute/transfer` `network` field when Arc auto-detection is insufficient
 - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for ERC-20 transfers; omit for native
 - `KEEPERHUB_TOKEN_DECIMALS`, `KEEPERHUB_TOKEN_SYMBOL`, `KEEPERHUB_GAS_LIMIT_MULTIPLIER` — optional
+- `KEEPERHUB_ONLINE_DEFAULT_NETWORK` — default online destination (`base-sepolia` recommended)
+
+### CCTP online execution (optional)
+
+- `CIRCLE_CCTP_TRANSFER_PATH` — default `/v1/cctp/transfers`
+- `CIRCLE_CCTP_STATUS_PATH` — default `/v1/cctp/transfers`
+- `CIRCLE_CCTP_TIMEOUT_MS` — bridge finality timeout
+- `CIRCLE_CCTP_POLL_MS` — status poll interval
 
 ## HTTP API (must implement)
 
@@ -113,7 +121,8 @@ docs/*                        # optional marketing/pitch md
 
 - `GET /api/keeperhub/status` — JSON: `configured`, `api_base`, `arc_chain_id`, `arc_supported`, `execute_network`, matched `chain` summary, `token_address_configured`, or `error` string if chains call failed.
 - `GET /api/keeperhub/chains?includeDisabled=true|false` — requires key; returns `{ ok, arc_chain_id, matched, chains }`.
-- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor }`; uses KeeperHub [direct execution transfer](https://docs.keeperhub.com/api/direct-execution); Bearer + `X-API-Key` on execute routes as in reference `src/keeperhub/client.js`.
+- `GET /api/execution/networks` — returns `{ modes, online_default_network, online_networks }`.
+- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; `local` mode keeps Arc transfer path, `online` mode runs CCTP Arc→target then KeeperHub execute transfer on target network.
 - **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL.
 
 ### UCP (official stack)
@@ -394,6 +403,8 @@ Inputs/buttons as in reference:
 - `#agent-context-json` (optional JSON)
 - `#agent-intent` select (must include all intents listed by `/api/agents/capabilities`; at minimum: `tip_dancer|unlock_clip|battle_entry|judge_feedback_request|crew_split_settlement|practice_room_reserve|sample_pack_purchase|challenge_payout|merch_concierge_checkout`)
 - `#agent-payment-mode` select (`metamask|circle_wallet|offchain_demo`)
+- `#agent-execution-mode` select (`local|online`)
+- `#agent-execution-network` select (`ethereum-sepolia|base-sepolia|polygon-amoy|arbitrum-sepolia|avalanche-fuji`)
 - `#agent-run-session`, `#agent-get-last-session`
 - settlement eval: `#settlement-amount-minor`, `#settlement-evaluate`
 - output `#agent-output`
@@ -421,6 +432,22 @@ Three modes:
 - `offchain_demo`: no chain call; pass null refs
 - `metamask`: ensure chain (`wallet_switchEthereumChain` / `wallet_addEthereumChain`), then `eth_sendTransaction` to treasury with `value = amountMinor * 1e14` wei (reference uses this scaling)
 - `circle_wallet`: POST `/api/payments/circle/transfer` with `wallet_id` from saved wallet details if present
+
+## Per-request execution mode (must match)
+
+- Every payment-bearing action payload includes:
+  - `execution_mode`: `local|online`
+  - `execution_network`: required when `online`
+- Supported online target networks:
+  - `ethereum-sepolia`
+  - `base-sepolia`
+  - `polygon-amoy`
+  - `arbitrum-sepolia`
+  - `avalanche-fuji`
+- Online mode backend behavior:
+  1. bridge USDC from Arc testnet to target network via CCTP
+  2. execute KeeperHub transfer on target network
+  3. return combined receipt metadata (`bridge`, `keeperhub`, `payment_ref`)
 
 ## Vyper contract + tests + deploy
 

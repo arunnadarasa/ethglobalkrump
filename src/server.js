@@ -30,6 +30,7 @@ const {
 } = require("./state");
 const { makeAgentOrchestrator } = require("./agents/orchestrator");
 const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
+const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
 
 const app = express();
@@ -58,9 +59,14 @@ const ERC8004_AGENT_REGISTRY = process.env.ERC8004_AGENT_REGISTRY || "";
 const ERC8004_AGENT_ID = process.env.ERC8004_AGENT_ID || "";
 const ERC8004_AGENT_TOKEN_URI = process.env.ERC8004_AGENT_TOKEN_URI || "";
 const ERC8004_AGENT_CAPABILITIES_URI = process.env.ERC8004_AGENT_CAPABILITIES_URI || "";
+const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NETWORK || "base-sepolia";
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 const vyperSettlement = createVyperSettlementPolicy();
+const executionRouter = createExecutionRouter({
+  keeperhub,
+  defaultNetwork: ONLINE_EXECUTION_DEFAULT_NETWORK
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -120,10 +126,36 @@ function getRailConfig() {
       },
       keeperhub: {
         api_key_configured: keeperhub.isConfigured(),
-        api_base: keeperhub.getBaseUrl()
+        api_base: keeperhub.getBaseUrl(),
+        execution_modes: ["local", "online"],
+        online_default_network: ONLINE_EXECUTION_DEFAULT_NETWORK,
+        online_networks: executionRouter.listOnlineNetworks()
       }
     }
   };
+}
+
+async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amountMinor, recipientAddress, memo }) {
+  const selected = executionRouter.resolveExecutionInput({
+    executionMode,
+    executionNetwork,
+    defaultNetwork: ONLINE_EXECUTION_DEFAULT_NETWORK
+  });
+  if (selected.mode === "local") {
+    return { mode: "local", network: null, bridge: null, keeperhub: null, payment_ref: null };
+  }
+  const destination = String(recipientAddress || "").trim();
+  if (!destination) {
+    throw new Error("Online execution requires recipient address");
+  }
+  return executionRouter.execute({
+    executionMode: selected.mode,
+    executionNetwork: selected.network,
+    amountMinor,
+    recipientAddress: destination,
+    memo,
+    sourceWalletId: activeCircleWalletId || CIRCLE_WALLET_ID || ""
+  });
 }
 
 function getAgentIdentityMetadata() {
@@ -535,6 +567,15 @@ app.get("/api/config", (_req, res) => {
   res.json(getRailConfig());
 });
 
+app.get("/api/execution/networks", (_req, res) => {
+  return res.json({
+    ok: true,
+    modes: ["local", "online"],
+    online_default_network: ONLINE_EXECUTION_DEFAULT_NETWORK,
+    online_networks: executionRouter.listOnlineNetworks()
+  });
+});
+
 app.get("/api/keeperhub/status", async (_req, res) => {
   try {
     const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
@@ -567,27 +608,45 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
     if (!keeperhub.isConfigured()) {
       return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY");
     }
-    const { recipient_address, amount_minor } = req.body || {};
+    const { recipient_address, amount_minor, execution_mode, execution_network } = req.body || {};
     if (!recipient_address || typeof recipient_address !== "string") {
       return sendError(res, 400, "invalid_recipient", "recipient_address is required");
     }
     if (!Number.isInteger(amount_minor) || amount_minor < 1) {
       return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
     }
-    const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
-    if (!summary.execute_network) {
-      return sendError(
-        res,
-        400,
-        "keeperhub_no_network",
-        "Arc testnet not found in KeeperHub chain list, or could not derive slug. Set KEEPERHUB_EXECUTE_NETWORK (see README)."
-      );
+    const selectedMode = String(execution_mode || "local").toLowerCase();
+    let transfer = null;
+    let summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+    let online = null;
+    if (selectedMode === "online") {
+      online = await maybeExecuteOnlineTransfer({
+        executionMode: selectedMode,
+        executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+        amountMinor: amount_minor,
+        recipientAddress: recipient_address.trim(),
+        memo: "keeperhub-demo-online"
+      });
+      transfer = online.keeperhub;
+      summary = {
+        ...summary,
+        execute_network: online.network
+      };
+    } else {
+      if (!summary.execute_network) {
+        return sendError(
+          res,
+          400,
+          "keeperhub_no_network",
+          "Arc testnet not found in KeeperHub chain list, or could not derive slug. Set KEEPERHUB_EXECUTE_NETWORK (see README)."
+        );
+      }
+      transfer = await keeperhub.executeTransferPayout({
+        recipientAddress: recipient_address.trim(),
+        amountMinor: amount_minor,
+        network: summary.execute_network
+      });
     }
-    const transfer = await keeperhub.executeTransferPayout({
-      recipientAddress: recipient_address.trim(),
-      amountMinor: amount_minor,
-      network: summary.execute_network
-    });
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T4',location:'src/server.js:/api/keeperhub/execute-transfer',message:'KeeperHub transfer response received',data:{status:transfer?.status||null,executionId:transfer?.executionId||null,arcSupported:summary.arc_supported,executeNetwork:summary.execute_network},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -599,7 +658,15 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
         execution_status = null;
       }
     }
-    return res.status(201).json({ ok: true, keeperhub: transfer, execution_status: execution_status, arc: summary });
+    return res.status(201).json({
+      ok: true,
+      execution_mode: selectedMode,
+      execution_network: selectedMode === "online" ? online?.network || null : summary.execute_network || null,
+      bridge: online?.bridge || null,
+      keeperhub: transfer,
+      execution_status: execution_status,
+      arc: summary
+    });
   } catch (error) {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-token-debug',hypothesisId:'T5',location:'src/server.js:/api/keeperhub/execute-transfer:catch',message:'KeeperHub transfer route failed',data:{status:error.status||null,errorMessage:error.message||null},timestamp:Date.now()})}).catch(()=>{});
@@ -825,8 +892,8 @@ app.get("/api/tips/leaderboard", (_req, res) => {
   });
 });
 
-app.post("/api/tips", (req, res) => {
-  const { fan_name, dancer_id, amount_minor, payment_mode, payment_ref } = req.body || {};
+app.post("/api/tips", async (req, res) => {
+  const { fan_name, dancer_id, amount_minor, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   const dancer = dancers.find((item) => item.id === dancer_id);
   if (!dancer) {
     return sendError(res, 404, "dancer_not_found", "Unknown dancer_id");
@@ -835,6 +902,14 @@ app.post("/api/tips", (req, res) => {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
   }
 
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: amount_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u1-tip-execution"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   dancer.tipsMinor += amount_minor;
   const paymentId = helpers.makeId("tip");
   payments.push({
@@ -844,7 +919,9 @@ app.post("/api/tips", (req, res) => {
     dancer_id,
     amount_minor,
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   });
@@ -862,6 +939,7 @@ app.post("/api/tips", (req, res) => {
       mode: payment_mode || "x402_style_authorization",
       settlement: "batched_on_arc_testnet"
     },
+    execution,
     leaderboard: listLeaderboard()
   });
 });
@@ -914,13 +992,21 @@ app.get("/api/tutorials/:clipId", (req, res) => {
   });
 });
 
-app.post("/api/tutorials/:clipId/pay", (req, res) => {
+app.post("/api/tutorials/:clipId/pay", async (req, res) => {
   const { clipId } = req.params;
-  const { buyer_name, payment_mode, payment_ref } = req.body || {};
+  const { buyer_name, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   const clip = tutorialClips.find((item) => item.id === clipId);
   if (!clip) {
     return sendError(res, 404, "clip_not_found", "Unknown clip id");
   }
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: clip.priceMinor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u2-tutorial-pay"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
 
   const unlockToken = helpers.makeId("unlock");
   unlocks.set(unlockToken, new Set([clipId]));
@@ -932,7 +1018,9 @@ app.post("/api/tutorials/:clipId/pay", (req, res) => {
     buyer_name: buyer_name || "Anonymous",
     amount_minor: clip.priceMinor,
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   });
@@ -947,7 +1035,8 @@ app.post("/api/tutorials/:clipId/pay", (req, res) => {
     gateway: {
       mode: payment_mode || "x402_authorization",
       settlement: "batched"
-    }
+    },
+    execution
   });
 });
 
@@ -964,12 +1053,12 @@ app.get("/api/battle", (_req, res) => {
   });
 });
 
-app.post("/api/battle/register", (req, res) => {
+app.post("/api/battle/register", async (req, res) => {
   if (getBattleClosed()) {
     return sendError(res, 409, "registration_closed", "Battle entry is closed");
   }
 
-  const { dancer_name, wallet, entry_fee_minor, payment_mode, payment_ref } = req.body || {};
+  const { dancer_name, wallet, entry_fee_minor, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   if (!dancer_name || !wallet) {
     return sendError(res, 400, "invalid_entry", "dancer_name and wallet are required");
   }
@@ -977,6 +1066,14 @@ app.post("/api/battle/register", (req, res) => {
     return sendError(res, 400, "invalid_fee", "entry_fee_minor must be integer >= 100");
   }
 
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: entry_fee_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u5-battle-entry"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   const entry = {
     id: helpers.makeId("entry"),
     dancer_name,
@@ -984,14 +1081,17 @@ app.post("/api/battle/register", (req, res) => {
     entry_fee_minor,
     entry_fee_usd: helpers.toUsd(entry_fee_minor),
     paid_via: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     created_at: helpers.nowIso()
   };
 
   entries.push(entry);
   res.status(201).json({
     track: "U5",
-    entry
+    entry,
+    execution
   });
 });
 
@@ -1080,14 +1180,23 @@ app.get("/api/judge-feedback", (_req, res) => {
   });
 });
 
-app.post("/api/judge-feedback/requests", (req, res) => {
-  const { dancer_name, judge_name, topic, amount_minor, payment_mode, payment_ref } = req.body || {};
+app.post("/api/judge-feedback/requests", async (req, res) => {
+  const { dancer_name, judge_name, topic, amount_minor, payment_mode, payment_ref, execution_mode, execution_network } =
+    req.body || {};
   if (!dancer_name || !judge_name || !topic) {
     return sendError(res, 400, "invalid_feedback_request", "dancer_name, judge_name, and topic are required");
   }
   if (!Number.isInteger(amount_minor) || amount_minor < 100) {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 100");
   }
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: amount_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u3-feedback-request"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   const requestId = helpers.makeId("feedback");
   const record = {
     id: requestId,
@@ -1097,7 +1206,9 @@ app.post("/api/judge-feedback/requests", (req, res) => {
     amount_minor,
     amount_usd: helpers.toUsd(amount_minor),
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     status: "requested",
     feedback_packet: null,
     created_at: helpers.nowIso(),
@@ -1110,11 +1221,11 @@ app.post("/api/judge-feedback/requests", (req, res) => {
     request_id: requestId,
     amount_minor,
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   });
-  return res.status(201).json({ track: "U3", request: record });
+  return res.status(201).json({ track: "U3", request: record, execution });
 });
 
 app.post("/api/judge-feedback/:requestId/deliver", (req, res) => {
@@ -1158,8 +1269,9 @@ app.get("/api/practice-bookings", (_req, res) => {
   });
 });
 
-app.post("/api/practice-bookings/reserve", (req, res) => {
-  const { room_id, dancer_name, planned_minutes, payment_mode, payment_ref } = req.body || {};
+app.post("/api/practice-bookings/reserve", async (req, res) => {
+  const { room_id, dancer_name, planned_minutes, payment_mode, payment_ref, execution_mode, execution_network } =
+    req.body || {};
   const room = practiceRooms.find((item) => item.id === room_id);
   if (!room) {
     return sendError(res, 404, "room_not_found", "Unknown room id");
@@ -1168,6 +1280,14 @@ app.post("/api/practice-bookings/reserve", (req, res) => {
     return sendError(res, 400, "invalid_booking", "dancer_name and planned_minutes (>=5) are required");
   }
   const estimateMinor = room.rate_minor_per_min * planned_minutes;
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: estimateMinor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u6-practice-reserve"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   if (ENABLE_VYPER_SETTLEMENT) {
     const policy = vyperSettlement.evaluate({
       agentId: "payments-agent",
@@ -1190,14 +1310,16 @@ app.post("/api/practice-bookings/reserve", (req, res) => {
     final_minor: null,
     final_usd: null,
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     status: "reserved",
     started_at: null,
     ended_at: null,
     created_at: helpers.nowIso()
   };
   practiceBookings.push(booking);
-  return res.status(201).json({ track: "U6", booking });
+  return res.status(201).json({ track: "U6", booking, execution });
 });
 
 app.post("/api/practice-bookings/:bookingId/start", (req, res) => {
@@ -1235,16 +1357,24 @@ app.get("/api/sample-packs", (_req, res) => {
   });
 });
 
-app.post("/api/sample-packs/:packId/purchase", (req, res) => {
+app.post("/api/sample-packs/:packId/purchase", async (req, res) => {
   const pack = samplePacks.find((item) => item.id === req.params.packId);
   if (!pack) {
     return sendError(res, 404, "pack_not_found", "Unknown pack id");
   }
-  const { tier_id, buyer_name, payment_mode, payment_ref } = req.body || {};
+  const { tier_id, buyer_name, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   const tier = (pack.tiers || []).find((item) => item.id === tier_id);
   if (!tier) {
     return sendError(res, 400, "tier_not_found", "tier_id is required and must match pack tier");
   }
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: tier.price_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u7-sample-pack-purchase"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   const license = {
     id: helpers.makeId("license"),
     pack_id: pack.id,
@@ -1255,12 +1385,14 @@ app.post("/api/sample-packs/:packId/purchase", (req, res) => {
     amount_minor: tier.price_minor,
     amount_usd: helpers.toUsd(tier.price_minor),
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     license_token: helpers.makeId("lictok"),
     created_at: helpers.nowIso()
   };
   issuedLicenses.push(license);
-  return res.status(201).json({ track: "U7", license });
+  return res.status(201).json({ track: "U7", license, execution });
 });
 
 app.post("/api/sample-packs/licenses/verify", (req, res) => {
@@ -1335,18 +1467,26 @@ app.post("/api/challenges/:challengeId/score", (req, res) => {
   return res.json({ track: "U8", submission });
 });
 
-app.post("/api/challenges/:challengeId/payout", (req, res) => {
+app.post("/api/challenges/:challengeId/payout", async (req, res) => {
   const challenge = challenges.find((item) => item.id === req.params.challengeId);
   if (!challenge) {
     return sendError(res, 404, "challenge_not_found", "Unknown challenge id");
   }
-  const { winner_submission_id, payment_mode, payment_ref } = req.body || {};
+  const { winner_submission_id, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   const winner = challengeSubmissions.find(
     (item) => item.id === winner_submission_id && item.challenge_id === challenge.id
   );
   if (!winner) {
     return sendError(res, 404, "winner_submission_not_found", "Unknown winner submission id");
   }
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: challenge.bounty_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u8-challenge-payout"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   challenge.status = "paid_out";
   const payout = {
     id: helpers.makeId("challenge-payout"),
@@ -1356,11 +1496,13 @@ app.post("/api/challenges/:challengeId/payout", (req, res) => {
     amount_minor: challenge.bounty_minor,
     amount_usd: helpers.toUsd(challenge.bounty_minor),
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     created_at: helpers.nowIso()
   };
   challengePayouts.push(payout);
-  return res.status(201).json({ track: "U8", payout });
+  return res.status(201).json({ track: "U8", payout, execution });
 });
 
 // U4: Crew revenue split wallet
@@ -1395,15 +1537,23 @@ app.post("/api/crews", (req, res) => {
   return res.status(201).json({ track: "U4", crew });
 });
 
-app.post("/api/crews/:crewId/split-settlement", (req, res) => {
+app.post("/api/crews/:crewId/split-settlement", async (req, res) => {
   const crew = crews.find((item) => item.id === req.params.crewId);
   if (!crew) {
     return sendError(res, 404, "crew_not_found", "Unknown crew id");
   }
-  const { amount_minor, payment_mode, payment_ref, source } = req.body || {};
+  const { amount_minor, payment_mode, payment_ref, source, execution_mode, execution_network } = req.body || {};
   if (!Number.isInteger(amount_minor) || amount_minor < 1) {
     return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
   }
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor: amount_minor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u4-crew-split"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   const shares = crew.members.map((member, idx) => {
     const raw = Math.floor((amount_minor * member.share_bps) / 10000);
     const isLast = idx === crew.members.length - 1;
@@ -1421,14 +1571,16 @@ app.post("/api/crews/:crewId/split-settlement", (req, res) => {
     crew_id: crew.id,
     source: source || "manual",
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     amount_minor,
     amount_usd: helpers.toUsd(amount_minor),
     shares: shares.map((share) => ({ ...share, amount_usd: helpers.toUsd(share.amount_minor) })),
     created_at: helpers.nowIso()
   };
   crewSettlements.push(settlement);
-  return res.status(201).json({ track: "U4", settlement });
+  return res.status(201).json({ track: "U4", settlement, execution });
 });
 
 // U10: Agent-based merch concierge
@@ -1455,14 +1607,22 @@ app.post("/api/merch/concierge/recommend", (req, res) => {
   });
 });
 
-app.post("/api/merch/checkout", (req, res) => {
-  const { item_id, quantity, buyer_name, payment_mode, payment_ref } = req.body || {};
+app.post("/api/merch/checkout", async (req, res) => {
+  const { item_id, quantity, buyer_name, payment_mode, payment_ref, execution_mode, execution_network } = req.body || {};
   const item = merchCatalog.find((row) => row.id === item_id);
   if (!item) {
     return sendError(res, 404, "merch_item_not_found", "Unknown merch item id");
   }
   const qty = Math.max(1, Number(quantity || 1));
   const amountMinor = item.price_minor * qty;
+  const execution = await maybeExecuteOnlineTransfer({
+    executionMode: execution_mode || "local",
+    executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
+    amountMinor,
+    recipientAddress: ONCHAIN_TREASURY_ADDRESS,
+    memo: "u10-merch-checkout"
+  });
+  const resolvedPaymentRef = execution.payment_ref || payment_ref || null;
   const order = {
     id: helpers.makeId("merch"),
     item_id: item.id,
@@ -1472,12 +1632,14 @@ app.post("/api/merch/checkout", (req, res) => {
     amount_minor: amountMinor,
     amount_usd: helpers.toUsd(amountMinor),
     payment_mode: payment_mode || "offchain_demo",
-    payment_ref: payment_ref || null,
+    payment_ref: resolvedPaymentRef,
+    execution_mode: execution.mode,
+    execution_network: execution.network,
     status: "authorized_offchain",
     created_at: helpers.nowIso()
   };
   merchOrders.push(order);
-  return res.status(201).json({ track: "U10", order });
+  return res.status(201).json({ track: "U10", order, execution });
 });
 
 app.get("/api/health", (_req, res) => {

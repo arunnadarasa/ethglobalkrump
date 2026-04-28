@@ -27,7 +27,7 @@ Speaker note: Existing solutions force a tradeoff between agent intelligence and
 - Agent orchestration layer for H2A, A2A, A2H.
 - Vyper settlement policy for enforcement credibility.
 - Circle + Arc rails for practical payment operations.
-- **KeeperHub** (ETHGlobal OpenAgents sponsor): optional direct execution on Arc for battle payout / demos — additive, not a replacement for UCP or Circle.
+- **KeeperHub** (ETHGlobal OpenAgents sponsor): dual execution mode — local Arc and online testnet mode via Arc USDC CCTP bridge (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji).
 
 Speaker note: We did not replace standards. We composed them, then layered sponsor-grade execution where it helps.
 
@@ -96,9 +96,9 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 2. Show `GET /api/agents/identity` (ERC-8004 style metadata).
 3. Run `tip_dancer` agent session.
 4. Highlight trace events and settlement proof.
-5. Trigger one payment flow with MetaMask and one with Circle (U1/U2/U5/U3/U4/U6/U8 now support live rail selection in UI where payment is required).
+5. Trigger one payment flow with MetaMask and one with Circle (all payment-bearing flows support live rail selection in UI).
 6. Show UCP checkout/order endpoints.
-7. **KeeperHub:** `GET /api/keeperhub/status` (Arc in chain list), optional demo transfer or U5 payout with checkbox.
+7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc -> CCTP -> target testnet transfer).
 8. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (KeeperHub executes; UCP decides commerce shape).

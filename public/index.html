@@ -84,6 +84,17 @@
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
           </select>
+          <select id="agent-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="agent-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button id="agent-run-session" type="button">Run Agent Session</button>
           <button id="agent-get-last-session" type="button">Get Last Session</button>
         </div>
@@ -107,6 +118,17 @@
         <div class="row">
           <input id="keeperhub-demo-recipient" placeholder="Recipient 0x… (Arc testnet)" style="min-width: 280px" />
           <input id="keeperhub-demo-amount" type="number" min="1" value="100" />
+          <select id="keeperhub-execution-mode">
+            <option value="local">KeeperHub local (Arc)</option>
+            <option value="online">KeeperHub online (CCTP + target)</option>
+          </select>
+          <select id="keeperhub-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button id="keeperhub-demo-transfer" type="button">Demo transfer (minor units)</button>
         </div>
         <pre id="keeperhub-output"></pre>
@@ -127,6 +149,17 @@
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
           </select>
+          <select id="tip-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="tip-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button type="submit">Send Tip (minor units)</button>
         </form>
         <pre id="leaderboard"></pre>
@@ -140,6 +173,17 @@
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
+          </select>
+          <select id="tutorial-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="tutorial-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
           <button id="try-locked" type="button">Try Open Locked Clip</button>
           <button id="pay-unlock" type="button">Pay + Unlock</button>
@@ -158,6 +202,17 @@
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
+          </select>
+          <select id="battle-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="battle-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
           <button type="submit">Register Entrant</button>
         </form>
@@ -187,6 +242,17 @@
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
           </select>
+          <select id="u3-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u3-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button id="u3-request-feedback" type="button">Request Feedback</button>
           <button id="u3-list-feedback" type="button">List Requests</button>
         </div>
@@ -211,6 +277,17 @@
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
           </select>
+          <select id="u6-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u6-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button id="u6-reserve" type="button">Reserve</button>
         </div>
         <div class="row">
@@ -233,6 +310,17 @@
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
+          </select>
+          <select id="u7-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u7-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
           <button id="u7-purchase" type="button">Purchase License</button>
         </div>
@@ -266,6 +354,17 @@
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
           </select>
+          <select id="u8-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u8-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
           <button id="u8-score-btn" type="button">Score</button>
           <button id="u8-payout" type="button">Payout Winner</button>
         </div>
@@ -286,6 +385,17 @@
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
+          </select>
+          <select id="u4-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u4-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
           <button id="u4-run-split" type="button">Run Split Settlement</button>
         </div>
@@ -308,6 +418,17 @@
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
             <option value="offchain_demo">Offchain demo only</option>
+          </select>
+          <select id="u10-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="u10-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
           <button id="u10-checkout" type="button">Checkout</button>
         </div>

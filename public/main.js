@@ -233,6 +233,13 @@ function parseAgentContext() {
   }
 }
 
+function getExecutionSelection(modeElementId, networkElementId) {
+  return {
+    execution_mode: document.getElementById(modeElementId)?.value || "local",
+    execution_network: document.getElementById(networkElementId)?.value || "base-sepolia"
+  };
+}
+
 async function loadAgentCapabilitiesFromUi() {
   const response = await request("/api/agents/capabilities");
   const intents = response.body?.agents?.intents || [];
@@ -271,6 +278,7 @@ async function loadAgentIdentityFromUi() {
 async function runAgentSessionFromUi() {
   const intent = document.getElementById("agent-intent").value;
   const paymentMode = document.getElementById("agent-payment-mode").value || "offchain_demo";
+  const execution = getExecutionSelection("agent-execution-mode", "agent-execution-network");
   const parsedContext = parseAgentContext();
   const fallbackAmounts = {
     tip_dancer: 25,
@@ -289,7 +297,9 @@ async function runAgentSessionFromUi() {
     ...parsedContext,
     amount_minor: amountMinor,
     payment_mode: payment.mode,
-    payment_ref: payment.ref
+    payment_ref: payment.ref,
+    execution_mode: execution.execution_mode,
+    execution_network: execution.execution_network
   };
   const payload = { intent, context };
   const response = await request("/api/agents/sessions", {
@@ -574,6 +584,7 @@ document.getElementById("tip-form").addEventListener("submit", async (event) => 
   try {
     const amountMinor = Number(document.getElementById("tip-amount").value);
     const mode = document.getElementById("tip-mode").value;
+    const execution = getExecutionSelection("tip-execution-mode", "tip-execution-network");
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'tip-debug-v1',hypothesisId:'T1',location:'public/main.js:tip-form:submit',message:'Tip form submitted',data:{mode,amountMinor,dancerId:document.getElementById("dancer-id").value},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -583,7 +594,9 @@ document.getElementById("tip-form").addEventListener("submit", async (event) => 
       dancer_id: document.getElementById("dancer-id").value,
       amount_minor: amountMinor,
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request("/api/tips", {
       method: "POST",
@@ -615,6 +628,7 @@ document.getElementById("pay-unlock").addEventListener("click", async () => {
       throw new Error("Tutorial clip not found");
     }
     const mode = document.getElementById("tutorial-mode").value;
+    const execution = getExecutionSelection("tutorial-execution-mode", "tutorial-execution-network");
     const payment = await resolvePaymentReference(mode, Number(clip.priceMinor), "u2-unlock");
     const data = await request(`/api/tutorials/${clipId}/pay`, {
       method: "POST",
@@ -622,7 +636,9 @@ document.getElementById("pay-unlock").addEventListener("click", async () => {
       body: JSON.stringify({
         buyer_name: "Hackathon Demo Buyer",
         payment_mode: payment.mode,
-        payment_ref: payment.ref
+        payment_ref: payment.ref,
+        execution_mode: execution.execution_mode,
+        execution_network: execution.execution_network
       })
     });
     unlockToken = data.body.unlock_token || "";
@@ -648,13 +664,16 @@ document.getElementById("register-form").addEventListener("submit", async (event
   try {
     const amountMinor = Number(document.getElementById("entry-fee").value);
     const mode = document.getElementById("battle-mode").value;
+    const execution = getExecutionSelection("battle-execution-mode", "battle-execution-network");
     const payment = await resolvePaymentReference(mode, amountMinor, "u5-entry");
     const payload = {
       dancer_name: document.getElementById("entry-name").value,
       wallet: document.getElementById("entry-wallet").value,
       entry_fee_minor: amountMinor,
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request("/api/battle/register", {
       method: "POST",
@@ -776,10 +795,11 @@ async function loadKeeperHubChainsFromUi() {
 async function keeperHubDemoTransferFromUi() {
   const recipient_address = document.getElementById("keeperhub-demo-recipient").value.trim();
   const amount_minor = Number(document.getElementById("keeperhub-demo-amount").value);
+  const execution = getExecutionSelection("keeperhub-execution-mode", "keeperhub-execution-network");
   const data = await request("/api/keeperhub/execute-transfer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient_address, amount_minor })
+    body: JSON.stringify({ recipient_address, amount_minor, ...execution })
   });
   print("keeperhub-output", { status: data.status, body: data.body });
 }
@@ -818,6 +838,7 @@ document.getElementById("u3-request-feedback").addEventListener("click", async (
   try {
     const amountMinor = Number(document.getElementById("u3-amount").value || 0);
     const mode = document.getElementById("u3-mode").value;
+    const execution = getExecutionSelection("u3-execution-mode", "u3-execution-network");
     const payment = await resolvePaymentReference(mode, amountMinor, "u3-feedback");
     const payload = {
       dancer_name: document.getElementById("u3-dancer-name").value || "Guest Dancer",
@@ -825,7 +846,9 @@ document.getElementById("u3-request-feedback").addEventListener("click", async (
       topic: document.getElementById("u3-topic").value || "Battle breakdown",
       amount_minor: amountMinor,
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request("/api/judge-feedback/requests", {
       method: "POST",
@@ -872,6 +895,7 @@ document.getElementById("u6-reserve").addEventListener("click", async () => {
     const roomId = document.getElementById("u6-room-id").value || "room-1";
     const plannedMinutes = Number(document.getElementById("u6-minutes").value || 0);
     const mode = document.getElementById("u6-mode").value;
+    const execution = getExecutionSelection("u6-execution-mode", "u6-execution-network");
 
     const roomsResponse = await request("/api/practice-rooms");
     const room = (roomsResponse.body?.rooms || []).find((item) => item.id === roomId);
@@ -886,7 +910,9 @@ document.getElementById("u6-reserve").addEventListener("click", async () => {
       dancer_name: document.getElementById("u6-dancer-name").value || "Guest Dancer",
       planned_minutes: plannedMinutes,
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request("/api/practice-bookings/reserve", {
       method: "POST",
@@ -933,6 +959,7 @@ document.getElementById("u7-purchase").addEventListener("click", async () => {
     const packId = document.getElementById("u7-pack-id").value || "pack-1";
     const tierId = document.getElementById("u7-tier-id").value || "tier-personal";
     const mode = document.getElementById("u7-mode").value;
+    const execution = getExecutionSelection("u7-execution-mode", "u7-execution-network");
     const packsResponse = await request("/api/sample-packs");
     const pack = (packsResponse.body?.packs || []).find((item) => item.id === packId);
     if (!pack) {
@@ -948,7 +975,9 @@ document.getElementById("u7-purchase").addEventListener("click", async () => {
       tier_id: tierId,
       buyer_name: document.getElementById("u7-buyer-name").value || "Buyer",
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request(`/api/sample-packs/${encodeURIComponent(packId)}/purchase`, {
       method: "POST",
@@ -1055,6 +1084,7 @@ document.getElementById("u8-payout").addEventListener("click", async () => {
     document.getElementById("u8-challenge-id").value = challengeId;
     document.getElementById("u8-submission-id").value = submissionId;
     const mode = document.getElementById("u8-mode").value;
+    const execution = getExecutionSelection("u8-execution-mode", "u8-execution-network");
     const payoutResponse = await request("/api/challenges");
     const challenge = (payoutResponse.body?.challenges || []).find((item) => item.id === challengeId);
     if (!challenge) {
@@ -1065,7 +1095,9 @@ document.getElementById("u8-payout").addEventListener("click", async () => {
     const payload = {
       winner_submission_id: submissionId,
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
       method: "POST",
@@ -1111,12 +1143,15 @@ document.getElementById("u4-run-split").addEventListener("click", async () => {
     const crewId = document.getElementById("u4-crew-id").value;
     const amountMinor = Number(document.getElementById("u4-split-amount").value || 0);
     const mode = document.getElementById("u4-mode").value;
+    const execution = getExecutionSelection("u4-execution-mode", "u4-execution-network");
     const payment = await resolvePaymentReference(mode, amountMinor, "u4-split");
     const payload = {
       amount_minor: amountMinor,
       source: "ui_demo",
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
       method: "POST",
@@ -1153,6 +1188,7 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
     const itemId = document.getElementById("u10-item-id").value || "merch-1";
     const quantity = Math.max(1, Number(document.getElementById("u10-qty").value || 1));
     const mode = document.getElementById("u10-mode").value;
+    const execution = getExecutionSelection("u10-execution-mode", "u10-execution-network");
     const catalogResponse = await request("/api/merch/catalog");
     const item = (catalogResponse.body?.items || []).find((row) => row.id === itemId);
     if (!item) {
@@ -1165,7 +1201,9 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
       quantity,
       buyer_name: document.getElementById("u10-buyer").value || "Buyer",
       payment_mode: payment.mode,
-      payment_ref: payment.ref
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
     };
     const data = await request("/api/merch/checkout", {
       method: "POST",

@@ -1,6 +1,13 @@
 "use strict";
 
 const DEFAULT_BASE = "https://app.keeperhub.com/api";
+const ONLINE_EXECUTE_NETWORKS = {
+  "ethereum-sepolia": "ethereum-sepolia",
+  "base-sepolia": "base-sepolia",
+  "polygon-amoy": "polygon-amoy",
+  "arbitrum-sepolia": "arbitrum-sepolia",
+  "avalanche-fuji": "avalanche-fuji"
+};
 
 /**
  * KeeperHub docs use host `app.keeperhub.com` with API root `/api`.
@@ -63,7 +70,29 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W1',location:'src/keeperhub/client.js:keeperhubFetch:pre',message:'Outbound request to KeeperHub execute/transfer',data:{url,method,headerKeys:Object.keys(headers),authFormatOk:String(headers.Authorization||'').startsWith('Bearer kh_'),body:body||null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
   }
-  const timeoutMs = Number(process.env.KEEPERHUB_REQUEST_TIMEOUT_MS || 10000);
+  const defaultTimeoutMs = executeRoute ? 30000 : 10000;
+  const timeoutMs = Number(process.env.KEEPERHUB_REQUEST_TIMEOUT_MS || defaultTimeoutMs);
+  const startedAt = Date.now();
+  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+    // #region agent log
+    fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "aded7a"
+      },
+      body: JSON.stringify({
+        sessionId: "aded7a",
+        runId: "krump-timeout-debug",
+        hypothesisId: "K1",
+        location: "src/keeperhub/client.js:keeperhubFetch:start",
+        message: "keeperhub_request_started",
+        data: { path, method, timeoutMs },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response;
@@ -75,6 +104,32 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
       signal: controller.signal
     });
   } catch (error) {
+    if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+      // #region agent log
+      fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "aded7a"
+        },
+        body: JSON.stringify({
+          sessionId: "aded7a",
+          runId: "krump-timeout-debug",
+          hypothesisId: "K2",
+          location: "src/keeperhub/client.js:keeperhubFetch:catch",
+          message: "keeperhub_request_exception",
+          data: {
+            path,
+            timeoutMs,
+            elapsedMs: Date.now() - startedAt,
+            errorName: error?.name || null,
+            errorMessage: error?.message || null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+    }
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W4',location:'src/keeperhub/client.js:keeperhubFetch:fetch-catch',message:'KeeperHub fetch threw before response',data:{path,url,timeoutMs,errorName:error?.name||null,errorMessage:error?.message||null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
@@ -89,6 +144,30 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     clearTimeout(timeout);
   }
   const text = await response.text();
+  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
+    // #region agent log
+    fetch("http://127.0.0.1:7690/ingest/6763d774-eed0-493a-8b58-d55203d9fdc2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "aded7a"
+      },
+      body: JSON.stringify({
+        sessionId: "aded7a",
+        runId: "krump-timeout-debug",
+        hypothesisId: "K3",
+        location: "src/keeperhub/client.js:keeperhubFetch:response",
+        message: "keeperhub_request_completed",
+        data: {
+          path,
+          status: response.status,
+          elapsedMs: Date.now() - startedAt
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  }
   if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
     // #region agent log
     fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b749cd'},body:JSON.stringify({sessionId:'b749cd',runId:'keeperhub-wire-debug',hypothesisId:'W2',location:'src/keeperhub/client.js:keeperhubFetch:post',message:'Inbound response from KeeperHub',data:{path,status:response.status,rawBody:text},timestamp:Date.now()})}).catch(()=>{});
@@ -147,7 +226,7 @@ function pickArcChain(chains, arcChainId) {
 function resolveExecuteNetworkSlug(chainRow) {
   const override = (process.env.KEEPERHUB_EXECUTE_NETWORK || "").trim();
   if (override) {
-    return override;
+    return ONLINE_EXECUTE_NETWORKS[override.toLowerCase()] || override;
   }
   if (!chainRow) {
     return null;
@@ -166,6 +245,13 @@ function resolveExecuteNetworkSlug(chainRow) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   return name || "arc-testnet";
+}
+
+function listOnlineExecuteNetworks() {
+  return Object.keys(ONLINE_EXECUTE_NETWORKS).map((id) => ({
+    id,
+    execute_network: ONLINE_EXECUTE_NETWORKS[id]
+  }));
 }
 
 /**
@@ -276,5 +362,6 @@ module.exports = {
   executeTransferPayout,
   getExecutionStatus,
   getStatusSummary,
-  minorToTransferAmountString
+  minorToTransferAmountString,
+  listOnlineExecuteNetworks
 };
