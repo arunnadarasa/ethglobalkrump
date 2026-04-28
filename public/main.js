@@ -807,6 +807,13 @@ function setKeeperhubOnlineSourceWalletAddress(address) {
   }
 }
 
+function setKeeperhubDestinationGasWalletAddress(address) {
+  const input = document.getElementById("keeperhub-destination-gas-wallet");
+  if (input) {
+    input.value = address || "";
+  }
+}
+
 async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
   const data = await request("/api/keeperhub/online-source-wallet/fund-hint", {
     method: "POST",
@@ -823,6 +830,33 @@ async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
     } catch (_err) {}
   }
   const faucetUrl = data.body?.faucet_url || "https://faucet.circle.com/";
+  if (openFaucet && faucetUrl) {
+    window.open(faucetUrl, "_blank", "noopener,noreferrer");
+  }
+  print("keeperhub-output", {
+    status: data.status,
+    copied_wallet_address: copied,
+    body: data.body
+  });
+}
+
+async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
+  const executionNetwork = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
+  const data = await request("/api/keeperhub/online-destination-gas/fund-hint", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ execution_network: executionNetwork })
+  });
+  const walletAddress = data.body?.signer_address || "";
+  setKeeperhubDestinationGasWalletAddress(walletAddress);
+  let copied = false;
+  if (walletAddress && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      copied = true;
+    } catch (_err) {}
+  }
+  const faucetUrl = data.body?.faucet_url || "";
   if (openFaucet && faucetUrl) {
     window.open(faucetUrl, "_blank", "noopener,noreferrer");
   }
@@ -872,6 +906,14 @@ document.getElementById("keeperhub-load-chains").addEventListener("click", async
 document.getElementById("keeperhub-fund-online-source").addEventListener("click", async () => {
   try {
     await fundKeeperhubOnlineSourceFromUi({ openFaucet: true });
+  } catch (error) {
+    print("keeperhub-output", { error: error.message });
+  }
+});
+
+document.getElementById("keeperhub-fund-destination-gas").addEventListener("click", async () => {
+  try {
+    await fundKeeperhubDestinationGasFromUi({ openFaucet: true });
   } catch (error) {
     print("keeperhub-output", { error: error.message });
   }
@@ -1278,6 +1320,9 @@ async function bootstrap() {
   await loadConfig();
   try {
     await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
+  } catch (_error) {}
+  try {
+    await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
   } catch (_error) {}
   hydrateSavedCircleWallet();
   print("balances-output", {

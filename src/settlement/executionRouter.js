@@ -79,7 +79,8 @@ function createExecutionRouter({ keeperhub, defaultNetwork = "base-sepolia" }) {
   return {
     execute,
     resolveExecutionInput,
-    listOnlineNetworks: cctpBridge.listOnlineNetworks
+    listOnlineNetworks: cctpBridge.listOnlineNetworks,
+    resolveDestinationSignerFundingHint: cctpBridge.resolveDestinationSignerFundingHint
   };
 }
 

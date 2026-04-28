@@ -774,6 +774,25 @@ app.post("/api/keeperhub/online-source-wallet/fund-hint", async (_req, res) => {
   }
 });
 
+app.post("/api/keeperhub/online-destination-gas/fund-hint", async (req, res) => {
+  try {
+    const network = String(req.body?.execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK).trim().toLowerCase();
+    const source = await resolveOnlineBridgeSourceWallet({ createIfMissing: true });
+    const hint = await executionRouter.resolveDestinationSignerFundingHint(network, source.wallet_address);
+    // #region agent log
+    fetch('http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'995d4d'},body:JSON.stringify({sessionId:'995d4d',runId:'online-destination-gas-v1',hypothesisId:'H32',location:'src/server.js:/api/keeperhub/online-destination-gas/fund-hint',message:'Destination gas funding hint generated',data:{executionNetwork:network,destinationChain:hint.destination_chain,signerAddressPrefix:String(hint.signer_address||'').slice(0,10),lookupStatus:hint.lookup_status||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return res.status(200).json({
+      ok: true,
+      ...hint,
+      token: "ETH",
+      instructions: `Fund signer wallet on ${hint.destination_network} with native gas token, then retry KeeperHub online transfer.`
+    });
+  } catch (error) {
+    return sendError(res, error.status || 502, error.code || "online_destination_gas_hint_failed", error.message);
+  }
+});
+
 app.get("/api/ucp/discovery", (req, res) => {
   const baseUrl = getUcpBaseUrl(req);
   return res.json({
