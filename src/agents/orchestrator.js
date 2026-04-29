@@ -50,10 +50,11 @@ function makeAgentOrchestrator({
   function paymentsAgentCheckout(itemId, quantity, context) {
     const previewAmountMinor = (tutorialClips.find((clip) => clip.id === itemId)?.priceMinor || 100) * quantity;
     const paymentMode = context?.payment_mode || "offchain_demo";
+    const agentIdForPolicy = context?.agent_actor_address || "payments-agent";
     const settlement =
       typeof evaluateSettlementPolicy === "function"
         ? evaluateSettlementPolicy({
-            agentId: "payments-agent",
+            agentId: agentIdForPolicy,
             amountMinor: previewAmountMinor,
             intent: context?.intent || "unknown"
           })
@@ -106,7 +107,7 @@ function makeAgentOrchestrator({
   }
 
   function runSession(intent, context) {
-    const identity = typeof getAgentIdentity === "function" ? getAgentIdentity() : null;
+    const identity = typeof getAgentIdentity === "function" ? getAgentIdentity(context) : null;
     const session = {
       id: helpers.makeId("agent-session"),
       intent,
@@ -122,12 +123,23 @@ function makeAgentOrchestrator({
     if (identity) {
       appendEvent(session, {
         kind: "identity",
-        message: "Attached ERC-8004 style agent identity metadata.",
+        message: "Attached agent identity metadata (ENS + ERC-8004 style when configured).",
         data: identity
       });
     }
 
     try {
+      if (context?.__ensResolutionError) {
+        throw new Error(`ENS resolution failed: ${context.__ensResolutionError}`);
+      }
+
+      if (Array.isArray(context?.__ensAllowedIntents) && context.__ensAllowedIntents.length > 0) {
+        const allowed = context.__ensAllowedIntents;
+        if (!allowed.includes(intent)) {
+          throw new Error(`ENS gating blocked intent "${intent}". Allowed intents: ${allowed.join(", ")}`);
+        }
+      }
+
       const paymentMode = context?.payment_mode || "offchain_demo";
       if (paymentMode !== "offchain_demo" && !context?.payment_ref) {
         throw new Error(`Missing payment_ref for payment_mode=${paymentMode}`);
@@ -155,6 +167,7 @@ function makeAgentOrchestrator({
       const itemId = resolveItemId(intent, context);
       const quantity = Math.max(1, Number(context?.quantity || 1));
       const checkoutResult = paymentsAgentCheckout(itemId, quantity, {
+        ...context,
         intent,
         session_hint: session.id,
         payment_mode: context?.payment_mode || "offchain_demo"

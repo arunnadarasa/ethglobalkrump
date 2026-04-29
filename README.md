@@ -70,6 +70,48 @@ This app now supports in-repo agent orchestration while keeping UCP as the comme
 
 Sub-agents coordinate internally (agent-to-agent), but only the payments sub-agent executes checkout and order calls via the existing UCP response builders.
 
+### ENS Agent Identity (Sepolia writes, Universal Resolver reads)
+
+The app can use **ENS** as the human-readable identity layer for agent sessions.
+
+- `POST /api/agents/sessions` accepts `context.agent_ens_name` (e.g. `my-agent.eth`)
+- the server resolves `agent_ens_name` via the ENS **Universal Resolver** using the configured Sepolia RPC
+- the resolved values are injected into the session trace identity and used to gate intents:
+  - if ENS text record `allowedIntents` is set, only those intents can run
+- when deep settlement is enabled, the resolved ENS address is also used as the `agentId` input for the Vyper settlement policy evaluation (so ENS identity becomes part of policy enforcement).
+
+#### ENS records to set (on the ENS resolver)
+Write these records on **Ethereum Sepolia**:
+
+- `addr` record (coin=60 == ETH) set to the Arc actor EVM address:
+  - in the app this is treated as the “agent actor address” used inside the Arc testnet settlement policy flow
+- text records (keys):
+  - `agentId` (string; appears in session identity metadata)
+  - `tokenUri` (string)
+  - `capabilitiesUri` (string)
+  - `allowedIntents` (string; comma-separated or JSON array of allowed intent ids)
+  - `arcAddress` (optional override; if set, the app prefers it over the addr record)
+
+#### Setup script
+
+Use the helper to register/update a name and set resolver + records on Sepolia:
+
+```sh
+ENS_SEPOLIA_RPC_URL=https://rpc.sepolia.org \
+ENS_PRIVATE_KEY=0x... \
+ENS_NAME=my-agent.eth \
+AGENT_ARC_ADDRESS=0x... \
+ENS_AGENT_ID=agent-1 \
+ENS_TOKEN_URI=https://... \
+ENS_CAPABILITIES_URI=https://... \
+ENS_ALLOWED_INTENTS=tip_dancer,battle_entry \
+node scripts/ens/setup-agent-ens.mjs
+```
+
+#### How resolution works for Arc flows
+
+Even though KeeperHub and the settlement narrative use **Arc testnet**, the ENS resolution itself is performed against **Sepolia** (where ENS contracts live). The resolved 0x address returned by ENS is then used as the identity/policy actor address within the Arc testnet and online KeeperHub flows.
+
 ### OpenClaw note
 
 OpenClaw is optional for this MVP. The current implementation is OpenClaw-compatible by design (session traces + delegated sub-agents), and can later be connected through an external OpenClaw gateway adapter without changing UCP routes.

@@ -32,6 +32,7 @@ const { makeAgentOrchestrator } = require("./agents/orchestrator");
 const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
 const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
+const { resolveAgentEns } = require("./ens/resolveAgentEns");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,6 +61,9 @@ const ERC8004_AGENT_REGISTRY = process.env.ERC8004_AGENT_REGISTRY || "";
 const ERC8004_AGENT_ID = process.env.ERC8004_AGENT_ID || "";
 const ERC8004_AGENT_TOKEN_URI = process.env.ERC8004_AGENT_TOKEN_URI || "";
 const ERC8004_AGENT_CAPABILITIES_URI = process.env.ERC8004_AGENT_CAPABILITIES_URI || "";
+const ENS_SEPOLIA_RPC_URL = process.env.ENS_SEPOLIA_RPC_URL || "https://rpc.sepolia.org";
+const ENS_UNIVERSAL_RESOLVER_ADDRESS =
+  process.env.ENS_UNIVERSAL_RESOLVER_ADDRESS || "0x3c85752a5d47DD09D677C645Ff2A938B38fbFEbA";
 const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NETWORK || "base-sepolia";
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 let activeCircleWalletId = CIRCLE_WALLET_ID;
@@ -297,13 +301,29 @@ function extractArcUsdcBalance(balanceList) {
   return parsed;
 }
 
-function getAgentIdentityMetadata() {
-  return {
+function getAgentIdentityMetadata(context) {
+  const base = {
     standard: "erc-8004-style",
     agent_registry: ERC8004_AGENT_REGISTRY || null,
     agent_id: ERC8004_AGENT_ID || null,
     token_uri: ERC8004_AGENT_TOKEN_URI || null,
     capabilities_uri: ERC8004_AGENT_CAPABILITIES_URI || null
+  };
+
+  const ensResolved = context?.__ensResolvedIdentity || null;
+  if (!ensResolved) {
+    return base;
+  }
+
+  return {
+    ...base,
+    standard: "ens-agent-erc-8004-style",
+    ens_name: ensResolved.ens_name || null,
+    agent_address: ensResolved.agent_address || null,
+    agent_id: ensResolved.agentId || base.agent_id,
+    token_uri: ensResolved.tokenUri || base.token_uri,
+    capabilities_uri: ensResolved.capabilitiesUri || base.capabilities_uri,
+    allowed_intents: ensResolved.allowedIntents || []
   };
 }
 
@@ -940,7 +960,7 @@ app.post("/api/settlement/vyper/evaluate", (req, res) => {
   });
 });
 
-app.post("/api/agents/sessions", (req, res) => {
+app.post("/api/agents/sessions", async (req, res) => {
   const { intent, context } = req.body || {};
   if (!intent || typeof intent !== "string") {
     return sendError(res, 400, "agent_intent_required", "intent is required and must be a string");
@@ -949,7 +969,24 @@ app.post("/api/agents/sessions", (req, res) => {
   if (!allowedIntents.has(intent)) {
     return sendError(res, 400, "agent_intent_unsupported", `Unsupported intent: ${intent}`);
   }
-  const session = agentOrchestrator.runSession(intent, context || {});
+
+  const ctx = context || {};
+  if (ctx.agent_ens_name && typeof ctx.agent_ens_name === "string") {
+    try {
+      const ens = await resolveAgentEns({
+        ensName: ctx.agent_ens_name,
+        sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+        universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+      });
+      ctx.__ensResolvedIdentity = ens;
+      ctx.agent_actor_address = ens.agent_address;
+      ctx.__ensAllowedIntents = ens.allowedIntents;
+    } catch (error) {
+      ctx.__ensResolutionError = error?.message || String(error);
+    }
+  }
+
+  const session = agentOrchestrator.runSession(intent, ctx);
   const statusCode = session.status === "failed" ? 502 : 201;
   return res.status(statusCode).json({
     ok: session.status === "completed",

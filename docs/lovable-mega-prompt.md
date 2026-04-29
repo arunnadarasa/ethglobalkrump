@@ -167,6 +167,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 
 - `GET /api/agents/identity`  
   Returns `{ ok, identity: { standard: "erc-8004-style", agent_registry, agent_id, token_uri, capabilities_uri } }` (nulls allowed).
+  (ENS-derived identity is injected into individual `sessions` via `context.agent_ens_name`, not returned directly by this endpoint.)
 
 - `POST /api/agents/sessions` body `{ intent, context? }`  
   - Validate intent allowlist from capabilities (dynamic from orchestrator intent list; do not hardcode only 3-4).
@@ -176,11 +177,15 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
   - Accept payment rail context in `context`: `payment_mode`, `payment_ref`, `amount_minor`.
   - If `payment_mode !== "offchain_demo"` and `payment_ref` is missing, fail session with an error trace.
   - Emit an early `payments_agent` trace event recording accepted payment context (`payment_mode`, `payment_ref`, `amount_minor`).
+  - Optional ENS identity mode: if `context.agent_ens_name` is provided, the server resolves the ENS name (via ENS Universal Resolver reads against Sepolia RPC) and:
+    - injects ENS-derived identity into `session.identity`
+    - sets `context.agent_actor_address` (resolved addr/override) and `context.__ensAllowedIntents`
+    - enforces ENS `allowedIntents` gating for which intents may run
   - For `tip_dancer`: fan agent proposes plan.
   - For `battle_entry`: dancer agent proposes details.
   - Payments agent must create UCP checkout via internal builder (not a second protocol).
   - **Critical:** payment instrument in checkout request must satisfy UCP enum: use `type: "card"` (e.g. visa/4242), not `wallet`.
-  - If `ENABLE_VYPER_SETTLEMENT`: call `vyperPolicy.evaluate` before checkout with `{ agentId: "payments-agent", amountMinor: previewTotal, intent }`; block with `502` + failed session if not approved.
+  - If `ENABLE_VYPER_SETTLEMENT`: call `vyperPolicy.evaluate` before checkout with `{ agentId: context.agent_actor_address || "payments-agent", amountMinor: previewTotal, intent }`; block with `502` + failed session if not approved.
   - Then fetch order status for checkout id.
   - Return `201` if completed, `502` if failed.
   - **Orchestrator behavior details (must match):**

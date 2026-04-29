@@ -301,6 +301,7 @@ async function runAgentSessionFromUi() {
   };
   const amountMinor = Number(parsedContext.amount_minor || fallbackAmounts[intent] || 100);
   const payment = await resolvePaymentReference(paymentMode, amountMinor, `agent-${intent}`);
+  const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
   const context = {
     ...parsedContext,
     amount_minor: amountMinor,
@@ -309,6 +310,9 @@ async function runAgentSessionFromUi() {
     execution_mode: execution.execution_mode,
     execution_network: execution.execution_network
   };
+  if (ensName) {
+    context.agent_ens_name = ensName;
+  }
   const payload = { intent, context };
   const response = await request("/api/agents/sessions", {
     method: "POST",
