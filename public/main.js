@@ -14,6 +14,7 @@ let railConfig = null;
 let connectedAccount = "";
 let lastCreatedCircleWallet = null;
 let lastAgentSessionId = "";
+let lastEnsJudgeResolve = null;
 let lastU8ChallengeId = "";
 let lastU8SubmissionId = "";
 
@@ -328,6 +329,150 @@ async function runAgentSessionFromUi() {
     payment_receipt: payment.receipt,
     body: response.body
   });
+}
+
+function setEnsJudgeChip({ statusId, chipText, variant }) {
+  const target = document.getElementById(statusId);
+  if (!target) {
+    return;
+  }
+  if (!chipText) {
+    target.classList.add("hidden");
+    return;
+  }
+  target.classList.remove("hidden");
+  target.classList.remove("warning", "success");
+  if (variant === "success") {
+    target.classList.add("success");
+  } else if (variant === "warning") {
+    target.classList.add("warning");
+  }
+  target.textContent = chipText;
+}
+
+function updateAgentRunDisabledByEnsGating() {
+  const runBtn = document.getElementById("agent-run-session");
+  if (!runBtn) {
+    return;
+  }
+  if (!lastEnsJudgeResolve) {
+    runBtn.disabled = false;
+    return;
+  }
+  const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  if (!selectedIntent) {
+    // If no intent is selected, don't block the session button.
+    runBtn.disabled = false;
+    return;
+  }
+  const allowedIntents = Array.isArray(lastEnsJudgeResolve.allowed_intents) ? lastEnsJudgeResolve.allowed_intents : [];
+  const hasAllowedIntents = allowedIntents.length > 0;
+  const isAllowed = hasAllowedIntents ? allowedIntents.includes(selectedIntent) : true;
+  runBtn.disabled = !isAllowed;
+}
+
+async function resolveEnsJudgeIdentityForUi() {
+  const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
+  if (!ensName) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Set Agent ENS name (top of Agent Orchestration) first.",
+      variant: "warning"
+    });
+    return;
+  }
+  const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  const url = `/api/ens/resolve?name=${encodeURIComponent(ensName)}&intent=${encodeURIComponent(selectedIntent)}`;
+
+  const data = await request(url, { method: "GET" });
+  if (!data.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: data.body?.error?.message || "ENS resolve failed.",
+      variant: "warning"
+    });
+    return;
+  }
+
+  lastEnsJudgeResolve = data.body || null;
+  const agentActorAddress = lastEnsJudgeResolve?.agent_actor_address || "";
+  const resolvedAgentId = lastEnsJudgeResolve?.text?.agentId || "";
+  const allowedIntents = lastEnsJudgeResolve?.allowed_intents || [];
+  const allowedIntentsLabel = allowedIntents.length ? allowedIntents.join(", ") : "(none set)";
+
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: `Resolved agentId (Vyper agentId): ${resolvedAgentId || "none"} | actor addr: ${agentActorAddress || "none"} | ENS allowedIntents: ${allowedIntentsLabel}`,
+    variant: "success"
+  });
+
+  const isAllowed = lastEnsJudgeResolve?.is_allowed_for_intent;
+  if (isAllowed === true) {
+    setEnsJudgeChip({ statusId: "ens-gating-chip", chipText: `Selected intent "${selectedIntent}" allowed by ENS.`, variant: "success" });
+  } else if (isAllowed === false) {
+    setEnsJudgeChip({ statusId: "ens-gating-chip", chipText: `Selected intent "${selectedIntent}" blocked by ENS allowedIntents.`, variant: "warning" });
+  } else {
+    setEnsJudgeChip({ statusId: "ens-gating-chip", chipText: "", variant: null });
+  }
+
+  const output = {
+    route: url,
+    body: lastEnsJudgeResolve
+  };
+  print("ens-identity-output", output);
+
+  updateAgentRunDisabledByEnsGating();
+}
+
+async function registerUpdateEnsJudgeIdentityForUi() {
+  const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
+  const arcActorAddress = document.getElementById("ens-arc-actor-address")?.value?.trim() || "";
+  const agentId = document.getElementById("ens-agent-id")?.value?.trim() || "";
+  const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
+  const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
+  const selectedIntent = document.getElementById("agent-intent")?.value || "";
+
+  if (!ensName) {
+    setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set Agent ENS name first.", variant: "warning" });
+    return;
+  }
+  if (!arcActorAddress) {
+    setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set Arc actor address for the ENS addr record.", variant: "warning" });
+    return;
+  }
+  if (!agentId) {
+    setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set agentId text record value.", variant: "warning" });
+    return;
+  }
+
+  setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Submitting ENS setup transaction...", variant: "warning" });
+
+  const payload = {
+    ensName,
+    arcActorAddress,
+    agentId,
+    tokenUri,
+    capabilitiesUri,
+    allowedIntent: selectedIntent
+  };
+
+  const data = await request("/api/ens/setup-agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!data.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: data.body?.error?.message || "ENS setup failed.",
+      variant: "warning"
+    });
+    return;
+  }
+
+  print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
+  await resolveEnsJudgeIdentityForUi();
 }
 
 async function getLastAgentSessionFromUi() {
@@ -771,6 +916,60 @@ document.getElementById("agent-run-session").addEventListener("click", async () 
     await runAgentSessionFromUi();
   } catch (error) {
     print("agent-output", { error: error.message });
+  }
+});
+
+document.getElementById("ens-resolve-identity")?.addEventListener("click", async () => {
+  try {
+    await resolveEnsJudgeIdentityForUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-register-update")?.addEventListener("click", async () => {
+  try {
+    await registerUpdateEnsJudgeIdentityForUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("agent-intent")?.addEventListener("change", () => {
+  updateAgentRunDisabledByEnsGating();
+  // Optionally refresh gating if ENS resolve already ran.
+  if (lastEnsJudgeResolve) {
+    const selectedIntent = document.getElementById("agent-intent")?.value || "";
+    if (!selectedIntent) {
+      setEnsJudgeChip({ statusId: "ens-gating-chip", chipText: "", variant: null });
+      return;
+    }
+    const allowedIntents = Array.isArray(lastEnsJudgeResolve.allowed_intents)
+      ? lastEnsJudgeResolve.allowed_intents
+      : [];
+    const hasAllowedIntents = allowedIntents.length > 0;
+    const isAllowed = hasAllowedIntents ? allowedIntents.includes(selectedIntent) : true;
+    if (isAllowed) {
+      setEnsJudgeChip({
+        statusId: "ens-gating-chip",
+        chipText: `Selected intent "${selectedIntent}" allowed by ENS.`,
+        variant: "success"
+      });
+    } else {
+      setEnsJudgeChip({
+        statusId: "ens-gating-chip",
+        chipText: `Selected intent "${selectedIntent}" blocked by ENS allowedIntents.`,
+        variant: "warning"
+      });
+    }
   }
 });
 

@@ -33,6 +33,7 @@ const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
 const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
+const { setupAgentEns } = require("./ens/setupAgentEns");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +67,7 @@ const ENS_UNIVERSAL_RESOLVER_ADDRESS =
   process.env.ENS_UNIVERSAL_RESOLVER_ADDRESS || "0x3c85752a5d47DD09D677C645Ff2A938B38fbFEbA";
 const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NETWORK || "base-sepolia";
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
+const ENS_PRIVATE_KEY = process.env.ENS_PRIVATE_KEY || "";
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -945,6 +947,110 @@ app.get("/api/agents/identity", (_req, res) => {
     ok: true,
     identity: getAgentIdentityMetadata()
   });
+});
+
+app.get("/api/ens/resolve", async (req, res) => {
+  try {
+    const ensName = String(req.query?.name || "").trim();
+    if (!ensName) {
+      return sendError(res, 400, "ens_name_required", "Query param `name` (ENS name) is required");
+    }
+    const intent = typeof req.query?.intent === "string" ? req.query.intent.trim() : "";
+
+    const ens = await resolveAgentEns({
+      ensName,
+      sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+    });
+
+    const allowedIntents = Array.isArray(ens.allowedIntents) ? ens.allowedIntents : [];
+    const hasAllowedIntents = allowedIntents.length > 0;
+    const isAllowedForIntent = intent
+      ? hasAllowedIntents
+        ? allowedIntents.includes(intent)
+        : true
+      : null;
+
+    return res.json({
+      ok: true,
+      ens_name: ens.ens_name,
+      agent_actor_address: ens.agent_address,
+      text: {
+        agentId: ens.agentId,
+        tokenUri: ens.tokenUri,
+        capabilitiesUri: ens.capabilitiesUri,
+        allowedIntents: ens.allowedIntents,
+        arcAddress: ens.text?.arcAddress || null
+      },
+      allowed_intents: allowedIntents,
+      is_allowed_for_intent: isAllowedForIntent
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_resolve_failed", error.message);
+  }
+});
+
+app.post("/api/ens/setup-agent", async (req, res) => {
+  try {
+    if (!ENS_PRIVATE_KEY) {
+      return sendError(res, 400, "ens_private_key_missing", "Set ENS_PRIVATE_KEY in env to write ENS records");
+    }
+    const {
+      ensName,
+      arcActorAddress,
+      agentId,
+      tokenUri,
+      capabilitiesUri,
+      allowedIntent
+    } = req.body || {};
+
+    if (!ensName || typeof ensName !== "string") {
+      return sendError(res, 400, "ens_name_required", "ensName is required");
+    }
+    if (!arcActorAddress || typeof arcActorAddress !== "string") {
+      return sendError(res, 400, "arc_actor_address_required", "arcActorAddress is required");
+    }
+    if (!agentId || typeof agentId !== "string") {
+      return sendError(res, 400, "agent_id_required", "agentId is required");
+    }
+    if (!allowedIntent || typeof allowedIntent !== "string") {
+      return sendError(res, 400, "allowed_intent_required", "allowedIntent is required (single intent id)");
+    }
+
+    await setupAgentEns({
+      ensName: ensName.trim(),
+      ensPrivateKey: ENS_PRIVATE_KEY,
+      sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      arcActorAddress: arcActorAddress.trim(),
+      agentId: agentId.trim(),
+      tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
+      capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
+      allowedIntent: allowedIntent.trim()
+    });
+
+    // Resolve immediately so the UI can render updated chips.
+    const resolved = await resolveAgentEns({
+      ensName: ensName.trim(),
+      sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+    });
+
+    return res.json({
+      ok: true,
+      ens_name: resolved.ens_name,
+      agent_actor_address: resolved.agent_address,
+      text: {
+        agentId: resolved.agentId,
+        tokenUri: resolved.tokenUri,
+        capabilitiesUri: resolved.capabilitiesUri,
+        allowedIntents: resolved.allowedIntents,
+        arcAddress: resolved.text?.arcAddress || null
+      },
+      allowed_intents: resolved.allowedIntents
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_setup_failed", error.message || String(error));
+  }
 });
 
 app.post("/api/settlement/vyper/evaluate", (req, res) => {

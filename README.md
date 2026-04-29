@@ -108,6 +108,20 @@ ENS_ALLOWED_INTENTS=tip_dancer,battle_entry \
 node scripts/ens/setup-agent-ens.mjs
 ```
 
+#### Judge-friendly UX (in-app)
+For demo/judging, the frontend includes a dedicated “`ENS Agent Identity (for Vyper agent)`” card that performs the same actions without needing to run the script manually:
+
+1. `Register/Update ENS Identity` (writes on **Ethereum Sepolia** using server-side `ENS_PRIVATE_KEY`)
+2. `Resolve ENS for Vyper agent` (read-only resolve via the **Universal Resolver**, showing the resolved Vyper `agentId` and `allowedIntents`)
+3. The UI shows whether the currently selected `#agent-intent` is allowed; the main `Run Agent Session` button is disabled when blocked.
+
+Associated endpoints:
+
+- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>`
+  - returns `agent_actor_address` (ENS `addr`), ENS text records, and `is_allowed_for_intent` for the provided intent.
+- `POST /api/ens/setup-agent`
+  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, based on UI inputs.
+
 #### How resolution works for Arc flows
 
 Even though KeeperHub and the settlement narrative use **Arc testnet**, the ENS resolution itself is performed against **Sepolia** (where ENS contracts live). The resolved 0x address returned by ENS is then used as the identity/policy actor address within the Arc testnet and online KeeperHub flows.

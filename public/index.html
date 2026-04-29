@@ -113,6 +113,34 @@
       </section>
 
       <section>
+        <h2>ENS Agent Identity (for Vyper agent)</h2>
+        <p class="subtitle">Write/resolve an ENS name on Sepolia; the Vyper agentId + allowedIntents gate your selected intent.</p>
+        <div class="row">
+          <input
+            id="ens-arc-actor-address"
+            placeholder="Arc actor address (addr record)"
+            style="min-width: 260px"
+          />
+          <input id="ens-agent-id" placeholder="agentId (text record)" style="min-width: 200px" />
+          <input id="ens-token-uri" placeholder="tokenUri (optional)" style="min-width: 240px" />
+          <input
+            id="ens-capabilities-uri"
+            placeholder="capabilitiesUri (optional)"
+            style="min-width: 240px"
+          />
+        </div>
+        <div class="row">
+          <button id="ens-resolve-identity" type="button">Resolve ENS for Vyper agent</button>
+          <button id="ens-register-update" type="button">Register/Update ENS Identity</button>
+        </div>
+        <div class="row">
+          <div id="ens-identity-status" class="hint-chip hidden"></div>
+          <div id="ens-gating-chip" class="hint-chip hidden"></div>
+        </div>
+        <pre id="ens-identity-output"></pre>
+      </section>
+
+      <section>
         <h2>KeeperHub (execution layer)</h2>
         <p class="subtitle">
           Optional <a href="https://docs.keeperhub.com/api" target="_blank" rel="noopener noreferrer">KeeperHub</a> direct
