@@ -9,6 +9,27 @@ function print(targetId, payload) {
   document.getElementById(targetId).textContent = JSON.stringify(payload, null, 2);
 }
 
+function debugEnsLog(hypothesisId, location, message, data = {}) {
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "995d4d"
+    },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "ens-judge-name-check",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+}
+
 let unlockToken = "";
 let railConfig = null;
 let connectedAccount = "";
@@ -372,8 +393,27 @@ function updateAgentRunDisabledByEnsGating() {
 }
 
 async function resolveEnsJudgeIdentityForUi() {
-  const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
+  const judgeEnsInputEl = document.getElementById("ens-name-input");
+  const globalEnsInputEl = document.getElementById("agent-ens-name");
+  const ensName =
+    judgeEnsInputEl?.value?.trim() ||
+    globalEnsInputEl?.value?.trim() ||
+    "";
+  if (judgeEnsInputEl && !judgeEnsInputEl.value && ensName) {
+    judgeEnsInputEl.value = ensName;
+  }
+  if (globalEnsInputEl && !globalEnsInputEl.value && ensName) {
+    globalEnsInputEl.value = ensName;
+  }
+  debugEnsLog("H1", "public/main.js:resolveEnsJudgeIdentityForUi", "resolve clicked with ENS input state", {
+    hasJudgeEnsInputElement: Boolean(judgeEnsInputEl),
+    hasGlobalEnsInputElement: Boolean(globalEnsInputEl),
+    ensNameLength: ensName.length
+  });
   if (!ensName) {
+    debugEnsLog("H2", "public/main.js:resolveEnsJudgeIdentityForUi", "resolve blocked due empty ENS name", {
+      ensNameLength: ensName.length
+    });
     setEnsJudgeChip({
       statusId: "ens-identity-status",
       chipText: "Set Agent ENS name (top of Agent Orchestration) first.",
@@ -425,14 +465,36 @@ async function resolveEnsJudgeIdentityForUi() {
 }
 
 async function registerUpdateEnsJudgeIdentityForUi() {
-  const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
+  const judgeEnsInputEl = document.getElementById("ens-name-input");
+  const globalEnsInputEl = document.getElementById("agent-ens-name");
+  const ensName =
+    judgeEnsInputEl?.value?.trim() ||
+    globalEnsInputEl?.value?.trim() ||
+    "";
+  if (judgeEnsInputEl && !judgeEnsInputEl.value && ensName) {
+    judgeEnsInputEl.value = ensName;
+  }
+  if (globalEnsInputEl && !globalEnsInputEl.value && ensName) {
+    globalEnsInputEl.value = ensName;
+  }
   const arcActorAddress = document.getElementById("ens-arc-actor-address")?.value?.trim() || "";
   const agentId = document.getElementById("ens-agent-id")?.value?.trim() || "";
   const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
   const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  debugEnsLog("H3", "public/main.js:registerUpdateEnsJudgeIdentityForUi", "register clicked with form state", {
+    hasJudgeEnsInputElement: Boolean(judgeEnsInputEl),
+    hasGlobalEnsInputElement: Boolean(globalEnsInputEl),
+    ensNameLength: ensName.length,
+    arcActorAddressLength: arcActorAddress.length,
+    agentIdLength: agentId.length,
+    selectedIntent
+  });
 
   if (!ensName) {
+    debugEnsLog("H4", "public/main.js:registerUpdateEnsJudgeIdentityForUi", "register blocked due empty ENS name", {
+      ensNameLength: ensName.length
+    });
     setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set Agent ENS name first.", variant: "warning" });
     return;
   }
@@ -921,6 +983,7 @@ document.getElementById("agent-run-session").addEventListener("click", async () 
 
 document.getElementById("ens-resolve-identity")?.addEventListener("click", async () => {
   try {
+    debugEnsLog("H5", "public/main.js:ens-resolve-identity:click", "resolve button event fired", {});
     await resolveEnsJudgeIdentityForUi();
   } catch (error) {
     setEnsJudgeChip({
@@ -933,6 +996,7 @@ document.getElementById("ens-resolve-identity")?.addEventListener("click", async
 
 document.getElementById("ens-register-update")?.addEventListener("click", async () => {
   try {
+    debugEnsLog("H5", "public/main.js:ens-register-update:click", "register button event fired", {});
     await registerUpdateEnsJudgeIdentityForUi();
   } catch (error) {
     setEnsJudgeChip({
@@ -940,6 +1004,14 @@ document.getElementById("ens-register-update")?.addEventListener("click", async 
       chipText: error?.message || String(error),
       variant: "warning"
     });
+  }
+});
+
+document.getElementById("ens-name-input")?.addEventListener("input", (event) => {
+  const value = event?.target?.value || "";
+  const globalInput = document.getElementById("agent-ens-name");
+  if (globalInput) {
+    globalInput.value = value;
   }
 });
 
