@@ -82,7 +82,7 @@ const DESTINATION_MIN_NATIVE_GAS = {
   "base-sepolia": 0.001,
   "ethereum-sepolia": 0.001,
   /** Headroom for Circle wallet pending tx fees on Amoy (observed ~0.176 POL required vs balance). */
-  "polygon-amoy": 0.25,
+  "polygon-amoy": 0.2,
   "arbitrum-sepolia": 0.001,
   "avalanche-fuji": 0.01
 };
@@ -255,68 +255,6 @@ function uniqRpcEndpoints(urls) {
     out.push(s);
   }
   return out;
-}
-
-function redactRpcUrlForDebug(value) {
-  const s = String(value || "");
-  if (/alchemy\.com\/v2\//i.test(s)) {
-    return s.replace(/\/v2\/[^/?]+/i, "/v2/***");
-  }
-  return s;
-}
-
-function safeDebugPayload(value, depth = 0) {
-  const maxDepth = 6;
-  if (depth > maxDepth) {
-    return "[max-depth]";
-  }
-  if (value === null || value === undefined) {
-    return value;
-  }
-  const t = typeof value;
-  if (t === "bigint") {
-    return value.toString();
-  }
-  if (t === "number" || t === "boolean") {
-    return value;
-  }
-  if (t === "string") {
-    return redactRpcUrlForDebug(value);
-  }
-  if (t === "function") {
-    return "[fn]";
-  }
-  if (Array.isArray(value)) {
-    return value.slice(0, 30).map((v) => safeDebugPayload(v, depth + 1));
-  }
-  if (t === "object") {
-    const out = {};
-    for (const k of Object.keys(value).slice(0, 45)) {
-      try {
-        out[k] = safeDebugPayload(value[k], depth + 1);
-      } catch (_e) {
-        out[k] = "[unreadable]";
-      }
-    }
-    return out;
-  }
-  return String(value);
-}
-
-function debugIngest(payload) {
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: payload.runId || "run1",
-      hypothesisId: payload.hypothesisId,
-      location: payload.location,
-      message: payload.message,
-      data: payload.data,
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
 }
 
 function resolveBridgeDestinationChain(network, destinationNetworkKey) {
@@ -514,7 +452,13 @@ async function resolveDestinationSignerFundingHint(destinationNetwork, fallbackA
     signer_native_is_sufficient: nativeBalanceNumber >= minNativeRecommended,
     signer_usdc_balance: Number(usdcBalance.toFixed(6)),
     faucet_url: DESTINATION_GAS_FAUCETS[networkKey] || "",
-    lookup_status: destinationWalletLookup.status || null
+    lookup_status: destinationWalletLookup.status || null,
+    keeperhub_executor_gas_hint:
+      "Native balances above are for the Circle wallet used as the CCTP bridge signer on this chain. " +
+      "KeeperHub /execute/transfer spends gas from your organization’s executor wallet (a different address). " +
+      "Fund that executor with the same chain’s native token in KeeperHub, or the USDC payout step can fail with INSUFFICIENT_FUNDS even when Circle gas looks sufficient.",
+    keeperhub_executor_gas_hint_short:
+      "KeeperHub’s organization executor (another wallet) also needs native gas on this chain for the USDC payout."
   };
 }
 
@@ -695,7 +639,6 @@ async function bridgeUsdcFromArc({
   const availableUsdcArc = extractUsdcArcBalance(balanceList);
   const amount = (Number(amountMinor || 0) / 100).toFixed(2);
   const requested = Number(amount);
-  const arcRpcProbe = await probeArcRpcNativeBalance(sourceAddress);
   const bridgeDestinationChain = resolveBridgeDestinationChain(network, destinationNetwork);
   const destinationRpcUrl =
     Array.isArray(bridgeDestinationChain?.rpcEndpoints) && bridgeDestinationChain.rpcEndpoints.length > 0
@@ -705,9 +648,6 @@ async function bridgeUsdcFromArc({
   const bridgeKit = getBridgeKit();
   const destinationWalletLookup = await fetchAnyCircleWalletAddressOnBlockchain(network.circleBlockchain);
   const destinationSignerAddress = destinationWalletLookup.address || sourceAddress;
-  const destinationSourceAddressProbe = destinationRpcUrl
-    ? await probeEvmRpcNativeBalance(destinationRpcUrl, sourceAddress)
-    : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
   const destinationSignerAddressProbe = destinationRpcUrl
     ? await probeEvmRpcNativeBalance(destinationRpcUrl, destinationSignerAddress)
     : { ok: false, status: -1, body: { error: "missing_destination_rpc_url" } };
@@ -724,71 +664,8 @@ async function bridgeUsdcFromArc({
   }
   const minNativeRecommended = Number(DESTINATION_MIN_NATIVE_GAS[String(destinationNetwork || "").trim().toLowerCase()] || 0.001);
   const signerNativeWei = destinationSignerAddressProbe?.body?.result;
-  const sourceOnDestNativeWei = destinationSourceAddressProbe?.body?.result;
   const signerNativeNumber = parseEvmNativeFromHexNumber(signerNativeWei || "0x0");
-  const sourceOnDestNativeNumber = parseEvmNativeFromHexNumber(sourceOnDestNativeWei || "0x0");
-  let rpcProbeHost = "";
-  try {
-    rpcProbeHost = destinationRpcUrl ? new URL(destinationRpcUrl).hostname : "";
-  } catch (_e) {
-    rpcProbeHost = "";
-  }
-  // #region agent log
-  debugIngest({
-    hypothesisId: "H-A",
-    location: "cctpBridge.js:bridgeUsdcFromArc:pre_bridge_gas",
-    message: "pre-bridge native gas vs threshold",
-    data: {
-      destinationNetwork,
-      minNativeRecommended,
-      signerNativeNumber,
-      sourceOnDestNativeNumber,
-      belowMinSigner: signerNativeNumber < minNativeRecommended,
-      amount,
-      requested,
-      availableUsdcArc,
-      rpcProbeHost,
-      polygonAmoyPublicFirst:
-        String(destinationNetwork || "")
-          .trim()
-          .toLowerCase() === "polygon-amoy"
-          ? POLYGON_AMOY_RPC_PUBLIC_FIRST
-          : null
-    }
-  });
-  // #endregion
-  // #region agent log
-  debugIngest({
-    hypothesisId: "H-C",
-    location: "cctpBridge.js:bridgeUsdcFromArc:pre_bridge_signer",
-    message: "signer routing",
-    data: {
-      destinationNetwork,
-      circleBlockchain: network.circleBlockchain,
-      walletIdPrefix: String(destinationWalletLookup.walletId || "").slice(0, 8),
-      destSignerTail: String(destinationSignerAddress).slice(-8),
-      sourceTail: String(sourceAddress).slice(-8),
-      recipientTail: String(destination).slice(-8),
-      signerIsSourceFallback: destinationSignerAddress.toLowerCase() === sourceAddress.toLowerCase()
-    }
-  });
-  // #endregion
   if (signerNativeNumber < minNativeRecommended) {
-    // #region agent log
-    debugIngest({
-      hypothesisId: "H-A",
-      location: "cctpBridge.js:bridgeUsdcFromArc:preflight_low_gas",
-      message: "low destination native gas before bridgeKit.bridge",
-      runId: "post-fix",
-      data: {
-        destinationNetwork,
-        signerNativeNumber,
-        minNativeRecommended,
-        nativeSymbol: network.nativeSymbol,
-        allowLowDestinationGas: ALLOW_LOW_DESTINATION_GAS
-      }
-    });
-    // #endregion
     if (!ALLOW_LOW_DESTINATION_GAS) {
       const error = new Error(
         `Destination signer has ~${signerNativeNumber.toFixed(4)} ${network.nativeSymbol} on ${network.keeperhubNetwork}; at least ${minNativeRecommended} ${network.nativeSymbol} is recommended before CCTP mint (avoids burn succeeding then mint failing). Fund the destination gas wallet or set ALLOW_LOW_DESTINATION_GAS=true to try anyway.`
@@ -805,78 +682,27 @@ async function bridgeUsdcFromArc({
     }
   }
   const bridgeKitTransferConfig = resolveBridgeKitTransferConfig();
-  let bridgeResult;
-  try {
-    const bridgePayload = {
-      from: {
-        adapter,
-        chain: ArcTestnet,
-        address: sourceAddress
-      },
-      to: {
-        adapter,
-        chain: bridgeDestinationChain,
-        address: destinationSignerAddress,
-        recipientAddress: destination
-      },
-      amount,
-      token: "USDC"
-    };
-    if (Object.keys(bridgeKitTransferConfig).length > 0) {
-      bridgePayload.config = bridgeKitTransferConfig;
-    }
-    bridgeResult = await bridgeKit.bridge(bridgePayload);
-  } catch (error) {
-    // #region agent log
-    debugIngest({
-      hypothesisId: "H-E",
-      location: "cctpBridge.js:bridgeUsdcFromArc:bridge_threw",
-      message: "bridgeKit.bridge threw",
-      data: {
-        destinationNetwork,
-        name: error?.name,
-        code: error?.code,
-        message: String(error?.message || "").slice(0, 500)
-      }
-    });
-    // #endregion
-    throw error;
+  const bridgePayload = {
+    from: {
+      adapter,
+      chain: ArcTestnet,
+      address: sourceAddress
+    },
+    to: {
+      adapter,
+      chain: bridgeDestinationChain,
+      address: destinationSignerAddress,
+      recipientAddress: destination
+    },
+    amount,
+    token: "USDC"
+  };
+  if (Object.keys(bridgeKitTransferConfig).length > 0) {
+    bridgePayload.config = bridgeKitTransferConfig;
   }
+  const bridgeResult = await bridgeKit.bridge(bridgePayload);
   const state = String(bridgeResult?.state || bridgeResult?.status || "success").toLowerCase();
-  // #region agent log
-  debugIngest({
-    hypothesisId: "H-B",
-    location: "cctpBridge.js:bridgeUsdcFromArc:post_bridge",
-    message: "bridgeKit.bridge returned",
-    data: {
-      destinationNetwork,
-      stateRaw: bridgeResult?.state ?? bridgeResult?.status,
-      stateNormalized: state,
-      transferSpeedRequested: bridgeKitTransferConfig.transferSpeed || null,
-      bridgeSummary: safeDebugPayload(bridgeResult)
-    }
-  });
-  // #endregion
   if (!["success", "succeeded", "complete", "completed"].includes(state)) {
-    const mintErrStep = Array.isArray(bridgeResult?.steps)
-      ? bridgeResult.steps.find(
-          (s) => String(s?.name || "").toLowerCase() === "mint" && String(s?.state || "").toLowerCase() === "error"
-        )
-      : null;
-    if (mintErrStep?.error) {
-      // #region agent log
-      debugIngest({
-        hypothesisId: "H-H",
-        location: "cctpBridge.js:bridgeUsdcFromArc:mint_error_flat",
-        message: "flattened mint step error",
-        data: {
-          destinationNetwork,
-          transferSpeedInResult: bridgeResult?.config?.transferSpeed ?? null,
-          flat: flattenErrorForDebug(mintErrStep.error, 0, 12)
-        }
-      });
-      // #endregion
-    }
     const stepFailure = summarizeBridgeStepFailure(bridgeResult);
     const human = stepFailure?.displayMessage || stepFailure?.errorMessage || "";
     const suffix = human
