@@ -9,6 +9,7 @@ function makeAgentOrchestrator({
   getAgentIdentity
 }) {
   const sessions = new Map();
+  const defaultHighRiskIntents = ["challenge_payout", "crew_split_settlement"];
 
   function appendEvent(session, event) {
     session.trace.push({
@@ -140,6 +141,27 @@ function makeAgentOrchestrator({
         }
       }
 
+      const highRiskIntents = Array.isArray(context?.__ensTrust?.high_risk_intents) &&
+        context.__ensTrust.high_risk_intents.length > 0
+        ? context.__ensTrust.high_risk_intents
+        : defaultHighRiskIntents;
+      const isHighRiskIntent = highRiskIntents.includes(intent);
+      const isAttested = context?.__ensTrust?.attested === true;
+      if (isHighRiskIntent && !isAttested) {
+        throw new Error(
+          `ENS trust gate blocked high-risk intent "${intent}". Set ensip25Attestation=true in ENS text records first.`
+        );
+      }
+
+      const compatibleIntents = Array.isArray(context?.__ensVersioning?.compatible_intents)
+        ? context.__ensVersioning.compatible_intents
+        : [];
+      if (compatibleIntents.length > 0 && !compatibleIntents.includes(intent)) {
+        throw new Error(
+          `ENS version gate blocked intent "${intent}". Compatible intents: ${compatibleIntents.join(", ")}`
+        );
+      }
+
       const paymentMode = context?.payment_mode || "offchain_demo";
       if (paymentMode !== "offchain_demo" && !context?.payment_ref) {
         throw new Error(`Missing payment_ref for payment_mode=${paymentMode}`);
@@ -150,7 +172,21 @@ function makeAgentOrchestrator({
         data: {
           payment_mode: paymentMode,
           payment_ref: context?.payment_ref || null,
-          amount_minor: Number(context?.amount_minor || 0)
+          amount_minor: Number(context?.amount_minor || 0),
+          payout_mode: context?.payout_mode || "public",
+          payout_receiver: context?.payout_receiver || context?.agent_actor_address || null
+        }
+      });
+      appendEvent(session, {
+        kind: "ens_policy",
+        message: "Resolved ENS trust/privacy/version policy state.",
+        data: {
+          high_risk_intent: isHighRiskIntent,
+          trust_attested: isAttested,
+          payout_mode: context?.payout_mode || "public",
+          payout_receiver: context?.payout_receiver || null,
+          agent_version: context?.__ensVersioning?.agent_version || null,
+          capabilities_version: context?.__ensVersioning?.capabilities_version || null
         }
       });
 
@@ -179,7 +215,9 @@ function makeAgentOrchestrator({
           checkout_id: checkoutResult?.checkout?.checkout?.id || null,
           total_minor: checkoutResult?.checkout?.checkout?.total_minor || null,
           payment_mode: checkoutResult?.payment_mode || "offchain_demo",
-          settlement: checkoutResult?.settlement || null
+          settlement: checkoutResult?.settlement || null,
+          payout_route: context?.payout_mode || "public",
+          payout_receiver: context?.payout_receiver || null
         }
       });
 

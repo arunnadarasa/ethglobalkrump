@@ -133,6 +133,9 @@
             placeholder="capabilitiesUri (optional)"
             style="min-width: 240px"
           />
+          <input id="ens-attestor" placeholder="attestor (optional)" style="min-width: 220px" />
+          <input id="ens-agent-version" placeholder="agentVersion (e.g. v1)" style="min-width: 180px" />
+          <input id="ens-capabilities-version" placeholder="capabilitiesVersion (e.g. 2026.04)" style="min-width: 220px" />
         </div>
         <div class="row">
           <select id="ens-arc-address-source" style="min-width: 230px">
@@ -147,14 +150,31 @@
           </select>
           <button id="ens-check-signer-balance" type="button">Check wallet Sepolia ETH</button>
           <button id="ens-check-name-status" type="button">Check ENS name status</button>
+          <button id="ens-verify-attestation" type="button">Verify ENSIP-25 trust</button>
           <button id="ens-resolve-identity" type="button">Resolve ENS for Vyper agent</button>
           <button id="ens-register-update" type="button">Register/Update ENS Identity</button>
+        </div>
+        <div class="row">
+          <label>
+            <input id="ens-attested" type="checkbox" checked />
+            ENSIP-25 attested
+          </label>
+          <input id="ens-high-risk-intents" placeholder="highRiskIntents CSV (optional)" style="min-width: 320px" />
+          <select id="ens-payout-mode" style="min-width: 220px">
+            <option value="public">Payout mode: Public arcAddress</option>
+            <option value="privacy">Payout mode: Privacy receiver</option>
+          </select>
+          <input id="ens-privacy-receiver" placeholder="privacyReceiver (optional)" style="min-width: 300px" />
+          <input id="ens-compatible-intents" placeholder="compatibleIntents CSV (optional)" style="min-width: 320px" />
         </div>
         <div class="row">
           <div id="ens-identity-status" class="hint-chip hidden"></div>
           <div id="ens-gating-chip" class="hint-chip hidden"></div>
           <div id="ens-signer-balance-chip" class="hint-chip hidden"></div>
           <div id="ens-name-status-chip" class="hint-chip hidden"></div>
+          <div id="ens-trust-chip" class="hint-chip hidden"></div>
+          <div id="ens-privacy-chip" class="hint-chip hidden"></div>
+          <div id="ens-versioning-chip" class="hint-chip hidden"></div>
         </div>
         <pre id="ens-identity-output"></pre>
       </section>

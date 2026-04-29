@@ -85,8 +85,9 @@ We built a full loop:
 - Resolve output is plain readable values (`agentId`, `allowedIntents`, actor address), then intent-allowed verdict is shown inline.
 - Operator quality-of-life:
   - ENS auto-normalization (`arun` → `arun.eth`)
-  - `agentId` auto-helper (`agent-arun`)
+  - `agentId` auto-helper (`agent.arun`)
   - submission timer with commit→register wait guidance
+  - workshop lanes shown in chips: Trust (ENSIP-25-style), Privacy (payout mode), Versioning (compatibility)
 
 ## Architecture (high level)
 

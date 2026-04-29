@@ -43,7 +43,8 @@ In one interface, users can:
 - View UCP discovery/conformance outputs
 - Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `offchain_demo`)
 - ENS judge card: check name ownership + registration estimate, signer Sepolia ETH, mode selection (`demo/circle_wallet/metamask`), and resolve/gating proof in one place
-- ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper, source-aware wallet balance checks, and in-flight setup timer
+- ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper (`agent.<label>`), source-aware wallet balance checks, and in-flight setup timer
+- ENS workshop v2 proof points: trust verification chip, privacy payout mode chip, and version compatibility chip
 - KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
 
 Speaker note: Every action is explainable and auditable in real time.
@@ -104,8 +105,8 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 8. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
 9. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-10. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` -> `Resolve ENS for Vyper agent` and show selected-intent gating result.
-11. Point out decoded resolve payload (`agentId`, `allowedIntents`) and “intent allowed” chip for clear judge readability.
+10. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` -> `Verify ENSIP-25 trust` -> `Resolve ENS for Vyper agent`.
+11. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
 12. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape).

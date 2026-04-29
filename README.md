@@ -122,7 +122,7 @@ Additional judge UX refinements:
 - ENS write mode selector: `demo`, `circle_wallet`, `metamask`
 - Arc actor source autofill: use MetaMask connected wallet or created Circle wallet
 - ENS name normalization: bare labels auto-append `.eth` (e.g. `arun` → `arun.eth`)
-- `agentId` helper autofill from ENS label (`arun.eth` → `agent-arun`)
+- `agentId` helper autofill from ENS label (`arun.eth` → `agent.arun`)
 - In-flight submission timer and explicit commit→register wait cue (`~60-90s`) for unowned names
 - Dynamic wallet-source balance checks:
   - `Arc actor source: MetaMask connected wallet` or `Created Circle wallet`
@@ -141,7 +141,23 @@ Associated endpoints:
 - `GET /api/ens/signer-balance`
   - returns signer address + Sepolia ETH balance for ENS write readiness checks.
 - `POST /api/ens/setup-agent`
-  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, based on UI inputs and selected write mode.
+  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, plus workshop records for trust/privacy/versioning.
+- `POST /api/ens/verify-attestation`
+  - verifies ENSIP-25-style trust state for an ENS name and selected intent.
+
+#### ENS workshop enhanced fields
+
+The ENS Judge flow now supports three additional metadata groups (all stored in ENS text records and surfaced by `/api/ens/resolve`):
+
+- **Trust:** `ensip25Attestation`, `attestor`, `attestationUpdatedAt`, `highRiskIntents`
+- **Privacy:** `payoutMode` (`public|privacy`), `privacyReceiver`, `privacyUpdatedAt`
+- **Versioning:** `agentVersion`, `capabilitiesVersion`, `compatibleIntents`
+
+Runtime behavior:
+
+- high-risk intents (default: `challenge_payout`, `crew_split_settlement`) require trusted attestation
+- payout route can switch from public `arcAddress` to `privacyReceiver`
+- optional `compatibleIntents` enforces version-intent compatibility before session execution
 
 #### How resolution works for Arc flows
 

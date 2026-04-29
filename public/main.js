@@ -472,8 +472,39 @@ function updateAgentRunDisabledByEnsGating() {
   }
   const allowedIntents = Array.isArray(lastEnsJudgeResolve.allowed_intents) ? lastEnsJudgeResolve.allowed_intents : [];
   const hasAllowedIntents = allowedIntents.length > 0;
-  const isAllowed = hasAllowedIntents ? allowedIntents.includes(selectedIntent) : true;
-  runBtn.disabled = !isAllowed;
+  const isAllowedIntent = hasAllowedIntents ? allowedIntents.includes(selectedIntent) : true;
+  const isTrusted = lastEnsJudgeResolve?.trust?.is_trusted_for_intent !== false;
+  const isCompatible = lastEnsJudgeResolve?.versioning?.is_compatible_for_intent !== false;
+  runBtn.disabled = !(isAllowedIntent && isTrusted && isCompatible);
+}
+
+function renderEnsWorkshopChips(payload, selectedIntent) {
+  const trust = payload?.trust || {};
+  const privacy = payload?.privacy || {};
+  const versioning = payload?.versioning || {};
+  const trustText = trust.is_high_risk_intent
+    ? `Trust gate: ${trust.is_trusted_for_intent ? "allow" : "block"} for high-risk intent "${selectedIntent}". attested=${trust.attested}`
+    : `Trust gate: low-risk path for "${selectedIntent || "none"}". attested=${trust.attested}`;
+  setEnsJudgeChip({
+    statusId: "ens-trust-chip",
+    chipText: trustText,
+    variant: trust.is_trusted_for_intent === false ? "warning" : "success"
+  });
+
+  const privacyMode = privacy.payout_mode || "public";
+  const privacyReceiver = privacy.privacy_receiver || "(none)";
+  setEnsJudgeChip({
+    statusId: "ens-privacy-chip",
+    chipText: `Privacy payout: mode=${privacyMode}; receiver=${privacyReceiver}`,
+    variant: privacyMode === "privacy" && !privacy.privacy_receiver ? "warning" : "success"
+  });
+
+  const versionText = `Versioning: agent=${versioning.agent_version || "unset"}; capabilities=${versioning.capabilities_version || "unset"}; compatible=${versioning.is_compatible_for_intent === false ? "no" : "yes"}`;
+  setEnsJudgeChip({
+    statusId: "ens-versioning-chip",
+    chipText: versionText,
+    variant: versioning.is_compatible_for_intent === false ? "warning" : "success"
+  });
 }
 
 async function resolveEnsJudgeIdentityForUi() {
@@ -542,6 +573,7 @@ async function resolveEnsJudgeIdentityForUi() {
   } else {
     setEnsJudgeChip({ statusId: "ens-gating-chip", chipText: "", variant: null });
   }
+  renderEnsWorkshopChips(lastEnsJudgeResolve, selectedIntent);
 
   const output = {
     route: url,
@@ -573,6 +605,14 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   const agentId = document.getElementById("ens-agent-id")?.value?.trim() || "";
   const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
   const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
+  const ensip25Attested = Boolean(document.getElementById("ens-attested")?.checked);
+  const attestor = document.getElementById("ens-attestor")?.value?.trim() || "";
+  const highRiskIntents = document.getElementById("ens-high-risk-intents")?.value?.trim() || "";
+  const payoutMode = document.getElementById("ens-payout-mode")?.value || "public";
+  const privacyReceiver = document.getElementById("ens-privacy-receiver")?.value?.trim() || "";
+  const agentVersion = document.getElementById("ens-agent-version")?.value?.trim() || "";
+  const capabilitiesVersion = document.getElementById("ens-capabilities-version")?.value?.trim() || "";
+  const compatibleIntents = document.getElementById("ens-compatible-intents")?.value?.trim() || "";
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
   const writeMode = document.getElementById("ens-write-mode")?.value || "demo";
   debugEnsLog("H3", "public/main.js:registerUpdateEnsJudgeIdentityForUi", "register clicked with form state", {
@@ -622,6 +662,16 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     tokenUri,
     capabilitiesUri,
     allowedIntent: selectedIntent,
+    ensip25Attested,
+    attestor,
+    attestationUpdatedAt: new Date().toISOString(),
+    highRiskIntents,
+    payoutMode,
+    privacyReceiver,
+    privacyUpdatedAt: privacyReceiver ? new Date().toISOString() : "",
+    agentVersion,
+    capabilitiesVersion,
+    compatibleIntents,
     writeMode
   };
   if (writeMode === "metamask") {
@@ -744,6 +794,41 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   stopEnsSubmissionTimer();
   print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
   await resolveEnsJudgeIdentityForUi();
+}
+
+async function verifyEnsAttestationFromUi() {
+  const ensInput = document.getElementById("ens-name-input");
+  const globalInput = document.getElementById("agent-ens-name");
+  const ensName = normalizeEnsNameInput(ensInput?.value || globalInput?.value || "");
+  const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  if (!ensName) {
+    setEnsJudgeChip({
+      statusId: "ens-trust-chip",
+      chipText: "Set ENS name first.",
+      variant: "warning"
+    });
+    return;
+  }
+  const response = await request("/api/ens/verify-attestation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ensName, intent: selectedIntent })
+  });
+  if (!response.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-trust-chip",
+      chipText: response.body?.error?.message || "Attestation verification failed.",
+      variant: "warning"
+    });
+    return;
+  }
+  const trust = response.body?.trust || {};
+  setEnsJudgeChip({
+    statusId: "ens-trust-chip",
+    chipText: `Trust verify: attested=${trust.attested}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}`,
+    variant: trust.is_trusted_for_intent ? "success" : "warning"
+  });
+  print("ens-identity-output", { route: "/api/ens/verify-attestation", body: response.body });
 }
 
 async function checkEnsSignerBalanceFromUi() {
@@ -1397,6 +1482,18 @@ document.getElementById("ens-check-name-status")?.addEventListener("click", asyn
   } catch (error) {
     setEnsJudgeChip({
       statusId: "ens-name-status-chip",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-verify-attestation")?.addEventListener("click", async () => {
+  try {
+    await verifyEnsAttestationFromUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-trust-chip",
       chipText: error?.message || String(error),
       variant: "warning"
     });

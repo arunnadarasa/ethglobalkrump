@@ -458,15 +458,19 @@ Inputs/buttons as in reference:
 - Inputs:
   - `#ens-name-input` (auto-append `.eth` when label-only)
   - `#ens-arc-actor-address`
-  - `#ens-agent-id` (auto-helper: `agent-<ens-label>` unless user manually overrides)
+  - `#ens-agent-id` (auto-helper: `agent.<ens-label>` unless user manually overrides)
   - `#ens-token-uri`
   - `#ens-capabilities-uri`
+  - `#ens-attested`, `#ens-attestor`, `#ens-high-risk-intents`
+  - `#ens-payout-mode`, `#ens-privacy-receiver`
+  - `#ens-agent-version`, `#ens-capabilities-version`, `#ens-compatible-intents`
 - Selectors:
   - `#ens-arc-address-source` (`metamask`, `circle_wallet`) + `#ens-fill-arc-actor`
   - `#ens-write-mode` (`demo`, `circle_wallet`, `metamask`)
 - Buttons:
   - `#ens-check-signer-balance`
   - `#ens-check-name-status`
+  - `#ens-verify-attestation`
   - `#ens-resolve-identity`
   - `#ens-register-update`
 - Chips:
@@ -474,6 +478,9 @@ Inputs/buttons as in reference:
   - `#ens-gating-chip`
   - `#ens-signer-balance-chip`
   - `#ens-name-status-chip`
+  - `#ens-trust-chip`
+  - `#ens-privacy-chip`
+  - `#ens-versioning-chip`
 - In-flight UX:
   - show elapsed timer while ENS setup request is running
   - include explicit copy that commit→register may take ~60-90s for unowned names

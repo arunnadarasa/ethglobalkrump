@@ -213,7 +213,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
   - dynamic name ownership/status checks before registration (`/api/ens/name-status`)
   - signer Sepolia ETH check and shortfall cues (`/api/ens/signer-balance`)
   - write mode selector (`demo`, `circle_wallet`, `metamask`) with MetaMask proof signature in metamask mode
-  - ENS input normalization (`.eth` suffix) and `agentId` autofill (`agent-<label>`)
+  - ENS input normalization (`.eth` suffix) and `agentId` autofill (`agent.<label>`)
   - in-flight timer + copy explaining expected commit→register wait for unowned names
 - ENS resolver decoding hardened:
   - Universal Resolver multicall bytes are decoded into plain `addr` and text values
@@ -225,4 +225,8 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
   - long-running ENS setup status shows elapsed timer
   - ENS name status and registration-value cues are visible before write
   - bare ENS labels auto-normalize to `.eth`
-  - `agentId` auto-helper (`agent-<ens-label>`) speeds setup while preserving manual override
+  - `agentId` auto-helper (`agent.<ens-label>`) speeds setup while preserving manual override
+- ENS workshop enhancement (v2) now ships in three lanes:
+  - **Trust gate:** ENSIP-25-style attestation metadata + high-risk intent enforcement
+  - **Privacy lane:** ENS-controlled payout mode (`public|privacy`) with privacy receiver fallback
+  - **Version lane:** agent/capability version tags + optional compatible-intent enforcement

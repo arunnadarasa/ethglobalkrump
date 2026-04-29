@@ -68,6 +68,7 @@ const ENS_UNIVERSAL_RESOLVER_ADDRESS =
 const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NETWORK || "base-sepolia";
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 const ENS_PRIVATE_KEY = process.env.ENS_PRIVATE_KEY || "";
+const DEFAULT_HIGH_RISK_INTENTS = ["challenge_payout", "crew_split_settlement"];
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -303,6 +304,50 @@ function extractArcUsdcBalance(balanceList) {
   return parsed;
 }
 
+function parseCsvList(value) {
+  if (Array.isArray(value)) {
+    return value.map((x) => String(x || "").trim()).filter(Boolean);
+  }
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) {
+    return [];
+  }
+  return raw.split(",").map((x) => String(x).trim()).filter(Boolean);
+}
+
+function getHighRiskIntentsFromEns(ens) {
+  const fromRecord = parseCsvList(ens?.trust?.high_risk_intents);
+  return fromRecord.length > 0 ? fromRecord : DEFAULT_HIGH_RISK_INTENTS;
+}
+
+function deriveTrustForIntent(ens, intent) {
+  const attested = ens?.trust?.ensip25_attested === true;
+  const highRiskIntents = getHighRiskIntentsFromEns(ens);
+  const isHighRisk = intent ? highRiskIntents.includes(intent) : false;
+  const isTrustedForIntent = isHighRisk ? attested : true;
+  return {
+    attested,
+    attestor: ens?.trust?.attestor || null,
+    attestation_updated_at: ens?.trust?.attestation_updated_at || null,
+    high_risk_intents: highRiskIntents,
+    is_high_risk_intent: isHighRisk,
+    is_trusted_for_intent: isTrustedForIntent
+  };
+}
+
+function deriveVersionForIntent(ens, intent) {
+  const compatibleIntents = parseCsvList(ens?.versioning?.compatible_intents);
+  const isCompatibleForIntent = intent
+    ? compatibleIntents.length === 0 || compatibleIntents.includes(intent)
+    : null;
+  return {
+    agent_version: ens?.versioning?.agent_version || null,
+    capabilities_version: ens?.versioning?.capabilities_version || null,
+    compatible_intents: compatibleIntents,
+    is_compatible_for_intent: isCompatibleForIntent
+  };
+}
+
 function getAgentIdentityMetadata(context) {
   const base = {
     standard: "erc-8004-style",
@@ -325,7 +370,10 @@ function getAgentIdentityMetadata(context) {
     agent_id: ensResolved.agentId || base.agent_id,
     token_uri: ensResolved.tokenUri || base.token_uri,
     capabilities_uri: ensResolved.capabilitiesUri || base.capabilities_uri,
-    allowed_intents: ensResolved.allowedIntents || []
+    allowed_intents: ensResolved.allowedIntents || [],
+    trust: ensResolved.trust || null,
+    privacy: ensResolved.privacy || null,
+    versioning: ensResolved.versioning || null
   };
 }
 
@@ -971,6 +1019,8 @@ app.get("/api/ens/resolve", async (req, res) => {
         : true
       : null;
 
+    const trust = deriveTrustForIntent(ens, intent);
+    const versioning = deriveVersionForIntent(ens, intent);
     return res.json({
       ok: true,
       ens_name: ens.ens_name,
@@ -983,10 +1033,37 @@ app.get("/api/ens/resolve", async (req, res) => {
         arcAddress: ens.text?.arcAddress || null
       },
       allowed_intents: allowedIntents,
-      is_allowed_for_intent: isAllowedForIntent
+      is_allowed_for_intent: isAllowedForIntent,
+      trust,
+      privacy: ens.privacy || { payout_mode: "public", privacy_receiver: null, privacy_updated_at: null },
+      versioning
     });
   } catch (error) {
     return sendError(res, 502, "ens_resolve_failed", error.message);
+  }
+});
+
+app.post("/api/ens/verify-attestation", async (req, res) => {
+  try {
+    const ensName = String(req.body?.ensName || "").trim();
+    const intent = String(req.body?.intent || "").trim();
+    if (!ensName) {
+      return sendError(res, 400, "ens_name_required", "ensName is required");
+    }
+    const ens = await resolveAgentEns({
+      ensName,
+      sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+    });
+    const trust = deriveTrustForIntent(ens, intent);
+    return res.json({
+      ok: true,
+      ens_name: ens.ens_name,
+      intent: intent || null,
+      trust
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_verify_attestation_failed", error.message || String(error));
   }
 });
 
@@ -1127,6 +1204,16 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       tokenUri,
       capabilitiesUri,
       allowedIntent,
+      ensip25Attested,
+      attestor,
+      attestationUpdatedAt,
+      highRiskIntents,
+      payoutMode,
+      privacyReceiver,
+      privacyUpdatedAt,
+      agentVersion,
+      capabilitiesVersion,
+      compatibleIntents,
       writeMode,
       metamaskSigner,
       metamaskProofMessage,
@@ -1148,6 +1235,10 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     }
     if (!["demo", "circle_wallet", "metamask"].includes(normalizedWriteMode)) {
       return sendError(res, 400, "ens_write_mode_invalid", "writeMode must be demo, circle_wallet, or metamask");
+    }
+    const normalizedPayoutMode = String(payoutMode || "public").trim().toLowerCase() === "privacy" ? "privacy" : "public";
+    if (normalizedPayoutMode === "privacy" && !String(privacyReceiver || "").trim()) {
+      return sendError(res, 400, "ens_privacy_receiver_required", "privacyReceiver is required when payoutMode=privacy.");
     }
     if (normalizedWriteMode === "metamask") {
       if (!metamaskSigner || typeof metamaskSigner !== "string") {
@@ -1179,7 +1270,21 @@ app.post("/api/ens/setup-agent", async (req, res) => {
             tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
             capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
             allowedIntents: [allowedIntent.trim()],
-            arcAddress: arcActorAddress.trim()
+            arcAddress: arcActorAddress.trim(),
+            ensip25Attestation: Boolean(ensip25Attested),
+            attestor: typeof attestor === "string" ? attestor.trim() : "",
+            attestationUpdatedAt: typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : "",
+            highRiskIntents: parseCsvList(highRiskIntents),
+            payoutMode: normalizedPayoutMode,
+            privacyReceiver: typeof privacyReceiver === "string" ? privacyReceiver.trim() : "",
+            privacyUpdatedAt: typeof privacyUpdatedAt === "string" ? privacyUpdatedAt.trim() : "",
+            agentVersion: typeof agentVersion === "string" ? agentVersion.trim() : "",
+            capabilitiesVersion: typeof capabilitiesVersion === "string" ? capabilitiesVersion.trim() : "",
+            compatibleIntents: parseCsvList(compatibleIntents)
+          },
+          trust: {
+            attested: Boolean(ensip25Attested),
+            high_risk_intents: parseCsvList(highRiskIntents)
           }
         }
       });
@@ -1201,7 +1306,17 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       agentId: agentId.trim(),
       tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
       capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
-      allowedIntent: allowedIntent.trim()
+      allowedIntent: allowedIntent.trim(),
+      ensip25Attested: Boolean(ensip25Attested),
+      attestor: typeof attestor === "string" ? attestor.trim() : "",
+      attestationUpdatedAt: typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : "",
+      highRiskIntents: parseCsvList(highRiskIntents),
+      payoutMode: normalizedPayoutMode,
+      privacyReceiver: typeof privacyReceiver === "string" ? privacyReceiver.trim() : "",
+      privacyUpdatedAt: typeof privacyUpdatedAt === "string" ? privacyUpdatedAt.trim() : "",
+      agentVersion: typeof agentVersion === "string" ? agentVersion.trim() : "",
+      capabilitiesVersion: typeof capabilitiesVersion === "string" ? capabilitiesVersion.trim() : "",
+      compatibleIntents: parseCsvList(compatibleIntents)
     });
 
     // Resolve immediately so the UI can render updated chips.
@@ -1211,6 +1326,8 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
 
+    const trust = deriveTrustForIntent(resolved, allowedIntent.trim());
+    const versioning = deriveVersionForIntent(resolved, allowedIntent.trim());
     return res.json({
       ok: true,
       ens_name: resolved.ens_name,
@@ -1223,7 +1340,10 @@ app.post("/api/ens/setup-agent", async (req, res) => {
         arcAddress: resolved.text?.arcAddress || null
       },
       allowed_intents: resolved.allowedIntents,
-      write_mode: normalizedWriteMode
+      write_mode: normalizedWriteMode,
+      trust,
+      privacy: resolved.privacy || { payout_mode: "public", privacy_receiver: null, privacy_updated_at: null },
+      versioning
     });
   } catch (error) {
     return sendError(res, 502, "ens_setup_failed", error.message || String(error));
@@ -1264,6 +1384,17 @@ app.post("/api/agents/sessions", async (req, res) => {
       ctx.__ensResolvedIdentity = ens;
       ctx.agent_actor_address = ens.agent_address;
       ctx.__ensAllowedIntents = ens.allowedIntents;
+      ctx.__ensTrust = deriveTrustForIntent(ens, intent);
+      ctx.__ensPrivacy = ens.privacy || { payout_mode: "public", privacy_receiver: null, privacy_updated_at: null };
+      ctx.__ensVersioning = deriveVersionForIntent(ens, intent);
+      const privacyReceiver = ctx.__ensPrivacy?.privacy_receiver;
+      const payoutMode = ctx.__ensPrivacy?.payout_mode || "public";
+      if (payoutMode === "privacy" && privacyReceiver) {
+        ctx.payout_receiver = privacyReceiver;
+      } else {
+        ctx.payout_receiver = ens.agent_address || null;
+      }
+      ctx.payout_mode = payoutMode;
     } catch (error) {
       ctx.__ensResolutionError = error?.message || String(error);
     }

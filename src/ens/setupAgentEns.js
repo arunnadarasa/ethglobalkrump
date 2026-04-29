@@ -33,7 +33,17 @@ async function setupAgentEns({
   agentId,
   tokenUri,
   capabilitiesUri,
-  allowedIntent
+  allowedIntent,
+  ensip25Attested,
+  attestor,
+  attestationUpdatedAt,
+  highRiskIntents,
+  payoutMode,
+  privacyReceiver,
+  privacyUpdatedAt,
+  agentVersion,
+  capabilitiesVersion,
+  compatibleIntents
 } = {}) {
   const runStartMs = Date.now();
   const rpcHost = (() => {
@@ -267,13 +277,34 @@ async function setupAgentEns({
   // Set required text records.
   const normalizedTokenUri = typeof tokenUri === "string" ? tokenUri.trim() : "";
   const normalizedCapabilitiesUri = typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "";
+  const normalizedPayoutMode = String(payoutMode || "public").trim().toLowerCase() === "privacy" ? "privacy" : "public";
+  const normalizedHighRiskIntents = Array.isArray(highRiskIntents)
+    ? highRiskIntents.map((x) => String(x || "").trim()).filter(Boolean).join(",")
+    : typeof highRiskIntents === "string"
+      ? highRiskIntents
+      : "";
+  const normalizedCompatibleIntents = Array.isArray(compatibleIntents)
+    ? compatibleIntents.map((x) => String(x || "").trim()).filter(Boolean).join(",")
+    : typeof compatibleIntents === "string"
+      ? compatibleIntents
+      : "";
 
   const textPairs = [
     ["agentId", agentId],
     ["tokenUri", normalizedTokenUri || null],
     ["capabilitiesUri", normalizedCapabilitiesUri || null],
     ["allowedIntents", allowedIntent],
-    ["arcAddress", arcActorAddress]
+    ["arcAddress", arcActorAddress],
+    ["ensip25Attestation", String(Boolean(ensip25Attested))],
+    ["attestor", typeof attestor === "string" ? attestor.trim() : ""],
+    ["attestationUpdatedAt", typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : ""],
+    ["highRiskIntents", normalizedHighRiskIntents],
+    ["payoutMode", normalizedPayoutMode],
+    ["privacyReceiver", typeof privacyReceiver === "string" ? privacyReceiver.trim() : ""],
+    ["privacyUpdatedAt", typeof privacyUpdatedAt === "string" ? privacyUpdatedAt.trim() : ""],
+    ["agentVersion", typeof agentVersion === "string" ? agentVersion.trim() : ""],
+    ["capabilitiesVersion", typeof capabilitiesVersion === "string" ? capabilitiesVersion.trim() : ""],
+    ["compatibleIntents", normalizedCompatibleIntents]
   ];
 
   for (const [key, value] of textPairs) {

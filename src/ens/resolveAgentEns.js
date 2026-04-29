@@ -25,7 +25,17 @@ const TEXT_KEYS = [
   "tokenUri",
   "capabilitiesUri",
   "allowedIntents",
-  "arcAddress"
+  "arcAddress",
+  "ensip25Attestation",
+  "attestor",
+  "attestationUpdatedAt",
+  "highRiskIntents",
+  "payoutMode",
+  "privacyReceiver",
+  "privacyUpdatedAt",
+  "agentVersion",
+  "capabilitiesVersion",
+  "compatibleIntents"
 ];
 
 function toNonEmptyString(value) {
@@ -53,6 +63,24 @@ function parseAllowedIntents(value) {
     .split(",")
     .map((x) => String(x).trim())
     .filter(Boolean);
+}
+
+function parseStringList(value) {
+  return parseAllowedIntents(value);
+}
+
+function parseBoolean(value) {
+  const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!s) {
+    return null;
+  }
+  if (["true", "1", "yes", "y"].includes(s)) {
+    return true;
+  }
+  if (["false", "0", "no", "n"].includes(s)) {
+    return false;
+  }
+  return null;
 }
 
 async function resolveAgentEns({
@@ -190,6 +218,10 @@ async function resolveAgentEns({
 
   const allowedIntents = parseAllowedIntents(text.allowedIntents);
   const arcAddress = toNonEmptyString(text.arcAddress);
+  const highRiskIntents = parseStringList(text.highRiskIntents);
+  const compatibleIntents = parseStringList(text.compatibleIntents);
+  const payoutModeRaw = toNonEmptyString(text.payoutMode);
+  const payoutMode = payoutModeRaw === "privacy" ? "privacy" : "public";
 
   const agent_address = arcAddress || (typeof addr === "string" ? addr : null);
 
@@ -200,6 +232,22 @@ async function resolveAgentEns({
     tokenUri: text.tokenUri || null,
     capabilitiesUri: text.capabilitiesUri || null,
     allowedIntents,
+    trust: {
+      ensip25_attested: parseBoolean(text.ensip25Attestation),
+      attestor: toNonEmptyString(text.attestor),
+      attestation_updated_at: toNonEmptyString(text.attestationUpdatedAt),
+      high_risk_intents: highRiskIntents
+    },
+    privacy: {
+      payout_mode: payoutMode,
+      privacy_receiver: toNonEmptyString(text.privacyReceiver),
+      privacy_updated_at: toNonEmptyString(text.privacyUpdatedAt)
+    },
+    versioning: {
+      agent_version: toNonEmptyString(text.agentVersion),
+      capabilities_version: toNonEmptyString(text.capabilitiesVersion),
+      compatible_intents: compatibleIntents
+    },
     // full text map (useful for debugging / demos)
     text
   };
