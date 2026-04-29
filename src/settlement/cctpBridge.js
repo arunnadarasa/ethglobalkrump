@@ -1,8 +1,15 @@
 "use strict";
 
-const { BridgeKit, ArcTestnet, EthereumSepolia, BaseSepolia, PolygonAmoy, ArbitrumSepolia, AvalancheFuji } = require(
-  "@circle-fin/bridge-kit"
-);
+const {
+  BridgeKit,
+  ArcTestnet,
+  EthereumSepolia,
+  BaseSepolia,
+  PolygonAmoy,
+  ArbitrumSepolia,
+  AvalancheFuji,
+  TransferSpeed
+} = require("@circle-fin/bridge-kit");
 const { createCircleWalletsAdapter } = require("@circle-fin/adapter-circle-wallets");
 
 const CIRCLE_API_BASE = (process.env.CIRCLE_API_BASE || "https://api.circle.com").replace(/\/$/, "");
@@ -20,6 +27,8 @@ const POLYGON_AMOY_RPC_PUBLIC_FIRST =
 const ALLOW_LOW_DESTINATION_GAS = String(process.env.ALLOW_LOW_DESTINATION_GAS || "")
   .trim()
   .toLowerCase() === "true";
+/** FAST | SLOW — unset lets Bridge Kit default to FAST; set SLOW for standard CCTP timing. */
+const ARC_BRIDGE_TRANSFER_SPEED = String(process.env.ARC_BRIDGE_TRANSFER_SPEED || "").trim().toUpperCase();
 let adapterInstance = null;
 let bridgeKitInstance = null;
 
@@ -72,7 +81,8 @@ const DESTINATION_GAS_FAUCETS = {
 const DESTINATION_MIN_NATIVE_GAS = {
   "base-sepolia": 0.001,
   "ethereum-sepolia": 0.001,
-  "polygon-amoy": 0.1,
+  /** Headroom for Circle wallet pending tx fees on Amoy (observed ~0.176 POL required vs balance). */
+  "polygon-amoy": 0.25,
   "arbitrum-sepolia": 0.001,
   "avalanche-fuji": 0.01
 };
@@ -326,6 +336,62 @@ function resolveBridgeDestinationChain(network, destinationNetworkKey) {
   return base;
 }
 
+function flattenErrorForDebug(err, depth = 0, maxDepth = 10) {
+  if (depth > maxDepth) {
+    return "[max-depth]";
+  }
+  if (err == null) {
+    return err;
+  }
+  const t = typeof err;
+  if (t === "string" || t === "number" || t === "boolean") {
+    return err;
+  }
+  if (t === "bigint") {
+    return err.toString();
+  }
+  if (Array.isArray(err)) {
+    return err.map((x) => flattenErrorForDebug(x, depth + 1, maxDepth));
+  }
+  if (t === "object") {
+    const out = {};
+    const keys = ["name", "message", "shortMessage", "details", "code", "type", "recoverability", "cause", "metaMessages", "version", "chain"];
+    for (const k of keys) {
+      if (Object.prototype.hasOwnProperty.call(err, k)) {
+        try {
+          out[k] = flattenErrorForDebug(err[k], depth + 1, maxDepth);
+        } catch (_e) {
+          out[k] = "[unreadable]";
+        }
+      }
+    }
+    if (Object.keys(out).length > 0) {
+      return out;
+    }
+    try {
+      return JSON.parse(JSON.stringify(err, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    } catch (_e2) {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
+function extractUserVisibleMintDetail(stepError) {
+  if (!stepError) {
+    return "";
+  }
+  const flat = flattenErrorForDebug(stepError, 0, 18);
+  const pick =
+    flat?.cause?.trace?.rawError?.cause?.details ||
+    flat?.cause?.trace?.rawError?.details ||
+    flat?.details;
+  if (typeof pick === "string" && pick.trim()) {
+    return pick.trim();
+  }
+  return "";
+}
+
 function summarizeBridgeStepFailure(bridgeResult) {
   const steps = bridgeResult?.steps;
   if (!Array.isArray(steps)) {
@@ -337,10 +403,16 @@ function summarizeBridgeStepFailure(bridgeResult) {
       continue;
     }
     const err = step.error || {};
+    const stepName = String(step.name || "unknown");
     const msg = String(step.errorMessage || err.shortMessage || err.message || "").trim();
+    const userDetail =
+      stepName.toLowerCase() === "mint" && step.error ? extractUserVisibleMintDetail(step.error).trim() : "";
+    const displayMessage = userDetail || msg;
     return {
-      stepName: String(step.name || "unknown"),
+      stepName,
       errorMessage: msg,
+      userDetail: userDetail || null,
+      displayMessage,
       errorCode: err.code,
       errorName: err.name,
       errorType: err.type,
@@ -348,6 +420,16 @@ function summarizeBridgeStepFailure(bridgeResult) {
     };
   }
   return null;
+}
+
+function resolveBridgeKitTransferConfig() {
+  if (ARC_BRIDGE_TRANSFER_SPEED === "SLOW") {
+    return { transferSpeed: TransferSpeed.SLOW };
+  }
+  if (ARC_BRIDGE_TRANSFER_SPEED === "FAST") {
+    return { transferSpeed: TransferSpeed.FAST };
+  }
+  return {};
 }
 
 function extractUsdcBalanceForBlockchain(balanceList, blockchain) {
@@ -722,9 +804,10 @@ async function bridgeUsdcFromArc({
       throw error;
     }
   }
+  const bridgeKitTransferConfig = resolveBridgeKitTransferConfig();
   let bridgeResult;
   try {
-    bridgeResult = await bridgeKit.bridge({
+    const bridgePayload = {
       from: {
         adapter,
         chain: ArcTestnet,
@@ -738,7 +821,11 @@ async function bridgeUsdcFromArc({
       },
       amount,
       token: "USDC"
-    });
+    };
+    if (Object.keys(bridgeKitTransferConfig).length > 0) {
+      bridgePayload.config = bridgeKitTransferConfig;
+    }
+    bridgeResult = await bridgeKit.bridge(bridgePayload);
   } catch (error) {
     // #region agent log
     debugIngest({
@@ -765,16 +852,35 @@ async function bridgeUsdcFromArc({
       destinationNetwork,
       stateRaw: bridgeResult?.state ?? bridgeResult?.status,
       stateNormalized: state,
+      transferSpeedRequested: bridgeKitTransferConfig.transferSpeed || null,
       bridgeSummary: safeDebugPayload(bridgeResult)
     }
   });
   // #endregion
   if (!["success", "succeeded", "complete", "completed"].includes(state)) {
+    const mintErrStep = Array.isArray(bridgeResult?.steps)
+      ? bridgeResult.steps.find(
+          (s) => String(s?.name || "").toLowerCase() === "mint" && String(s?.state || "").toLowerCase() === "error"
+        )
+      : null;
+    if (mintErrStep?.error) {
+      // #region agent log
+      debugIngest({
+        hypothesisId: "H-H",
+        location: "cctpBridge.js:bridgeUsdcFromArc:mint_error_flat",
+        message: "flattened mint step error",
+        data: {
+          destinationNetwork,
+          transferSpeedInResult: bridgeResult?.config?.transferSpeed ?? null,
+          flat: flattenErrorForDebug(mintErrStep.error, 0, 12)
+        }
+      });
+      // #endregion
+    }
     const stepFailure = summarizeBridgeStepFailure(bridgeResult);
-    const suffix = stepFailure?.errorMessage
-      ? ` — ${stepFailure.stepName}: ${stepFailure.errorMessage}${
-          stepFailure.errorName ? ` (${stepFailure.errorName})` : ""
-        }`
+    const human = stepFailure?.displayMessage || stepFailure?.errorMessage || "";
+    const suffix = human
+      ? ` — ${stepFailure.stepName}: ${human}${stepFailure.errorName ? ` (${stepFailure.errorName})` : ""}`
       : "";
     const error = new Error(`Arc App Kit bridge did not complete successfully (state=${state})${suffix}`);
     error.code = "arc_bridge_failed";
