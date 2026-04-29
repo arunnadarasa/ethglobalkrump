@@ -1021,6 +1021,36 @@ app.get("/api/ens/signer-balance", async (_req, res) => {
   }
 });
 
+app.get("/api/ens/address-balance", async (req, res) => {
+  try {
+    const address = String(req.query?.address || "").trim();
+    if (!address) {
+      return sendError(res, 400, "ens_address_required", "Query param `address` is required.");
+    }
+    const viem = await import("viem");
+    const viemChains = await import("viem/chains");
+    const { createPublicClient, http, isAddress, formatEther } = viem;
+    const { sepolia } = viemChains;
+    if (!isAddress(address)) {
+      return sendError(res, 400, "ens_address_invalid", "address must be a valid EVM address.");
+    }
+    const client = createPublicClient({
+      chain: sepolia,
+      transport: http(ENS_SEPOLIA_RPC_URL)
+    });
+    const balanceWei = await client.getBalance({ address });
+    return res.json({
+      ok: true,
+      address,
+      balance_wei: balanceWei.toString(),
+      balance_eth: formatEther(balanceWei),
+      needs_top_up: balanceWei <= 0n
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_address_balance_failed", error.message || String(error));
+  }
+});
+
 app.get("/api/ens/name-status", async (req, res) => {
   try {
     const ensName = String(req.query?.name || "").trim();

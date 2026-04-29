@@ -747,23 +747,54 @@ async function registerUpdateEnsJudgeIdentityForUi() {
 }
 
 async function checkEnsSignerBalanceFromUi() {
-  debugEnsLog("H6", "public/main.js:checkEnsSignerBalanceFromUi", "checking signer balance", {});
-  const data = await request("/api/ens/signer-balance", { method: "GET" });
+  const source = document.getElementById("ens-arc-address-source")?.value || "metamask";
+  let selectedAddress = "";
+  if (source === "metamask") {
+    if (!window.ethereum) {
+      setEnsJudgeChip({
+        statusId: "ens-signer-balance-chip",
+        chipText: "MetaMask provider not found in browser.",
+        variant: "warning"
+      });
+      return;
+    }
+    await connectMetaMask();
+    selectedAddress = connectedAccount || "";
+  } else {
+    const circle = lastCreatedCircleWallet || getWalletDetailsFromOutputPane();
+    selectedAddress = circle?.walletAddress || "";
+  }
+  if (!selectedAddress) {
+    setEnsJudgeChip({
+      statusId: "ens-signer-balance-chip",
+      chipText: source === "circle_wallet"
+        ? "No created Circle wallet found yet. Create/save a Circle wallet first."
+        : "No MetaMask wallet connected yet.",
+      variant: "warning"
+    });
+    return;
+  }
+  debugEnsLog("H6", "public/main.js:checkEnsSignerBalanceFromUi", "checking selected source balance", {
+    source,
+    addressLength: selectedAddress.length
+  });
+  const data = await request(`/api/ens/address-balance?address=${encodeURIComponent(selectedAddress)}`, { method: "GET" });
   if (!data.ok) {
     setEnsJudgeChip({
       statusId: "ens-signer-balance-chip",
-      chipText: data.body?.error?.message || "Failed to load ENS signer balance.",
+      chipText: data.body?.error?.message || "Failed to load selected wallet balance.",
       variant: "warning"
     });
     return;
   }
   const needsTopUp = Boolean(data.body?.needs_top_up);
+  const sourceLabel = source === "circle_wallet" ? "circle wallet" : "MetaMask wallet";
   setEnsJudgeChip({
     statusId: "ens-signer-balance-chip",
-    chipText: `Wallet ${data.body?.signer_address || ""} | Sepolia ETH: ${data.body?.balance_eth || "0"}${needsTopUp ? " (top up required)" : ""}`,
+    chipText: `Selected ${sourceLabel} ${data.body?.address || ""} | Sepolia ETH: ${data.body?.balance_eth || "0"}${needsTopUp ? " (top up required)" : ""}`,
     variant: needsTopUp ? "warning" : "success"
   });
-  print("ens-identity-output", { route: "/api/ens/signer-balance", body: data.body });
+  print("ens-identity-output", { route: "/api/ens/address-balance", body: data.body, source });
 }
 
 async function checkEnsNameStatusFromUi() {
