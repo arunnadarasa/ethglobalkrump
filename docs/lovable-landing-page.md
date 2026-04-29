@@ -89,6 +89,14 @@ We built a full loop:
   - submission timer with commit→register wait guidance
   - workshop lanes shown in chips: Trust (ENSIP-25-style), Privacy (payout mode), Versioning (compatibility)
 
+### 5b) Live proof flow used in demo rehearsal
+
+- Resolve ENS for high-risk intent (`challenge_payout`) and show current gate/trust state.
+- Verify attestation directly via the trust endpoint.
+- Submit register/update in demo mode to show full text-record payload (trust/privacy/versioning).
+- Run high-risk session with trust off (blocked) and trust on (allowed).
+- Show `ens_policy` trace proving payout route + version metadata at runtime.
+
 ## Architecture (high level)
 
 1. User triggers intent in UI.

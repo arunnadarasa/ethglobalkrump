@@ -152,6 +152,12 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
   - modes:
     - `demo` => validate + preview only
     - `circle_wallet` / `metamask` => write on Sepolia via server signer
+- `POST /api/ens/verify-attestation`
+  - accepts `{ ensName, intent }`
+  - returns trust verdict fields including:
+    - `attested`
+    - `is_high_risk_intent`
+    - `is_trusted_for_intent`
 
 ### UCP (official stack)
 
@@ -573,6 +579,9 @@ Shipped reference code should **not** POST to local ingest URLs. If you fork an 
 8. Agent capabilities include expanded intents (`judge_feedback_request`, `crew_split_settlement`, `practice_room_reserve`, `sample_pack_purchase`, `challenge_payout`, `merch_concierge_checkout`) and UI syncs dropdown from capabilities.
 9. CI jobs pass.
 10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); `online-source-wallet` / `online-destination-gas` fund-hint routes return structured balances + gas guidance; optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
+11. ENS workshop sanity flow passes:
+    - resolve -> verify-attestation -> setup-agent demo preview -> high-risk blocked when `attested=false` -> high-risk allowed when `attested=true`.
+    - allowed run includes policy trace showing trust/privacy/versioning state.
 
 ---
 

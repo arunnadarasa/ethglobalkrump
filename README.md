@@ -159,6 +159,24 @@ Runtime behavior:
 - payout route can switch from public `arcAddress` to `privacyReceiver`
 - optional `compatibleIntents` enforces version-intent compatibility before session execution
 
+#### Quick live sanity checklist (judge-ready)
+
+Use this sequence for a fast proof that trust/privacy/versioning enforcement is live:
+
+1. `GET /api/ens/resolve?name=<ensName>&intent=challenge_payout`
+2. `POST /api/ens/verify-attestation` with `{ ensName, intent: "challenge_payout" }`
+3. `POST /api/ens/setup-agent` in `demo` mode with trust/privacy/version fields
+4. `POST /api/agents/sessions` high-risk intent with `attested=false` (expect blocked)
+5. `POST /api/agents/sessions` same intent with `attested=true` (expect allowed)
+
+Latest local run proof snapshot:
+
+- resolve returned `is_allowed_for_intent: false` for `challenge_payout` on current ENS data
+- verify-attestation returned `is_trusted_for_intent: false` when attestation was absent
+- setup-agent demo preview echoed trust/privacy/version text keys
+- high-risk session with `attested=false` failed with explicit trust-gate error
+- high-risk session with `attested=true` completed and emitted `ens_policy` trace including privacy payout route
+
 #### How resolution works for Arc flows
 
 Even though KeeperHub and the settlement narrative use **Arc testnet**, the ENS resolution itself is performed against **Sepolia** (where ENS contracts live). The resolved 0x address returned by ENS is then used as the identity/policy actor address within the Arc testnet and online KeeperHub flows.

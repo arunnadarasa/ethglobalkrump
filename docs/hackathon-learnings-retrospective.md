@@ -230,3 +230,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
   - **Trust gate:** ENSIP-25-style attestation metadata + high-risk intent enforcement
   - **Privacy lane:** ENS-controlled payout mode (`public|privacy`) with privacy receiver fallback
   - **Version lane:** agent/capability version tags + optional compatible-intent enforcement
+- Live sanity proof now reproducible in 5 calls:
+  - resolve -> verify trust -> setup demo payload -> blocked high-risk (attested=false) -> allowed high-risk (attested=true)
+  - blocked path returns explicit trust-gate failure text
+  - allowed path emits `ens_policy` trace with payout route + receiver in session events

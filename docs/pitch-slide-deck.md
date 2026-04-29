@@ -106,8 +106,9 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 8. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
 9. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
 10. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` -> `Verify ENSIP-25 trust` -> `Resolve ENS for Vyper agent`.
-11. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
-12. Show Arc deployment proof in README.
+11. Run `challenge_payout` once with trust off (show blocked), then once with trust on (show allowed).
+12. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
+13. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape).
 
