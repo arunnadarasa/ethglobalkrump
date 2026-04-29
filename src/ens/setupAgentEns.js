@@ -11,6 +11,27 @@
 const DEFAULT_ENS_SEPOLIA_RPC_URL = "https://rpc.sepolia.org";
 const ETH_COIN_TYPE = 60; // ENSIP-9 coinType for ETH
 
+function debugEnsServerLog(hypothesisId, location, message, data = {}) {
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "995d4d"
+    },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "ens-setup-privatekey-import",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+}
+
 async function setupAgentEns({
   ensName,
   ensPrivateKey,
@@ -39,17 +60,34 @@ async function setupAgentEns({
 
   // Import ESM dependencies at runtime because this repo is CommonJS.
   const viem = await import("viem");
+  const viemAccounts = await import("viem/accounts");
   const viemChains = await import("viem/chains");
   const ensjs = await import("@ensdomains/ensjs");
   const ensPublic = await import("@ensdomains/ensjs/public");
   const ensWallet = await import("@ensdomains/ensjs/wallet");
 
-  const { createPublicClient, createWalletClient, http, privateKeyToAccount } = viem;
+  const { createPublicClient, createWalletClient, http } = viem;
+  const { privateKeyToAccount } = viemAccounts;
+  debugEnsServerLog("S1", "src/ens/setupAgentEns.js:import-viem", "loaded viem module export probes", {
+    hasCreatePublicClient: typeof createPublicClient === "function",
+    hasCreateWalletClient: typeof createWalletClient === "function",
+    hasHttp: typeof http === "function",
+    hasPrivateKeyToAccount: typeof privateKeyToAccount === "function",
+    hasAccountsNamespace: Boolean(viem && viem.accounts),
+    hasViemAccountsModule: Boolean(viemAccounts),
+    hasDefaultExport: Boolean(viem && viem.default)
+  });
   const { sepolia } = viemChains;
   const { addEnsContracts } = ensjs;
   const { getOwner, getResolver, getPrice } = ensPublic;
   const { commitName, registerName, setResolver, setAddressRecord, setTextRecord } = ensWallet;
   const { randomSecret } = await import("@ensdomains/ensjs/utils");
+
+  debugEnsServerLog("S2", "src/ens/setupAgentEns.js:import-ensjs", "loaded ENS helper export probes", {
+    hasAddEnsContracts: typeof addEnsContracts === "function",
+    hasGetOwner: typeof getOwner === "function",
+    hasSetAddressRecord: typeof setAddressRecord === "function"
+  });
 
   const ensChain = addEnsContracts(sepolia);
 
@@ -58,7 +96,14 @@ async function setupAgentEns({
     transport: http(sepoliaRpcUrl)
   });
 
+  debugEnsServerLog("S3", "src/ens/setupAgentEns.js:before-private-key-account", "about to derive wallet account", {
+    privateKeyPrefix: String(ensPrivateKey || "").slice(0, 2),
+    privateKeyLength: String(ensPrivateKey || "").length
+  });
   const account = privateKeyToAccount(ensPrivateKey);
+  debugEnsServerLog("S4", "src/ens/setupAgentEns.js:after-private-key-account", "derived wallet account", {
+    hasAccountAddress: Boolean(account && account.address)
+  });
   const walletClient = createWalletClient({
     chain: ensChain,
     transport: http(sepoliaRpcUrl),
@@ -70,9 +115,17 @@ async function setupAgentEns({
 
   const nameOwner = await getOwner(publicClient, { name: ensName });
   const currentOwnershipLevel = nameOwner?.ownershipLevel || null;
+  debugEnsServerLog("S5", "src/ens/setupAgentEns.js:owner-check", "checked ENS ownership state", {
+    hasNameOwner: Boolean(nameOwner),
+    ownershipLevel: currentOwnershipLevel || null,
+    ownerMatchesSigner: Boolean(
+      nameOwner?.owner && String(nameOwner.owner).toLowerCase() === String(signer).toLowerCase()
+    )
+  });
 
   // Register if unowned.
   if (!nameOwner) {
+    debugEnsServerLog("S6", "src/ens/setupAgentEns.js:register-branch", "name unowned; entering commit/register flow", {});
     const secret = randomSecret();
 
     // Commit then register.
@@ -83,7 +136,11 @@ async function setupAgentEns({
       secret,
       resolverAddress: publicResolverAddress
     });
+    debugEnsServerLog("S7", "src/ens/setupAgentEns.js:commitName", "submitted commitName transaction", {
+      hasCommitmentHash: Boolean(commitmentHash)
+    });
     await publicClient.waitForTransactionReceipt({ hash: commitmentHash });
+    debugEnsServerLog("S7", "src/ens/setupAgentEns.js:commitName", "commitName receipt confirmed", {});
 
     // ENS name commitments have a validity buffer; the helper script used 60s.
     await new Promise((resolve) => setTimeout(resolve, 60 * 1000));
@@ -99,9 +156,15 @@ async function setupAgentEns({
       resolverAddress: publicResolverAddress,
       value
     });
+    debugEnsServerLog("S8", "src/ens/setupAgentEns.js:registerName", "submitted registerName transaction", {
+      hasRegisterHash: Boolean(registerHash)
+    });
     await publicClient.waitForTransactionReceipt({ hash: registerHash });
+    debugEnsServerLog("S8", "src/ens/setupAgentEns.js:registerName", "registerName receipt confirmed", {});
   } else if (String(nameOwner.owner).toLowerCase() !== String(signer).toLowerCase()) {
     throw new Error(`ENS name is owned by ${nameOwner.owner}, not signer ${signer}.`);
+  } else {
+    debugEnsServerLog("S6", "src/ens/setupAgentEns.js:register-branch", "name already owned by signer; skipping registration", {});
   }
 
   // Re-fetch ownership info in case registration created a wrapped name.
@@ -110,6 +173,9 @@ async function setupAgentEns({
 
   // Ensure resolver is the public resolver.
   const currentResolver = await getResolver(publicClient, { name: ensName });
+  debugEnsServerLog("S9", "src/ens/setupAgentEns.js:resolver-check", "checked resolver before update", {
+    hasCurrentResolver: Boolean(currentResolver)
+  });
   if (!currentResolver || String(currentResolver).toLowerCase() !== String(publicResolverAddress).toLowerCase()) {
     const contract = refreshedOwnershipLevel === "nameWrapper" ? "nameWrapper" : "registry";
     const resolverHash = await setResolver(walletClient, {
@@ -150,6 +216,7 @@ async function setupAgentEns({
     });
     await publicClient.waitForTransactionReceipt({ hash: txHash });
   }
+  debugEnsServerLog("S10", "src/ens/setupAgentEns.js:complete", "ENS setup completed all writes", {});
 }
 
 module.exports = {
