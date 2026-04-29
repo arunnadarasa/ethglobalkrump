@@ -44,7 +44,7 @@ In one interface, users can:
 - Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `offchain_demo`)
 - ENS judge card: check name ownership + registration estimate, signer Sepolia ETH, mode selection (`demo/circle_wallet/metamask`), and resolve/gating proof in one place
 - ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper (`agent.<label>`), source-aware wallet balance checks, and in-flight setup timer
-- ENS workshop v2 proof points: trust verification chip, privacy payout mode chip, and version compatibility chip
+- ENS workshop v2 proof points: strict ENSIP-25 parameterized text-record trust (registry interop + agent id), privacy payout mode chip, and version compatibility chip
 - KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
 
 Speaker note: Every action is explainable and auditable in real time.
@@ -105,7 +105,7 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 8. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
 9. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-10. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` -> `Verify ENSIP-25 trust` -> `Resolve ENS for Vyper agent`.
+10. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) -> `Resolve ENS for Vyper agent` (same `registry` + `agentId` as query params for live trust fields).
 11. Run `challenge_payout` once with trust off (show blocked), then once with trust on (show allowed).
 12. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
 13. Show Arc deployment proof in README.
@@ -143,6 +143,7 @@ Speaker note: We already have the core stack. Next is distribution and integrati
 - Agent orchestration in `src/agents/orchestrator.js`
 - KeeperHub client in `src/keeperhub/client.js`; online bridge in `src/settlement/cctpBridge.js`; routes `/api/keeperhub/*` (including `online-*-wallet/fund-hint`) and `execute_via_keeperhub` on declare-winner in `src/server.js`
 - KeeperHub UI controls, `#keeperhub-funding-reminder`, and signer/gas hints in `public/main.js` + `public/index.html`
+- ENS helpers in `src/ens/ensip25.js`, `src/ens/resolveAgentEns.js`, `src/ens/setupAgentEns.js`
 - Vyper contract in `contracts/AgentSettlementPolicy.vy`
 - Tests in `tests/titanoboa/test_agent_settlement_policy.py`
 - Deployment helper in `scripts/deploy_vyper_policy.py`

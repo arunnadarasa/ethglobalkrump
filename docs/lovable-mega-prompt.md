@@ -35,6 +35,9 @@ src/agents/orchestrator.js    # agent sessions + trace
 src/settlement/vyperPolicy.js # Node-side policy mirror + spend ledger
 src/settlement/cctpBridge.js  # Online mode: Arc USDC -> destination via Circle Bridge Kit CCTP + balance/gas hints
 src/keeperhub/client.js       # KeeperHub REST: chains, execute/transfer, execution status (numeric network ids where required)
+src/ens/ensip25.js            # strict ENSIP-25 key encoding + non-empty attestation helpers
+src/ens/resolveAgentEns.js    # Universal Resolver reads + trust fields
+src/ens/setupAgentEns.js      # Sepolia text-record writes incl. ENSIP-25 key/value
 contracts/AgentSettlementPolicy.vy
 scripts/deploy_vyper_policy.py
 tests/titanoboa/requirements.txt
@@ -82,6 +85,13 @@ docs/*                        # optional marketing/pitch md
 - `VYPER_SETTLEMENT_CONTRACT` (Arc address string; surfaced in settlement “proof” metadata)
 - `ERC8004_IDENTITY_REGISTRY` (string; surfaced in settlement “proof” metadata)
 - `ERC8004_AGENT_REGISTRY`, `ERC8004_AGENT_ID`, `ERC8004_AGENT_TOKEN_URI`, `ERC8004_AGENT_CAPABILITIES_URI`
+
+### ENS / strict ENSIP-25 (optional judge flow)
+
+- `ENS_SEPOLIA_RPC_URL`, `ENS_UNIVERSAL_RESOLVER_ADDRESS`, `ENS_PRIVATE_KEY` (and related `ENS_*` / `AGENT_ARC_ADDRESS` from `.env.example` for scripted setup)
+- `ENSIP25_REGISTRY_INTEROP` — optional full ERC-7930 interoperable registry address hex (wins over address+chain derivation)
+- `ENSIP25_REGISTRY_ADDRESS` + `ENSIP25_REGISTRY_CHAIN_ID` — optional EVM registry + chain id when interop hex is not set (`ENSIP25_REGISTRY_CHAIN_ID` defaults to `ARC_CHAIN_ID`)
+- If neither interop nor address is set, the server may parse `ERC8004_AGENT_REGISTRY` when shaped like `eip155:<chainId>:0x…`
 
 ### Deploy script only
 
@@ -134,13 +144,14 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 
 ### ENS Judge identity routes (must implement)
 
-- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>`
+- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>&registry=<optional>&agentId=<optional>`
   - resolves via Universal Resolver on Sepolia and returns:
     - `ens_name`
     - `agent_actor_address`
     - `text` (`agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntents`, `arcAddress`)
     - `allowed_intents`
     - `is_allowed_for_intent`
+    - when `registry` + `agentId` resolve (or env defaults apply): `ensip25_verified`, `ensip25_key`, `ensip25_value` (and related trust metadata)
 - `GET /api/ens/signer-balance`
   - returns signer wallet + SepoliaETH balance from `ENS_PRIVATE_KEY`.
 - `GET /api/ens/name-status?name=<ensName>`
@@ -148,16 +159,15 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - `POST /api/ens/setup-agent`
   - accepts UI-driven fields:
     - `ensName`, `arcActorAddress`, `agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntent`, `writeMode`
+    - strict ENSIP-25 write trio (all optional but should be set together for trust): `ensip25Registry`, `ensip25AgentId`, `ensip25Value` (non-empty `ensip25Value` required to pass high-risk gate later)
+    - workshop extras: `attestor`, `attestationUpdatedAt`, `highRiskIntents`, privacy + versioning text fields as in reference README
     - for `metamask` mode also require `metamaskSigner`, `metamaskProofMessage`, `metamaskProofSignature`
   - modes:
     - `demo` => validate + preview only
     - `circle_wallet` / `metamask` => write on Sepolia via server signer
 - `POST /api/ens/verify-attestation`
-  - accepts `{ ensName, intent }`
-  - returns trust verdict fields including:
-    - `attested`
-    - `is_high_risk_intent`
-    - `is_trusted_for_intent`
+  - accepts `{ ensName, intent, registry, agentId }`
+  - returns `trust` verdict fields (`ensip25_verified`, `ensip25_key`, `ensip25_value`, `is_high_risk_intent`, `is_trusted_for_intent`, …) plus an `ensip25` object with `key`, `verified`, `value`, and registry interop metadata where applicable
 
 ### UCP (official stack)
 
@@ -208,6 +218,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
     - injects ENS-derived identity into `session.identity`
     - sets `context.agent_actor_address` (resolved addr/override) and `context.__ensAllowedIntents`
     - enforces ENS `allowedIntents` gating for which intents may run
+    - for **high-risk** intents (`challenge_payout`, `crew_split_settlement` by default), requires **verified** strict ENSIP-25 attestation (non-empty text at `agent-registration[<registryERC7930>][<agentId>]`) before the session proceeds
   - For `tip_dancer`: fan agent proposes plan.
   - For `battle_entry`: dancer agent proposes details.
   - Payments agent must create UCP checkout via internal builder (not a second protocol).
@@ -467,7 +478,7 @@ Inputs/buttons as in reference:
   - `#ens-agent-id` (auto-helper: `agent.<ens-label>` unless user manually overrides)
   - `#ens-token-uri`
   - `#ens-capabilities-uri`
-  - `#ens-attested`, `#ens-attestor`, `#ens-high-risk-intents`
+  - `#ensip25-registry`, `#ensip25-agent-id`, `#ensip25-value`, `#ens-attestor`, `#ens-high-risk-intents`
   - `#ens-payout-mode`, `#ens-privacy-receiver`
   - `#ens-agent-version`, `#ens-capabilities-version`, `#ens-compatible-intents`
 - Selectors:
@@ -580,7 +591,7 @@ Shipped reference code should **not** POST to local ingest URLs. If you fork an 
 9. CI jobs pass.
 10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); `online-source-wallet` / `online-destination-gas` fund-hint routes return structured balances + gas guidance; optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
 11. ENS workshop sanity flow passes:
-    - resolve -> verify-attestation -> setup-agent demo preview -> high-risk blocked when `attested=false` -> high-risk allowed when `attested=true`.
+    - `GET /api/ens/resolve?...&registry=...&agentId=...` -> `POST /api/ens/verify-attestation` -> `POST /api/ens/setup-agent` demo preview (shows `ensip25Key` / `ensip25Value`) -> high-risk blocked before non-empty ENSIP-25 value -> high-risk allowed after write.
     - allowed run includes policy trace showing trust/privacy/versioning state.
 
 ---

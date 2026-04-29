@@ -78,6 +78,7 @@ The app can use **ENS** as the human-readable identity layer for agent sessions.
 - the server resolves `agent_ens_name` via the ENS **Universal Resolver** using the configured Sepolia RPC
 - the resolved values are injected into the session trace identity and used to gate intents:
   - if ENS text record `allowedIntents` is set, only those intents can run
+  - **high-risk intents** (default: `challenge_payout`, `crew_split_settlement`) additionally require a **non-empty** ENSIP-25 text record at `agent-registration[<registryERC7930>][<agentId>]` (see env defaults below)
 - when deep settlement is enabled, the resolved ENS address is also used as the `agentId` input for the Vyper settlement policy evaluation (so ENS identity becomes part of policy enforcement).
 
 #### ENS records to set (on the ENS resolver)
@@ -134,28 +135,38 @@ Additional judge UX refinements:
 
 Associated endpoints:
 
-- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>`
-  - returns `agent_actor_address` (ENS `addr`), ENS text records, and `is_allowed_for_intent` for the provided intent.
+- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>&registry=<optional>&agentId=<optional>`
+  - returns `agent_actor_address` (ENS `addr`), ENS text records, `is_allowed_for_intent`, and **strict ENSIP-25** trust fields when `registry` + `agentId` are provided (or derivable from env / resolved `agentId`).
 - `GET /api/ens/name-status?name=<ensName>`
   - returns ownership state, estimated registration value, signer balance, and shortfall.
 - `GET /api/ens/signer-balance`
   - returns signer address + Sepolia ETH balance for ENS write readiness checks.
 - `POST /api/ens/setup-agent`
-  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, plus workshop records for trust/privacy/versioning.
+  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, plus privacy/versioning workshop fields and the **strict ENSIP-25** parameterized text key (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`).
 - `POST /api/ens/verify-attestation`
-  - verifies ENSIP-25-style trust state for an ENS name and selected intent.
+  - body `{ ensName, intent, registry, agentId }` — verifies that the ENSIP-25 key resolves to a **non-empty** value; returns `trust` plus `ensip25` details (`key`, `verified`, `value`).
+
+#### ENSIP-25 registry defaults (env)
+
+Optional server-side defaults (used when UI does not pass `registry` / session context omits overrides):
+
+- `ENSIP25_REGISTRY_INTEROP` — full ERC-7930 interoperable registry address hex (if set, wins over the address+chain derivation)
+- `ENSIP25_REGISTRY_ADDRESS` — EVM registry contract address (`0x…` 20 bytes)
+- `ENSIP25_REGISTRY_CHAIN_ID` — chain id used with `ENSIP25_REGISTRY_ADDRESS` (defaults to `ARC_CHAIN_ID`, e.g. Arc testnet `5042002`)
+
+If neither `ENSIP25_REGISTRY_INTEROP` nor `ENSIP25_REGISTRY_ADDRESS` is set, the server falls back to parsing `ERC8004_AGENT_REGISTRY` when it is shaped like `eip155:<chainId>:0x…`.
 
 #### ENS workshop enhanced fields
 
 The ENS Judge flow now supports three additional metadata groups (all stored in ENS text records and surfaced by `/api/ens/resolve`):
 
-- **Trust:** `ensip25Attestation`, `attestor`, `attestationUpdatedAt`, `highRiskIntents`
+- **Trust (strict ENSIP-25):** `agent-registration[<registryERC7930>][<agentId>]` (non-empty value), plus optional `attestor`, `attestationUpdatedAt`, `highRiskIntents`
 - **Privacy:** `payoutMode` (`public|privacy`), `privacyReceiver`, `privacyUpdatedAt`
 - **Versioning:** `agentVersion`, `capabilitiesVersion`, `compatibleIntents`
 
 Runtime behavior:
 
-- high-risk intents (default: `challenge_payout`, `crew_split_settlement`) require trusted attestation
+- high-risk intents (default: `challenge_payout`, `crew_split_settlement`) require a **verified** ENSIP-25 attestation (non-empty value at the parameterized key)
 - payout route can switch from public `arcAddress` to `privacyReceiver`
 - optional `compatibleIntents` enforces version-intent compatibility before session execution
 
@@ -163,19 +174,17 @@ Runtime behavior:
 
 Use this sequence for a fast proof that trust/privacy/versioning enforcement is live:
 
-1. `GET /api/ens/resolve?name=<ensName>&intent=challenge_payout`
-2. `POST /api/ens/verify-attestation` with `{ ensName, intent: "challenge_payout" }`
-3. `POST /api/ens/setup-agent` in `demo` mode with trust/privacy/version fields
-4. `POST /api/agents/sessions` high-risk intent with `attested=false` (expect blocked)
-5. `POST /api/agents/sessions` same intent with `attested=true` (expect allowed)
+1. `GET /api/ens/resolve?name=<ensName>&intent=challenge_payout&registry=<interopHex>&agentId=<agentId>`
+2. `POST /api/ens/verify-attestation` with `{ ensName, intent: "challenge_payout", registry, agentId }`
+3. `POST /api/ens/setup-agent` in `demo` mode with `ensip25Registry`, `ensip25AgentId`, `ensip25Value` and privacy/version fields
+4. `POST /api/agents/sessions` high-risk intent without ENSIP-25 key set (expect blocked)
+5. `POST /api/agents/sessions` same intent after writing non-empty ENSIP-25 key (expect allowed)
 
-Latest local run proof snapshot:
+Example outcomes you should see when rehearsing:
 
-- resolve returned `is_allowed_for_intent: false` for `challenge_payout` on current ENS data
-- verify-attestation returned `is_trusted_for_intent: false` when attestation was absent
-- setup-agent demo preview echoed trust/privacy/version text keys
-- high-risk session with `attested=false` failed with explicit trust-gate error
-- high-risk session with `attested=true` completed and emitted `ens_policy` trace including privacy payout route
+- `resolve` / `verify-attestation` report `ensip25_verified: false` when the name has no resolver yet or the ENSIP-25 key has no value
+- `setup-agent` demo preview includes `ensip25Key` / `ensip25Value` in the preview payload
+- `POST /api/agents/sessions` with `context.agent_ens_name` fails high-risk intents until the ENSIP-25 record exists on-chain (or you inject verified trust in a controlled test context)
 
 #### How resolution works for Arc flows
 

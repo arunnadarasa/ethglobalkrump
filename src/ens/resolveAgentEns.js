@@ -26,7 +26,6 @@ const TEXT_KEYS = [
   "capabilitiesUri",
   "allowedIntents",
   "arcAddress",
-  "ensip25Attestation",
   "attestor",
   "attestationUpdatedAt",
   "highRiskIntents",
@@ -69,20 +68,6 @@ function parseStringList(value) {
   return parseAllowedIntents(value);
 }
 
-function parseBoolean(value) {
-  const s = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (!s) {
-    return null;
-  }
-  if (["true", "1", "yes", "y"].includes(s)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(s)) {
-    return false;
-  }
-  return null;
-}
-
 function isResolverNotFoundError(error) {
   const message = [error?.shortMessage, error?.details, error?.message].filter(Boolean).join(" ").toLowerCase();
   return message.includes("resolvernotfound") || message.includes("resolver not found");
@@ -101,6 +86,7 @@ function isTransientReadError(error) {
 async function resolveAgentEns({
   ensName,
   sepoliaRpcUrl,
+  ensip25Key,
   universalResolverAddress = DEFAULT_UNIVERSAL_RESOLVER_ADDRESS
 } = {}) {
   if (!ensName || typeof ensName !== "string") {
@@ -146,6 +132,7 @@ async function resolveAgentEns({
   const dnsEncodedName = toHex(packetToBytes(normalizedName));
   const node = namehash(normalizedName);
 
+  const dynamicTextKeys = ensip25Key ? [...TEXT_KEYS, String(ensip25Key).trim()] : TEXT_KEYS;
   // Compose resolverCalls in a fixed order so decoding is deterministic.
   const resolverCalls = [
     {
@@ -153,7 +140,7 @@ async function resolveAgentEns({
       functionName: "addr",
       args: [node]
     },
-    ...TEXT_KEYS.map((key) => ({
+    ...dynamicTextKeys.map((key) => ({
       abi: simpleResolverAbi,
       functionName: "text",
       args: [node, key]
@@ -199,7 +186,9 @@ async function resolveAgentEns({
         capabilitiesUri: null,
         allowedIntents: [],
         trust: {
-          ensip25_attested: false,
+          ensip25_verified: false,
+          ensip25_key: ensip25Key || null,
+          ensip25_value: null,
           attestor: null,
           attestation_updated_at: null,
           high_risk_intents: []
@@ -261,8 +250,8 @@ async function resolveAgentEns({
   });
 
   const text = {};
-  for (let i = 0; i < TEXT_KEYS.length; i += 1) {
-    text[TEXT_KEYS[i]] = toNonEmptyString(textValues[i]);
+  for (let i = 0; i < dynamicTextKeys.length; i += 1) {
+    text[dynamicTextKeys[i]] = toNonEmptyString(textValues[i]);
   }
 
   const allowedIntents = parseAllowedIntents(text.allowedIntents);
@@ -274,6 +263,8 @@ async function resolveAgentEns({
 
   const agent_address = arcAddress || (typeof addr === "string" ? addr : null);
 
+  const ensip25Value = ensip25Key ? toNonEmptyString(text[String(ensip25Key).trim()]) : null;
+
   return {
     ens_name: normalizedName,
     agent_address,
@@ -282,7 +273,9 @@ async function resolveAgentEns({
     capabilitiesUri: text.capabilitiesUri || null,
     allowedIntents,
     trust: {
-      ensip25_attested: parseBoolean(text.ensip25Attestation),
+      ensip25_verified: Boolean(ensip25Value),
+      ensip25_key: ensip25Key || null,
+      ensip25_value: ensip25Value,
       attestor: toNonEmptyString(text.attestor),
       attestation_updated_at: toNonEmptyString(text.attestationUpdatedAt),
       high_risk_intents: highRiskIntents

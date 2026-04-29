@@ -429,8 +429,16 @@ function maybeAutoFillAgentIdFromEnsName() {
     });
     return;
   }
+  const prevAuto = lastAutoAgentId;
   input.value = nextAuto;
   lastAutoAgentId = nextAuto;
+  const ensip25AgentIdInput = document.getElementById("ensip25-agent-id");
+  if (ensip25AgentIdInput) {
+    const currentEnsip25 = String(ensip25AgentIdInput.value || "").trim();
+    if (!currentEnsip25 || currentEnsip25 === prevAuto) {
+      ensip25AgentIdInput.value = nextAuto;
+    }
+  }
   debugEnsLog("H12", "public/main.js:maybeAutoFillAgentIdFromEnsName", "auto-filled agentId", {
     agentIdLength: nextAuto.length
   });
@@ -482,9 +490,10 @@ function renderEnsWorkshopChips(payload, selectedIntent) {
   const trust = payload?.trust || {};
   const privacy = payload?.privacy || {};
   const versioning = payload?.versioning || {};
+  const ensip25Key = trust.ensip25_key || "unset";
   const trustText = trust.is_high_risk_intent
-    ? `Trust gate: ${trust.is_trusted_for_intent ? "allow" : "block"} for high-risk intent "${selectedIntent}". attested=${trust.attested}`
-    : `Trust gate: low-risk path for "${selectedIntent || "none"}". attested=${trust.attested}`;
+    ? `Trust gate: ${trust.is_trusted_for_intent ? "allow" : "block"} for high-risk "${selectedIntent}". ENSIP-25 verified=${trust.ensip25_verified}; key=${ensip25Key}`
+    : `Trust gate: low-risk path for "${selectedIntent || "none"}". ENSIP-25 verified=${trust.ensip25_verified}; key=${ensip25Key}`;
   setEnsJudgeChip({
     statusId: "ens-trust-chip",
     chipText: trustText,
@@ -541,7 +550,9 @@ async function resolveEnsJudgeIdentityForUi() {
     return;
   }
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
-  const url = `/api/ens/resolve?name=${encodeURIComponent(ensName)}&intent=${encodeURIComponent(selectedIntent)}`;
+  const registry = document.getElementById("ensip25-registry")?.value?.trim() || "";
+  const ensip25AgentId = document.getElementById("ensip25-agent-id")?.value?.trim() || document.getElementById("ens-agent-id")?.value?.trim() || "";
+  const url = `/api/ens/resolve?name=${encodeURIComponent(ensName)}&intent=${encodeURIComponent(selectedIntent)}&registry=${encodeURIComponent(registry)}&agentId=${encodeURIComponent(ensip25AgentId)}`;
 
   const data = await request(url, { method: "GET" });
   if (!data.ok) {
@@ -605,7 +616,9 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   const agentId = document.getElementById("ens-agent-id")?.value?.trim() || "";
   const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
   const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
-  const ensip25Attested = Boolean(document.getElementById("ens-attested")?.checked);
+  const ensip25Registry = document.getElementById("ensip25-registry")?.value?.trim() || "";
+  const ensip25AgentId = document.getElementById("ensip25-agent-id")?.value?.trim() || agentId;
+  const ensip25Value = document.getElementById("ensip25-value")?.value?.trim() || "1";
   const attestor = document.getElementById("ens-attestor")?.value?.trim() || "";
   const highRiskIntents = document.getElementById("ens-high-risk-intents")?.value?.trim() || "";
   const payoutMode = document.getElementById("ens-payout-mode")?.value || "public";
@@ -662,7 +675,9 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     tokenUri,
     capabilitiesUri,
     allowedIntent: selectedIntent,
-    ensip25Attested,
+    ensip25Registry,
+    ensip25AgentId,
+    ensip25Value,
     attestor,
     attestationUpdatedAt: new Date().toISOString(),
     highRiskIntents,
@@ -801,6 +816,8 @@ async function verifyEnsAttestationFromUi() {
   const globalInput = document.getElementById("agent-ens-name");
   const ensName = normalizeEnsNameInput(ensInput?.value || globalInput?.value || "");
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  const registry = document.getElementById("ensip25-registry")?.value?.trim() || "";
+  const agentId = document.getElementById("ensip25-agent-id")?.value?.trim() || document.getElementById("ens-agent-id")?.value?.trim() || "";
   if (!ensName) {
     setEnsJudgeChip({
       statusId: "ens-trust-chip",
@@ -812,7 +829,7 @@ async function verifyEnsAttestationFromUi() {
   const response = await request("/api/ens/verify-attestation", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ensName, intent: selectedIntent })
+    body: JSON.stringify({ ensName, intent: selectedIntent, registry, agentId })
   });
   if (!response.ok) {
     setEnsJudgeChip({
@@ -823,9 +840,10 @@ async function verifyEnsAttestationFromUi() {
     return;
   }
   const trust = response.body?.trust || {};
+  const ensip25 = response.body?.ensip25 || {};
   setEnsJudgeChip({
     statusId: "ens-trust-chip",
-    chipText: `Trust verify: attested=${trust.attested}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}`,
+    chipText: `Trust verify: verified=${ensip25.verified}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}; key=${ensip25.key || "unset"}`,
     variant: trust.is_trusted_for_intent ? "success" : "warning"
   });
   print("ens-identity-output", { route: "/api/ens/verify-attestation", body: response.body });

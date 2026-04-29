@@ -34,6 +34,11 @@ const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
 const { setupAgentEns } = require("./ens/setupAgentEns");
+const {
+  getRegistryInteropAddress,
+  buildEnsip25Key,
+  hasEnsip25Attestation
+} = require("./ens/ensip25");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +74,9 @@ const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NE
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 const ENS_PRIVATE_KEY = process.env.ENS_PRIVATE_KEY || "";
 const DEFAULT_HIGH_RISK_INTENTS = ["challenge_payout", "crew_split_settlement"];
+const ENSIP25_REGISTRY_INTEROP = process.env.ENSIP25_REGISTRY_INTEROP || "";
+const ENSIP25_REGISTRY_ADDRESS = process.env.ENSIP25_REGISTRY_ADDRESS || "";
+const ENSIP25_REGISTRY_CHAIN_ID = Number(process.env.ENSIP25_REGISTRY_CHAIN_ID || ARCTESTNET_CHAIN_ID || "5042002");
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -315,18 +323,81 @@ function parseCsvList(value) {
   return raw.split(",").map((x) => String(x).trim()).filter(Boolean);
 }
 
+function resolveEnsip25RegistryInteropAddress(registryCandidate) {
+  return getRegistryInteropAddress({
+    registryInteropAddress: registryCandidate || ENSIP25_REGISTRY_INTEROP,
+    registryAddress: ENSIP25_REGISTRY_ADDRESS,
+    chainId: ENSIP25_REGISTRY_CHAIN_ID,
+    fallbackRegistry: ERC8004_AGENT_REGISTRY
+  });
+}
+
+function buildEnsip25Context({ ens, agentIdCandidate, registryCandidate } = {}) {
+  const trustKey = String(ens?.trust?.ensip25_key || "").trim();
+  if (trustKey) {
+    const trustValue = ens?.text?.[trustKey] || ens?.trust?.ensip25_value || null;
+    return {
+      agent_id: ens?.trust?.ensip25_agent_id || agentIdCandidate || ens?.agentId || null,
+      registry_interop_address: ens?.trust?.ensip25_registry || null,
+      attestation_key: trustKey,
+      attestation_value: trustValue,
+      verified: hasEnsip25Attestation(trustValue)
+    };
+  }
+  const agentId = String(agentIdCandidate || ens?.agentId || ERC8004_AGENT_ID || "").trim();
+  if (!agentId) {
+    return {
+      agent_id: null,
+      registry_interop_address: null,
+      attestation_key: null,
+      attestation_value: null,
+      verified: false
+    };
+  }
+  let registryInteropAddress = null;
+  let attestationKey = null;
+  try {
+    registryInteropAddress = resolveEnsip25RegistryInteropAddress(registryCandidate);
+    attestationKey = buildEnsip25Key({
+      registryInteropAddress,
+      agentId
+    });
+  } catch (_error) {
+    return {
+      agent_id: agentId,
+      registry_interop_address: null,
+      attestation_key: null,
+      attestation_value: null,
+      verified: false
+    };
+  }
+  const attestationValue = attestationKey ? ens?.text?.[attestationKey] || null : null;
+  return {
+    agent_id: agentId,
+    registry_interop_address: registryInteropAddress,
+    attestation_key: attestationKey,
+    attestation_value: attestationValue,
+    verified: hasEnsip25Attestation(attestationValue)
+  };
+}
+
 function getHighRiskIntentsFromEns(ens) {
   const fromRecord = parseCsvList(ens?.trust?.high_risk_intents);
   return fromRecord.length > 0 ? fromRecord : DEFAULT_HIGH_RISK_INTENTS;
 }
 
 function deriveTrustForIntent(ens, intent) {
-  const attested = ens?.trust?.ensip25_attested === true;
+  const ensip25 = buildEnsip25Context({ ens });
   const highRiskIntents = getHighRiskIntentsFromEns(ens);
   const isHighRisk = intent ? highRiskIntents.includes(intent) : false;
-  const isTrustedForIntent = isHighRisk ? attested : true;
+  const isTrustedForIntent = isHighRisk ? ensip25.verified : true;
   return {
-    attested,
+    attested: ensip25.verified,
+    ensip25_verified: ensip25.verified,
+    ensip25_key: ensip25.attestation_key,
+    ensip25_registry: ensip25.registry_interop_address,
+    ensip25_agent_id: ensip25.agent_id,
+    ensip25_value: ensip25.attestation_value,
     attestor: ens?.trust?.attestor || null,
     attestation_updated_at: ens?.trust?.attestation_updated_at || null,
     high_risk_intents: highRiskIntents,
@@ -1005,11 +1076,28 @@ app.get("/api/ens/resolve", async (req, res) => {
     }
     const intent = typeof req.query?.intent === "string" ? req.query.intent.trim() : "";
 
-    const ens = await resolveAgentEns({
+    const ensInitial = await resolveAgentEns({
       ensName,
       sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
+    const ensip25AgentId = String(req.query?.agentId || "").trim() || ensInitial.agentId || ERC8004_AGENT_ID || "";
+    const registryCandidate = String(req.query?.registry || "").trim();
+    let ensip25Key = null;
+    try {
+      const registryInteropAddress = resolveEnsip25RegistryInteropAddress(registryCandidate);
+      ensip25Key = buildEnsip25Key({ registryInteropAddress, agentId: ensip25AgentId });
+    } catch (_error) {
+      ensip25Key = null;
+    }
+    const ens = ensip25Key
+      ? await resolveAgentEns({
+          ensName,
+          sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+          ensip25Key,
+          universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+        })
+      : ensInitial;
 
     const allowedIntents = Array.isArray(ens.allowedIntents) ? ens.allowedIntents : [];
     const hasAllowedIntents = allowedIntents.length > 0;
@@ -1030,7 +1118,9 @@ app.get("/api/ens/resolve", async (req, res) => {
         tokenUri: ens.tokenUri,
         capabilitiesUri: ens.capabilitiesUri,
         allowedIntents: ens.allowedIntents,
-        arcAddress: ens.text?.arcAddress || null
+        arcAddress: ens.text?.arcAddress || null,
+        ensip25Key: ensip25Key,
+        ensip25Value: ensip25Key ? ens.text?.[ensip25Key] || null : null
       },
       allowed_intents: allowedIntents,
       is_allowed_for_intent: isAllowedForIntent,
@@ -1047,12 +1137,35 @@ app.post("/api/ens/verify-attestation", async (req, res) => {
   try {
     const ensName = String(req.body?.ensName || "").trim();
     const intent = String(req.body?.intent || "").trim();
+    const registryCandidate = String(req.body?.registry || "").trim();
+    const providedAgentId = String(req.body?.agentId || "").trim();
     if (!ensName) {
       return sendError(res, 400, "ens_name_required", "ensName is required");
+    }
+    const ensInitial = await resolveAgentEns({
+      ensName,
+      sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+    });
+    const agentId = providedAgentId || ensInitial.agentId || ERC8004_AGENT_ID || "";
+    if (!agentId) {
+      return sendError(res, 400, "ensip25_agent_id_required", "agentId is required for ENSIP-25 verification.");
+    }
+    let registryInteropAddress = null;
+    let ensip25Key = null;
+    try {
+      registryInteropAddress = resolveEnsip25RegistryInteropAddress(registryCandidate);
+      ensip25Key = buildEnsip25Key({
+        registryInteropAddress,
+        agentId
+      });
+    } catch (error) {
+      return sendError(res, 400, "ensip25_registry_invalid", error.message || "Unable to build ENSIP-25 key.");
     }
     const ens = await resolveAgentEns({
       ensName,
       sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      ensip25Key,
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
     const trust = deriveTrustForIntent(ens, intent);
@@ -1060,7 +1173,14 @@ app.post("/api/ens/verify-attestation", async (req, res) => {
       ok: true,
       ens_name: ens.ens_name,
       intent: intent || null,
-      trust
+      trust,
+      ensip25: {
+        key: ensip25Key,
+        registry_interop_address: registryInteropAddress,
+        agent_id: agentId,
+        value: ens.text?.[ensip25Key] || null,
+        verified: hasEnsip25Attestation(ens.text?.[ensip25Key] || null)
+      }
     });
   } catch (error) {
     return sendError(res, 502, "ens_verify_attestation_failed", error.message || String(error));
@@ -1204,7 +1324,9 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       tokenUri,
       capabilitiesUri,
       allowedIntent,
-      ensip25Attested,
+      ensip25Registry,
+      ensip25AgentId,
+      ensip25Value,
       attestor,
       attestationUpdatedAt,
       highRiskIntents,
@@ -1233,6 +1355,22 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     if (!allowedIntent || typeof allowedIntent !== "string") {
       return sendError(res, 400, "allowed_intent_required", "allowedIntent is required (single intent id)");
     }
+    const normalizedEnsip25AgentId = String(ensip25AgentId || agentId || "").trim();
+    if (!normalizedEnsip25AgentId) {
+      return sendError(res, 400, "ensip25_agent_id_required", "ensip25AgentId (or agentId) is required.");
+    }
+    let registryInteropAddress = null;
+    let ensip25AttestationKey = null;
+    try {
+      registryInteropAddress = resolveEnsip25RegistryInteropAddress(String(ensip25Registry || "").trim());
+      ensip25AttestationKey = buildEnsip25Key({
+        registryInteropAddress,
+        agentId: normalizedEnsip25AgentId
+      });
+    } catch (error) {
+      return sendError(res, 400, "ensip25_registry_invalid", error.message || "Unable to build ENSIP-25 registry key.");
+    }
+    const normalizedEnsip25Value = String(ensip25Value || "1").trim() || "1";
     if (!["demo", "circle_wallet", "metamask"].includes(normalizedWriteMode)) {
       return sendError(res, 400, "ens_write_mode_invalid", "writeMode must be demo, circle_wallet, or metamask");
     }
@@ -1271,7 +1409,10 @@ app.post("/api/ens/setup-agent", async (req, res) => {
             capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
             allowedIntents: [allowedIntent.trim()],
             arcAddress: arcActorAddress.trim(),
-            ensip25Attestation: Boolean(ensip25Attested),
+            ensip25Key: ensip25AttestationKey,
+            ensip25Value: normalizedEnsip25Value,
+            ensip25Registry: registryInteropAddress,
+            ensip25AgentId: normalizedEnsip25AgentId,
             attestor: typeof attestor === "string" ? attestor.trim() : "",
             attestationUpdatedAt: typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : "",
             highRiskIntents: parseCsvList(highRiskIntents),
@@ -1283,7 +1424,11 @@ app.post("/api/ens/setup-agent", async (req, res) => {
             compatibleIntents: parseCsvList(compatibleIntents)
           },
           trust: {
-            attested: Boolean(ensip25Attested),
+            attested: hasEnsip25Attestation(normalizedEnsip25Value),
+            ensip25_verified: hasEnsip25Attestation(normalizedEnsip25Value),
+            ensip25_key: ensip25AttestationKey,
+            ensip25_registry: registryInteropAddress,
+            ensip25_agent_id: normalizedEnsip25AgentId,
             high_risk_intents: parseCsvList(highRiskIntents)
           }
         }
@@ -1307,7 +1452,8 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
       capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
       allowedIntent: allowedIntent.trim(),
-      ensip25Attested: Boolean(ensip25Attested),
+      ensip25AttestationKey,
+      ensip25AttestationValue: normalizedEnsip25Value,
       attestor: typeof attestor === "string" ? attestor.trim() : "",
       attestationUpdatedAt: typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : "",
       highRiskIntents: parseCsvList(highRiskIntents),
@@ -1323,6 +1469,7 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     const resolved = await resolveAgentEns({
       ensName: ensName.trim(),
       sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+      ensip25Key: ensip25AttestationKey,
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
 
@@ -1376,11 +1523,26 @@ app.post("/api/agents/sessions", async (req, res) => {
   const ctx = context || {};
   if (ctx.agent_ens_name && typeof ctx.agent_ens_name === "string") {
     try {
-      const ens = await resolveAgentEns({
+      const ensInitial = await resolveAgentEns({
         ensName: ctx.agent_ens_name,
         sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
         universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
       });
+      const agentIdForEnsip25 = String(ctx.ensip25_agent_id || ensInitial.agentId || ERC8004_AGENT_ID || "").trim();
+      let ens = ensInitial;
+      if (agentIdForEnsip25) {
+        const registryInteropAddress = resolveEnsip25RegistryInteropAddress(String(ctx.ensip25_registry || "").trim());
+        const ensip25Key = buildEnsip25Key({
+          registryInteropAddress,
+          agentId: agentIdForEnsip25
+        });
+        ens = await resolveAgentEns({
+          ensName: ctx.agent_ens_name,
+          sepoliaRpcUrl: ENS_SEPOLIA_RPC_URL,
+          ensip25Key,
+          universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
+        });
+      }
       ctx.__ensResolvedIdentity = ens;
       ctx.agent_actor_address = ens.agent_address;
       ctx.__ensAllowedIntents = ens.allowedIntents;

@@ -149,7 +149,7 @@ function makeAgentOrchestrator({
       const isAttested = context?.__ensTrust?.attested === true;
       if (isHighRiskIntent && !isAttested) {
         throw new Error(
-          `ENS trust gate blocked high-risk intent "${intent}". Set ensip25Attestation=true in ENS text records first.`
+          `ENS trust gate blocked high-risk intent "${intent}". Set a non-empty ENSIP-25 agent-registration[registry][agentId] text record first.`
         );
       }
 
