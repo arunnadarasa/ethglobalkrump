@@ -71,6 +71,7 @@ let lastU8SubmissionId = "";
 let ensSubmissionTimerHandle = null;
 let ensSubmissionStartedAtMs = 0;
 let lastAutoAgentId = "";
+let lastEnsChipOverflowLogAtMs = 0;
 
 function extractCircleWalletDetails(payload) {
   const wallet =
@@ -418,6 +419,22 @@ function setEnsJudgeChip({ statusId, chipText, variant }) {
     target.classList.add("warning");
   }
   target.textContent = chipText;
+  if (statusId.startsWith("ens-") && chipText) {
+    const now = Date.now();
+    if (now - lastEnsChipOverflowLogAtMs > 1500) {
+      lastEnsChipOverflowLogAtMs = now;
+      // #region agent log
+      debugEnsLog("H13", "public/main.js:setEnsJudgeChip", "ens chip render metrics", {
+        statusId,
+        textLength: chipText.length,
+        clientWidth: target.clientWidth || 0,
+        scrollWidth: target.scrollWidth || 0,
+        isOverflowing: (target.scrollWidth || 0) > (target.clientWidth || 0),
+        viewportWidth: window.innerWidth || 0
+      });
+      // #endregion
+    }
+  }
 }
 
 function stopEnsSubmissionTimer() {
