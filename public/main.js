@@ -36,7 +36,7 @@ function deriveAgentIdFromEnsName(ensNameRaw) {
   if (!safe) {
     return "";
   }
-  return `agent-${safe}`;
+  return `agent.${safe}`;
 }
 
 function debugEnsLog() {}
