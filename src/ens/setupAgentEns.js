@@ -11,6 +11,18 @@
 const DEFAULT_ENS_SEPOLIA_RPC_URL = "https://rpc.sepolia.org";
 const ETH_COIN_TYPE = 60; // ENSIP-9 coinType for ETH
 
+function formatEthFromWei(wei) {
+  const value = typeof wei === "bigint" ? wei : BigInt(wei || 0);
+  const base = 10n ** 18n;
+  const whole = value / base;
+  const frac = value % base;
+  if (frac === 0n) {
+    return `${whole.toString()}.0`;
+  }
+  const fracStr = frac.toString().padStart(18, "0").replace(/0+$/, "");
+  return `${whole.toString()}.${fracStr}`;
+}
+
 function debugEnsServerLog(hypothesisId, location, message, data = {}) {
   // #region agent log
   fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -157,6 +169,18 @@ async function setupAgentEns({
         `Circle wallet mode requires Sepolia ETH for ENS signer gas. Signer ${signer} has 0 wei; fund it and retry.`
       );
     }
+    const preflightPrice = await getPrice(publicClient, { nameOrNames: ensName, duration: 31536000 });
+    const preflightValue = (preflightPrice.base + preflightPrice.premium) * 110n / 100n;
+    debugEnsServerLog("S12", "src/ens/setupAgentEns.js:register-preflight-cost", "computed register value preflight", {
+      signerBalanceWei: signerBalanceWei.toString(),
+      requiredValueWei: preflightValue.toString()
+    });
+    if (signerBalanceWei < preflightValue) {
+      const shortfallWei = preflightValue - signerBalanceWei;
+      throw new Error(
+        `Insufficient SepoliaETH for ENS registration value. Signer ${signer} balance=${formatEthFromWei(signerBalanceWei)} ETH, required≈${formatEthFromWei(preflightValue)} ETH, shortfall≈${formatEthFromWei(shortfallWei)} ETH. Top up signer and retry.`
+      );
+    }
     const secret = randomSecret();
 
     // Commit then register.
@@ -176,16 +200,13 @@ async function setupAgentEns({
     // ENS name commitments have a validity buffer; the helper script used 60s.
     await new Promise((resolve) => setTimeout(resolve, 60 * 1000));
 
-    const price = await getPrice(publicClient, { nameOrNames: ensName, duration: 31536000 });
-    const value = (price.base + price.premium) * 110n / 100n;
-
     const registerHash = await registerName(walletClient, {
       name: ensName,
       owner: signer,
       duration: 31536000,
       secret,
       resolverAddress: publicResolverAddress,
-      value
+      value: preflightValue
     });
     debugEnsServerLog("S8", "src/ens/setupAgentEns.js:registerName", "submitted registerName transaction", {
       hasRegisterHash: Boolean(registerHash)

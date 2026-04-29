@@ -9,6 +9,22 @@ function print(targetId, payload) {
   document.getElementById(targetId).textContent = JSON.stringify(payload, null, 2);
 }
 
+function normalizeEnsNameInput(rawValue) {
+  const value = String(rawValue || "").trim();
+  if (!value) {
+    return "";
+  }
+  if (value.includes(".")) {
+    return value;
+  }
+  const normalized = `${value}.eth`;
+  debugEnsLog("H10", "public/main.js:normalizeEnsNameInput", "auto-appended .eth to ENS name", {
+    inputLength: value.length,
+    outputLength: normalized.length
+  });
+  return normalized;
+}
+
 function debugEnsLog(hypothesisId, location, message, data = {}) {
   // #region agent log
   fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -100,6 +116,22 @@ function formatUnits(value, decimals) {
   }
   const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${whole.toString()}.${fracStr}`;
+}
+
+function formatEthFromWeiString(weiText) {
+  try {
+    const value = BigInt(String(weiText || "0"));
+    const base = 10n ** 18n;
+    const whole = value / base;
+    const frac = value % base;
+    if (frac === 0n) {
+      return `${whole.toString()}.0`;
+    }
+    const fracStr = frac.toString().padStart(18, "0").replace(/0+$/, "");
+    return `${whole.toString()}.${fracStr}`;
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function getNativeBalanceFromMetaMask() {
@@ -395,14 +427,18 @@ function updateAgentRunDisabledByEnsGating() {
 async function resolveEnsJudgeIdentityForUi() {
   const judgeEnsInputEl = document.getElementById("ens-name-input");
   const globalEnsInputEl = document.getElementById("agent-ens-name");
-  const ensName =
-    judgeEnsInputEl?.value?.trim() ||
-    globalEnsInputEl?.value?.trim() ||
-    "";
+  const ensNameRaw = judgeEnsInputEl?.value || globalEnsInputEl?.value || "";
+  const ensName = normalizeEnsNameInput(ensNameRaw);
   if (judgeEnsInputEl && !judgeEnsInputEl.value && ensName) {
     judgeEnsInputEl.value = ensName;
   }
+  if (judgeEnsInputEl && judgeEnsInputEl.value !== ensName) {
+    judgeEnsInputEl.value = ensName;
+  }
   if (globalEnsInputEl && !globalEnsInputEl.value && ensName) {
+    globalEnsInputEl.value = ensName;
+  }
+  if (globalEnsInputEl && globalEnsInputEl.value !== ensName) {
     globalEnsInputEl.value = ensName;
   }
   debugEnsLog("H1", "public/main.js:resolveEnsJudgeIdentityForUi", "resolve clicked with ENS input state", {
@@ -467,14 +503,18 @@ async function resolveEnsJudgeIdentityForUi() {
 async function registerUpdateEnsJudgeIdentityForUi() {
   const judgeEnsInputEl = document.getElementById("ens-name-input");
   const globalEnsInputEl = document.getElementById("agent-ens-name");
-  const ensName =
-    judgeEnsInputEl?.value?.trim() ||
-    globalEnsInputEl?.value?.trim() ||
-    "";
+  const ensNameRaw = judgeEnsInputEl?.value || globalEnsInputEl?.value || "";
+  const ensName = normalizeEnsNameInput(ensNameRaw);
   if (judgeEnsInputEl && !judgeEnsInputEl.value && ensName) {
     judgeEnsInputEl.value = ensName;
   }
+  if (judgeEnsInputEl && judgeEnsInputEl.value !== ensName) {
+    judgeEnsInputEl.value = ensName;
+  }
   if (globalEnsInputEl && !globalEnsInputEl.value && ensName) {
+    globalEnsInputEl.value = ensName;
+  }
+  if (globalEnsInputEl && globalEnsInputEl.value !== ensName) {
     globalEnsInputEl.value = ensName;
   }
   const arcActorAddress = document.getElementById("ens-arc-actor-address")?.value?.trim() || "";
@@ -511,7 +551,10 @@ async function registerUpdateEnsJudgeIdentityForUi() {
 
   setEnsJudgeChip({
     statusId: "ens-identity-status",
-    chipText: writeMode === "demo" ? "Preparing ENS setup (demo mode)..." : "Submitting ENS setup transaction...",
+    chipText:
+      writeMode === "demo"
+        ? "Preparing ENS setup (demo mode)..."
+        : "Submitting ENS setup transaction... If ENS name is unowned, commit->register can take ~60-90s.",
     variant: "warning"
   });
 
@@ -541,10 +584,50 @@ async function registerUpdateEnsJudgeIdentityForUi() {
         chainId: chainId || null,
         accountCount: Array.isArray(accounts) ? accounts.length : 0
       });
+
+      // Force wallet interaction in MetaMask mode so judges see explicit user-approved signing.
+      const requestedAccounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      const signer = Array.isArray(requestedAccounts) ? requestedAccounts[0] || "" : "";
+      debugEnsLog("M4", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-request-accounts", "metamask accounts requested", {
+        accountCount: Array.isArray(requestedAccounts) ? requestedAccounts.length : 0,
+        hasSigner: Boolean(signer)
+      });
+      if (!signer) {
+        setEnsJudgeChip({
+          statusId: "ens-identity-status",
+          chipText: "MetaMask account connection was not approved.",
+          variant: "warning"
+        });
+        return;
+      }
+
+      const proofMessage = `Authorize ENS update intent for ${ensName} at ${new Date().toISOString()}`;
+      const proofSignature = await window.ethereum.request({
+        method: "personal_sign",
+        params: [proofMessage, signer]
+      });
+      debugEnsLog("M5", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-sign", "metamask proof signature captured", {
+        hasSignature: Boolean(proofSignature),
+        signerLength: signer.length
+      });
+      payload.metamaskSigner = signer;
+      payload.metamaskProofMessage = proofMessage;
+      payload.metamaskProofSignature = proofSignature;
+      setEnsJudgeChip({
+        statusId: "ens-identity-status",
+        chipText: "MetaMask signature captured. Submitting ENS setup...",
+        variant: "success"
+      });
     } catch (error) {
       debugEnsLog("M2", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-state", "metamask provider state failed", {
         error: error?.message || String(error)
       });
+      setEnsJudgeChip({
+        statusId: "ens-identity-status",
+        chipText: error?.message || "MetaMask interaction failed.",
+        variant: "warning"
+      });
+      return;
     }
   }
 
@@ -562,9 +645,26 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   }
 
   if (!data.ok) {
+    const rawErrorMessage = data.body?.error?.message || "ENS setup failed.";
+    let displayMessage = rawErrorMessage;
+    if (/insufficient funds for gas \* price \+ value/i.test(rawErrorMessage)) {
+      const haveMatch = rawErrorMessage.match(/have\s+(\d+)/i);
+      const wantMatch = rawErrorMessage.match(/want\s+(\d+)/i);
+      if (haveMatch?.[1] && wantMatch?.[1]) {
+        try {
+          const haveWei = BigInt(haveMatch[1]);
+          const wantWei = BigInt(wantMatch[1]);
+          const shortfallWei = wantWei > haveWei ? wantWei - haveWei : 0n;
+          const shortfallEth = formatEthFromWeiString(shortfallWei.toString()) || shortfallWei.toString();
+          displayMessage = `Insufficient SepoliaETH for ENS registration. Top up signer by at least ~${shortfallEth} ETH and retry.`;
+        } catch (_error) {
+          displayMessage = rawErrorMessage;
+        }
+      }
+    }
     setEnsJudgeChip({
       statusId: "ens-identity-status",
-      chipText: data.body?.error?.message || "ENS setup failed.",
+      chipText: displayMessage,
       variant: "warning"
     });
     return;
@@ -602,6 +702,54 @@ async function checkEnsSignerBalanceFromUi() {
     variant: needsTopUp ? "warning" : "success"
   });
   print("ens-identity-output", { route: "/api/ens/signer-balance", body: data.body });
+}
+
+async function checkEnsNameStatusFromUi() {
+  const ensInput = document.getElementById("ens-name-input");
+  const globalInput = document.getElementById("agent-ens-name");
+  const ensName = normalizeEnsNameInput(ensInput?.value || globalInput?.value || "");
+  if (ensInput && ensInput.value !== ensName) {
+    ensInput.value = ensName;
+  }
+  if (globalInput && globalInput.value !== ensName) {
+    globalInput.value = ensName;
+  }
+  if (!ensName) {
+    setEnsJudgeChip({
+      statusId: "ens-name-status-chip",
+      chipText: "Set ENS name first to check ownership and registration minimum.",
+      variant: "warning"
+    });
+    return;
+  }
+  debugEnsLog("H9", "public/main.js:checkEnsNameStatusFromUi", "checking ENS name status", {
+    ensNameLength: ensName.length
+  });
+  const data = await request(`/api/ens/name-status?name=${encodeURIComponent(ensName)}`, { method: "GET" });
+  if (!data.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-name-status-chip",
+      chipText: data.body?.error?.message || "Failed to check ENS name status.",
+      variant: "warning"
+    });
+    return;
+  }
+  const isOwned = Boolean(data.body?.is_owned);
+  const requiredEth = data.body?.registration?.required_value_eth || "0";
+  const signerShortfall = data.body?.signer?.shortfall_eth || "0";
+  const signerHasEnough = Boolean(data.body?.signer?.has_enough_for_registration_value);
+  const ownerAddress = data.body?.owner || "none";
+  const message = isOwned
+    ? `ENS name is already owned by ${ownerAddress}.`
+    : signerHasEnough
+      ? `ENS name appears unowned. Registration value estimate: ~${requiredEth} SepoliaETH (plus gas). Signer balance looks sufficient.`
+      : `ENS name appears unowned. Registration value estimate: ~${requiredEth} SepoliaETH (plus gas). Top up signer by ~${signerShortfall} SepoliaETH.`;
+  setEnsJudgeChip({
+    statusId: "ens-name-status-chip",
+    chipText: message,
+    variant: isOwned || signerHasEnough ? "success" : "warning"
+  });
+  print("ens-identity-output", { route: "/api/ens/name-status", body: data.body });
 }
 
 async function fillEnsArcActorAddressFromSelectedSource() {
@@ -1150,6 +1298,18 @@ document.getElementById("ens-check-signer-balance")?.addEventListener("click", a
   }
 });
 
+document.getElementById("ens-check-name-status")?.addEventListener("click", async () => {
+  try {
+    await checkEnsNameStatusFromUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-name-status-chip",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
 document.getElementById("ens-fill-arc-actor")?.addEventListener("click", async () => {
   try {
     await fillEnsArcActorAddressFromSelectedSource();
@@ -1180,6 +1340,29 @@ document.getElementById("ens-name-input")?.addEventListener("input", (event) => 
   const globalInput = document.getElementById("agent-ens-name");
   if (globalInput) {
     globalInput.value = value;
+  }
+});
+
+document.getElementById("ens-name-input")?.addEventListener("blur", (event) => {
+  const normalized = normalizeEnsNameInput(event?.target?.value || "");
+  if (!normalized) {
+    return;
+  }
+  const ensInput = document.getElementById("ens-name-input");
+  const globalInput = document.getElementById("agent-ens-name");
+  if (ensInput) {
+    ensInput.value = normalized;
+  }
+  if (globalInput) {
+    globalInput.value = normalized;
+  }
+});
+
+document.getElementById("ens-name-input")?.addEventListener("change", async () => {
+  try {
+    await checkEnsNameStatusFromUi();
+  } catch (_error) {
+    // no-op; status handled in helper
   }
 });
 

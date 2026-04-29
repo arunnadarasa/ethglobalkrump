@@ -1021,6 +1021,73 @@ app.get("/api/ens/signer-balance", async (_req, res) => {
   }
 });
 
+app.get("/api/ens/name-status", async (req, res) => {
+  try {
+    const ensName = String(req.query?.name || "").trim();
+    if (!ensName) {
+      return sendError(res, 400, "ens_name_required", "Query param `name` (ENS name) is required");
+    }
+
+    const viem = await import("viem");
+    const viemAccounts = await import("viem/accounts");
+    const viemChains = await import("viem/chains");
+    const ensjs = await import("@ensdomains/ensjs");
+    const ensPublic = await import("@ensdomains/ensjs/public");
+    const { createPublicClient, http, formatEther } = viem;
+    const { privateKeyToAccount } = viemAccounts;
+    const { sepolia } = viemChains;
+    const { addEnsContracts } = ensjs;
+    const { getOwner, getPrice } = ensPublic;
+
+    const chain = addEnsContracts(sepolia);
+    const client = createPublicClient({
+      chain,
+      transport: http(ENS_SEPOLIA_RPC_URL)
+    });
+
+    const owner = await getOwner(client, { name: ensName });
+    const isOwned = Boolean(owner);
+
+    const price = await getPrice(client, { nameOrNames: ensName, duration: 31536000 });
+    const requiredValueWei = (price.base + price.premium) * 110n / 100n;
+
+    let signerAddress = null;
+    let signerBalanceWei = null;
+    let shortfallWei = null;
+    if (ENS_PRIVATE_KEY) {
+      const account = privateKeyToAccount(ENS_PRIVATE_KEY);
+      signerAddress = account.address;
+      signerBalanceWei = await client.getBalance({ address: account.address });
+      shortfallWei = signerBalanceWei < requiredValueWei ? requiredValueWei - signerBalanceWei : 0n;
+    }
+
+    return res.json({
+      ok: true,
+      ens_name: ensName,
+      is_owned: isOwned,
+      owner: owner?.owner || null,
+      ownership_level: owner?.ownershipLevel || null,
+      registration: {
+        duration_seconds: 31536000,
+        required_value_wei: requiredValueWei.toString(),
+        required_value_eth: formatEther(requiredValueWei)
+      },
+      signer: signerAddress
+        ? {
+            address: signerAddress,
+            balance_wei: signerBalanceWei.toString(),
+            balance_eth: formatEther(signerBalanceWei),
+            shortfall_wei: shortfallWei.toString(),
+            shortfall_eth: formatEther(shortfallWei),
+            has_enough_for_registration_value: shortfallWei === 0n
+          }
+        : null
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_name_status_failed", error.message || String(error));
+  }
+});
+
 app.post("/api/ens/setup-agent", async (req, res) => {
   try {
     const {
@@ -1030,7 +1097,10 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       tokenUri,
       capabilitiesUri,
       allowedIntent,
-      writeMode
+      writeMode,
+      metamaskSigner,
+      metamaskProofMessage,
+      metamaskProofSignature
     } = req.body || {};
     const normalizedWriteMode = String(writeMode || "demo").trim().toLowerCase();
 
@@ -1048,6 +1118,22 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     }
     if (!["demo", "circle_wallet", "metamask"].includes(normalizedWriteMode)) {
       return sendError(res, 400, "ens_write_mode_invalid", "writeMode must be demo, circle_wallet, or metamask");
+    }
+    if (normalizedWriteMode === "metamask") {
+      if (!metamaskSigner || typeof metamaskSigner !== "string") {
+        return sendError(res, 400, "metamask_signer_required", "MetaMask mode requires metamaskSigner.");
+      }
+      if (!metamaskProofMessage || typeof metamaskProofMessage !== "string") {
+        return sendError(res, 400, "metamask_proof_message_required", "MetaMask mode requires metamaskProofMessage.");
+      }
+      if (!metamaskProofSignature || typeof metamaskProofSignature !== "string") {
+        return sendError(
+          res,
+          400,
+          "metamask_proof_signature_required",
+          "MetaMask mode requires metamaskProofSignature."
+        );
+      }
     }
 
     if (normalizedWriteMode === "demo") {
