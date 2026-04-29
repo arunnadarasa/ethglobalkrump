@@ -83,6 +83,21 @@ function parseBoolean(value) {
   return null;
 }
 
+function isResolverNotFoundError(error) {
+  const message = [error?.shortMessage, error?.details, error?.message].filter(Boolean).join(" ").toLowerCase();
+  return message.includes("resolvernotfound") || message.includes("resolver not found");
+}
+
+function isTransientReadError(error) {
+  const message = [error?.shortMessage, error?.details, error?.message].filter(Boolean).join(" ").toLowerCase();
+  return (
+    message.includes("request took too long") ||
+    message.includes("request timed out") ||
+    message.includes("the request timed out") ||
+    message.includes("http error")
+  );
+}
+
 async function resolveAgentEns({
   ensName,
   sepoliaRpcUrl,
@@ -164,12 +179,46 @@ async function resolveAgentEns({
     transport: http(sepoliaRpcUrl)
   });
 
-  const result = await client.readContract({
-    address: universalResolverAddress,
-    abi: universalResolverAbi,
-    functionName: "resolve",
-    args: [dnsEncodedName, multicallData]
-  });
+  let result;
+  try {
+    result = await client.readContract({
+      address: universalResolverAddress,
+      abi: universalResolverAbi,
+      functionName: "resolve",
+      args: [dnsEncodedName, multicallData]
+    });
+  } catch (error) {
+    // This happens for unconfigured/unregistered names. Treat as unresolved metadata,
+    // not a hard failure, so UI can still show ownership/status checks cleanly.
+    if (isResolverNotFoundError(error) || isTransientReadError(error)) {
+      return {
+        ens_name: normalizedName,
+        agent_address: null,
+        agentId: null,
+        tokenUri: null,
+        capabilitiesUri: null,
+        allowedIntents: [],
+        trust: {
+          ensip25_attested: false,
+          attestor: null,
+          attestation_updated_at: null,
+          high_risk_intents: []
+        },
+        privacy: {
+          payout_mode: "public",
+          privacy_receiver: null,
+          privacy_updated_at: null
+        },
+        versioning: {
+          agent_version: null,
+          capabilities_version: null,
+          compatible_intents: []
+        },
+        text: {}
+      };
+    }
+    throw error;
+  }
 
   const resolvedBytes = Array.isArray(result) ? result[0] : result;
   const decodedMulticall = decodeFunctionResult({
