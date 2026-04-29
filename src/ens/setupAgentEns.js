@@ -23,26 +23,7 @@ function formatEthFromWei(wei) {
   return `${whole.toString()}.${fracStr}`;
 }
 
-function debugEnsServerLog(hypothesisId, location, message, data = {}) {
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "995d4d"
-    },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "ens-setup-privatekey-import",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
-}
+function debugEnsServerLog() {}
 
 async function setupAgentEns({
   ensName,

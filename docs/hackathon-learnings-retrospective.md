@@ -209,3 +209,12 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - CCTP / Bridge Kit: Amoy and other destinations tunable via `POLYGON_AMOY_RPC_URL`, `POLYGON_AMOY_RPC_PUBLIC_FIRST`, `ALLOW_LOW_DESTINATION_GAS`, `ARC_BRIDGE_TRANSFER_SPEED`; per-chain recommended native minimums (e.g. Amoy **POL**) live in `src/settlement/cctpBridge.js`
 - KeeperHub execute mapping: some destination networks require **numeric chain `network`** values on `/execute/transfer` (implemented in `src/keeperhub/client.js`) when string slugs are rejected upstream
 - Debug hygiene: local `127.0.0.1` ingest telemetry removed from shipped KeeperHub client paths for cleaner production-style runs
+- ENS judge UX is now explicit and operator-safe:
+  - dynamic name ownership/status checks before registration (`/api/ens/name-status`)
+  - signer Sepolia ETH check and shortfall cues (`/api/ens/signer-balance`)
+  - write mode selector (`demo`, `circle_wallet`, `metamask`) with MetaMask proof signature in metamask mode
+  - ENS input normalization (`.eth` suffix) and `agentId` autofill (`agent-<label>`)
+  - in-flight timer + copy explaining expected commit→register wait for unowned names
+- ENS resolver decoding hardened:
+  - Universal Resolver multicall bytes are decoded into plain `addr` and text values
+  - intent gating now evaluates plain `allowedIntents` values (no raw ABI blob mismatch)

@@ -69,6 +69,22 @@ We built a full loop:
   - a clear **funding reminder**: top up on the **selected execution network** with **USDC** and that chain’s **native gas** (POL on Amoy, ETH on Sepolia networks, AVAX on Fuji, etc.)
   - gas readiness messaging that distinguishes **Circle CCTP bridge signer** balances from **KeeperHub organization executor** native requirements (API `keeperhub_executor_gas_hint` + `instructions` on destination fund-hint)
 
+### 5) ENS Judge Identity UX (Sepolia writes, Universal Resolver reads)
+
+- Dedicated ENS card in UI to make identity/gating visible for judges.
+- One-click status checks before writing:
+  - ENS name ownership + registration value estimate
+  - wallet Sepolia ETH balance + shortfall cue
+- Write modes for demos and live runs:
+  - `demo` (no onchain write, preview payload)
+  - `circle_wallet` (server signer path)
+  - `metamask` (wallet interaction + proof signature before submit)
+- Resolve output is plain readable values (`agentId`, `allowedIntents`, actor address), then intent-allowed verdict is shown inline.
+- Operator quality-of-life:
+  - ENS auto-normalization (`arun` → `arun.eth`)
+  - `agentId` auto-helper (`agent-arun`)
+  - submission timer with commit→register wait guidance
+
 ## Architecture (high level)
 
 1. User triggers intent in UI.
@@ -78,7 +94,7 @@ We built a full loop:
 5. Trace + outcome returned to user.
 6. For U5 on-chain payout (optional): server calls KeeperHub direct execution after pool math — commerce logic stays in-app; execution is delegated.
 
-### 5) Multi-chain destination wallet readiness
+### 6) Multi-chain destination wallet readiness
 
 - Destination signer wallets are provisioned for all target online chains:
   - `BASE-SEPOLIA`
@@ -89,7 +105,7 @@ We built a full loop:
 - Polygon Amoy native gas labeling uses `POL` in UX hints and warnings.
 - Online bridging uses **Circle Bridge Kit** (Arc App Kit) from Arc USDC; optional env tuning for Amoy RPCs and bridge speed (`POLYGON_AMOY_RPC_URL`, `POLYGON_AMOY_RPC_PUBLIC_FIRST`, `ARC_BRIDGE_TRANSFER_SPEED`, `ALLOW_LOW_DESTINATION_GAS` — see `.env.example`).
 
-### 6) Operator-facing funding APIs
+### 7) Operator-facing funding APIs
 
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc USDC source for the bridge
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — destination signer balances, recommended native minimum, executor gas hints, and human-readable `instructions`

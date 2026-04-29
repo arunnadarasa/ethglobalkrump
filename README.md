@@ -111,16 +111,30 @@ node scripts/ens/setup-agent-ens.mjs
 #### Judge-friendly UX (in-app)
 For demo/judging, the frontend includes a dedicated “`ENS Agent Identity (for Vyper agent)`” card that performs the same actions without needing to run the script manually:
 
-1. `Register/Update ENS Identity` (writes on **Ethereum Sepolia** using server-side `ENS_PRIVATE_KEY`)
-2. `Resolve ENS for Vyper agent` (read-only resolve via the **Universal Resolver**, showing the resolved Vyper `agentId` and `allowedIntents`)
-3. The UI shows whether the currently selected `#agent-intent` is allowed; the main `Run Agent Session` button is disabled when blocked.
+1. `Check ENS name status` (owned/unowned, estimated 1-year registration value, signer shortfall cue)
+2. `Check wallet Sepolia ETH` (shows signer address + current Sepolia ETH for registration readiness)
+3. `Register/Update ENS Identity` (writes on **Ethereum Sepolia** using server-side signer)
+4. `Resolve ENS for Vyper agent` (read-only resolve via the **Universal Resolver**, showing resolved Vyper `agentId` + `allowedIntents`)
+5. The UI shows whether the currently selected `#agent-intent` is allowed; the main `Run Agent Session` button is disabled when blocked.
+
+Additional judge UX refinements:
+
+- ENS write mode selector: `demo`, `circle_wallet`, `metamask`
+- Arc actor source autofill: use MetaMask connected wallet or created Circle wallet
+- ENS name normalization: bare labels auto-append `.eth` (e.g. `arun` → `arun.eth`)
+- `agentId` helper autofill from ENS label (`arun.eth` → `agent-arun`)
+- In-flight submission timer and explicit commit→register wait cue (`~60-90s`) for unowned names
 
 Associated endpoints:
 
 - `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>`
   - returns `agent_actor_address` (ENS `addr`), ENS text records, and `is_allowed_for_intent` for the provided intent.
+- `GET /api/ens/name-status?name=<ensName>`
+  - returns ownership state, estimated registration value, signer balance, and shortfall.
+- `GET /api/ens/signer-balance`
+  - returns signer address + Sepolia ETH balance for ENS write readiness checks.
 - `POST /api/ens/setup-agent`
-  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, based on UI inputs.
+  - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, based on UI inputs and selected write mode.
 
 #### How resolution works for Arc flows
 

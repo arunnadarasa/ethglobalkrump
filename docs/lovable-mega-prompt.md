@@ -132,6 +132,27 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns signer address, native + USDC balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` / `_short`, `instructions` (Circle signer vs KeeperHub org executor).
 - **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL; map some online destinations to **numeric** `network` chain IDs for `/execute/transfer` when string slugs are rejected.
 
+### ENS Judge identity routes (must implement)
+
+- `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>`
+  - resolves via Universal Resolver on Sepolia and returns:
+    - `ens_name`
+    - `agent_actor_address`
+    - `text` (`agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntents`, `arcAddress`)
+    - `allowed_intents`
+    - `is_allowed_for_intent`
+- `GET /api/ens/signer-balance`
+  - returns signer wallet + SepoliaETH balance from `ENS_PRIVATE_KEY`.
+- `GET /api/ens/name-status?name=<ensName>`
+  - returns ownership status + owner + registration value estimate + signer shortfall.
+- `POST /api/ens/setup-agent`
+  - accepts UI-driven fields:
+    - `ensName`, `arcActorAddress`, `agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntent`, `writeMode`
+    - for `metamask` mode also require `metamaskSigner`, `metamaskProofMessage`, `metamaskProofSignature`
+  - modes:
+    - `demo` => validate + preview only
+    - `circle_wallet` / `metamask` => write on Sepolia via server signer
+
 ### UCP (official stack)
 
 - `GET /api/ucp/discovery`  
@@ -431,6 +452,31 @@ Inputs/buttons as in reference:
 - output `#agent-output`
 - On `#agent-load-capabilities`: repopulate the `#agent-intent` dropdown from response `body.agents.intents` (keep currently selected value when still available).
 - On `#agent-run-session`: before posting session, resolve payment via selected rail and include `{ payment_mode, payment_ref, amount_minor }` in context; show `payment_receipt` in output.
+
+### ENS Judge card (must match)
+
+- Inputs:
+  - `#ens-name-input` (auto-append `.eth` when label-only)
+  - `#ens-arc-actor-address`
+  - `#ens-agent-id` (auto-helper: `agent-<ens-label>` unless user manually overrides)
+  - `#ens-token-uri`
+  - `#ens-capabilities-uri`
+- Selectors:
+  - `#ens-arc-address-source` (`metamask`, `circle_wallet`) + `#ens-fill-arc-actor`
+  - `#ens-write-mode` (`demo`, `circle_wallet`, `metamask`)
+- Buttons:
+  - `#ens-check-signer-balance`
+  - `#ens-check-name-status`
+  - `#ens-resolve-identity`
+  - `#ens-register-update`
+- Chips:
+  - `#ens-identity-status`
+  - `#ens-gating-chip`
+  - `#ens-signer-balance-chip`
+  - `#ens-name-status-chip`
+- In-flight UX:
+  - show elapsed timer while ENS setup request is running
+  - include explicit copy that commit→register may take ~60-90s for unowned names
 
 ### U1/U2/U5 sections
 
