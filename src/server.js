@@ -871,7 +871,9 @@ app.post("/api/keeperhub/online-destination-gas/fund-hint", async (req, res) => 
       ok: true,
       ...hint,
       token: hint.native_symbol || "ETH",
-      instructions: `Fund signer wallet on ${hint.destination_network} with native gas token, then retry KeeperHub online transfer.`
+      instructions:
+        `Fund the Circle bridge signer (${hint.signer_address || "see signer_address"}) on ${hint.destination_network} with native gas for CCTP. ` +
+        `Also fund your KeeperHub organization executor on the same chain for the USDC payout step — ${hint.keeperhub_executor_gas_hint || ""}`
     });
   } catch (error) {
     return sendError(res, error.status || 502, error.code || "online_destination_gas_hint_failed", error.message);

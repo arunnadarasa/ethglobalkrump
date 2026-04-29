@@ -76,15 +76,8 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   if (executeRoute) {
     headers["X-API-Key"] = key;
   }
-  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-  }
-  if (path === "/execute/transfer") {
-  }
   const defaultTimeoutMs = executeRoute ? 30000 : 10000;
   const timeoutMs = Number(process.env.KEEPERHUB_REQUEST_TIMEOUT_MS || defaultTimeoutMs);
-  const startedAt = Date.now();
-  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response;
@@ -96,8 +89,6 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
       signal: controller.signal
     });
   } catch (error) {
-    if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    }
     if (error?.name === "AbortError") {
       const err = new Error(`KeeperHub request timed out after ${timeoutMs}ms for ${method} ${path}`);
       err.status = 504;
@@ -109,40 +100,13 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     clearTimeout(timeout);
   }
   const text = await response.text();
-  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-  }
-  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-  }
   let parsed = {};
   try {
     parsed = text ? JSON.parse(text) : {};
   } catch (_e) {
     parsed = { raw: text };
   }
-  if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-    const executionId = parsed?.executionId || parsed?.data?.executionId || parsed?.id || null;
-    const status = parsed?.status || parsed?.data?.status || null;
-    const errorText = parsed?.error?.message || parsed?.error || parsed?.message || null;
-    // #region agent log
-    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-      body: JSON.stringify({
-        sessionId: "995d4d",
-        runId: "post-fix",
-        hypothesisId: "H-G",
-        location: "keeperhub/client.js:keeperhubFetch:execute_response",
-        message: "keeperhub execute endpoint response",
-        data: { path, httpStatus: response.status, ok: response.ok, executionId, status, errorText },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-  }
   if (!response.ok) {
-    if (path === "/execute/transfer" || /^\/execute\/[^/]+\/status$/.test(path)) {
-
-    }
     if (text.trimStart().startsWith("<!") || text.includes("<title>Error</title>")) {
       const err = new Error(
         `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
@@ -244,21 +208,6 @@ async function executeTransferPayout({ recipientAddress, amountMinor, network, i
   const expectedTokenAddress = NETWORK_USDC_ADDRESSES[String(network || "").toLowerCase()] || null;
   const tokenAddressNormalized = String(tokenAddress || "").toLowerCase();
   const expectedTokenAddressNormalized = String(expectedTokenAddress || "").toLowerCase();
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "post-fix",
-      hypothesisId: "H-F",
-      location: "keeperhub/client.js:executeTransferPayout:network_map",
-      message: "mapped keeperhub execute network",
-      data: { inputNetwork: network, executeNetwork },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
   const payload = {
     network: executeNetwork,
     recipientAddress,

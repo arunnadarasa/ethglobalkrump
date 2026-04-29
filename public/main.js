@@ -804,9 +804,6 @@ function setKeeperhubDestinationGasWalletAddress(address) {
 
 function updateKeeperhubChainHint() {
   const target = document.getElementById("keeperhub-chain-hint");
-  if (!target) {
-    return;
-  }
   const network = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
   const chainMap = {
     "base-sepolia": "BASE-SEPOLIA",
@@ -815,8 +812,25 @@ function updateKeeperhubChainHint() {
     "arbitrum-sepolia": "ARB-SEPOLIA",
     "avalanche-fuji": "AVAX-FUJI"
   };
+  const nativeSymbolByNetwork = {
+    "base-sepolia": "ETH",
+    "ethereum-sepolia": "ETH",
+    "polygon-amoy": "POL",
+    "arbitrum-sepolia": "ETH",
+    "avalanche-fuji": "AVAX"
+  };
   const destinationChain = chainMap[network] || String(network || "").toUpperCase();
-  target.textContent = `Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: ${destinationChain} (native gas token).`;
+  if (target) {
+    target.textContent = `Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: ${destinationChain} (native gas token).`;
+  }
+  const reminder = document.getElementById("keeperhub-funding-reminder");
+  if (reminder) {
+    const sel = document.getElementById("keeperhub-execution-network");
+    const label =
+      sel?.options?.[sel.selectedIndex]?.text?.trim() || destinationChain.replace(/-/g, " ");
+    const native = nativeSymbolByNetwork[network] || "that chain's native token";
+    reminder.textContent = `Top up KeeperHub wallets used for online execution on ${label} with USDC and ${native} (native gas on the network you select below).`;
+  }
 }
 
 function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcBalance, destinationChain }) {
@@ -904,7 +918,7 @@ function setKeeperhubSignerWalletIdHint({ destinationNetwork, destinationChain, 
     `Match: ${matches ? "yes" : "no"}.`;
 }
 
-function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, minRecommended, isSufficient }) {
+function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, minRecommended, isSufficient, keeperhubExecutorHint }) {
   const target = document.getElementById("keeperhub-gas-warning");
   if (!target) {
     return;
@@ -914,15 +928,19 @@ function setKeeperhubDestinationGasReadinessHint({ nativeBalance, nativeSymbol, 
     target.classList.remove("warning", "success");
     return;
   }
+  const executor =
+    typeof keeperhubExecutorHint === "string" && keeperhubExecutorHint.trim()
+      ? ` ${keeperhubExecutorHint.trim()}`
+      : "";
   if (!isSufficient) {
     target.classList.remove("hidden", "success");
     target.classList.add("warning");
-    target.textContent = `Action needed: destination gas is low (${nativeBalance || "0"} ${nativeSymbol || "ETH"}). Recommended >= ${minRecommended || 0}.`;
+    target.textContent = `Action needed: Circle bridge signer gas is low (${nativeBalance || "0"} ${nativeSymbol || "ETH"}). Recommended >= ${minRecommended || 0}.${executor}`;
     return;
   }
   target.classList.remove("hidden", "warning");
   target.classList.add("success");
-  target.textContent = `Destination gas is sufficient (${nativeBalance || "0"} ${nativeSymbol || "ETH"}).`;
+  target.textContent = `Circle bridge signer has enough native gas (${nativeBalance || "0"} ${nativeSymbol || "ETH"}) for CCTP.${executor}`;
 }
 
 function setKeeperhubSourceBalanceHint({ usdcBalance }) {
@@ -997,7 +1015,8 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
     nativeBalance: data.body?.signer_native_balance || "0",
     nativeSymbol: data.body?.native_symbol || "ETH",
     minRecommended: data.body?.signer_native_min_recommended ?? 0,
-    isSufficient: Boolean(data.body?.signer_native_is_sufficient)
+    isSufficient: Boolean(data.body?.signer_native_is_sufficient),
+    keeperhubExecutorHint: data.body?.keeperhub_executor_gas_hint_short || data.body?.keeperhub_executor_gas_hint || ""
   });
   let copied = false;
   if (walletAddress && navigator.clipboard?.writeText) {

@@ -70,7 +70,8 @@ pre {
   align-self: center;
 }
 
-#circle-funding-cue {
+#circle-funding-cue,
+#keeperhub-funding-reminder {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -79,7 +80,8 @@ pre {
   color: #d7e6ff;
 }
 
-#circle-funding-cue a {
+#circle-funding-cue a,
+#keeperhub-funding-reminder a {
   color: #7fb1ff;
 }
 
