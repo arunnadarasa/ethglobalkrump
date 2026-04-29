@@ -124,6 +124,13 @@ Additional judge UX refinements:
 - ENS name normalization: bare labels auto-append `.eth` (e.g. `arun` → `arun.eth`)
 - `agentId` helper autofill from ENS label (`arun.eth` → `agent-arun`)
 - In-flight submission timer and explicit commit→register wait cue (`~60-90s`) for unowned names
+- Dynamic wallet-source balance checks:
+  - `Arc actor source: MetaMask connected wallet` or `Created Circle wallet`
+  - `Check wallet Sepolia ETH` now checks the selected source wallet address (not a fixed signer address)
+- Resolver output now returns plain decoded values (no ABI-encoded blobs), so:
+  - `agent_actor_address` is a normal `0x...` address
+  - text values (`agentId`, `allowedIntents`, `arcAddress`) are readable
+  - `is_allowed_for_intent` matches selected intent correctly in UI
 
 Associated endpoints:
 

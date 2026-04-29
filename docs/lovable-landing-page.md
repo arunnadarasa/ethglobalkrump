@@ -79,6 +79,9 @@ We built a full loop:
   - `demo` (no onchain write, preview payload)
   - `circle_wallet` (server signer path)
   - `metamask` (wallet interaction + proof signature before submit)
+- Balance checks follow selected source wallet:
+  - if source = MetaMask, check connected MetaMask wallet Sepolia ETH
+  - if source = Circle wallet, check created Circle wallet Sepolia ETH
 - Resolve output is plain readable values (`agentId`, `allowedIntents`, actor address), then intent-allowed verdict is shown inline.
 - Operator quality-of-life:
   - ENS auto-normalization (`arun` → `arun.eth`)

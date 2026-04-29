@@ -218,3 +218,11 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - ENS resolver decoding hardened:
   - Universal Resolver multicall bytes are decoded into plain `addr` and text values
   - intent gating now evaluates plain `allowedIntents` values (no raw ABI blob mismatch)
+- Wallet-source clarity completed in judge UX:
+  - Sepolia ETH check now follows selected source wallet (`metamask` vs `circle_wallet`) instead of a fixed signer-only path
+  - this removed operator confusion when Circle wallet had 0 ETH but signer wallet had funds (or vice versa)
+- Final UX quality improvements landed:
+  - long-running ENS setup status shows elapsed timer
+  - ENS name status and registration-value cues are visible before write
+  - bare ENS labels auto-normalize to `.eth`
+  - `agentId` auto-helper (`agent-<ens-label>`) speeds setup while preserving manual override
