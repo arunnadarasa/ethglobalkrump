@@ -151,8 +151,37 @@ async function resolveAgentEns({
   });
 
   const decoded = Array.isArray(decodedMulticall) ? decodedMulticall : [];
-  const addr = decoded[0];
-  const textValues = decoded.slice(1);
+  const addrResultBytes = decoded[0];
+  const textResultBytes = decoded.slice(1);
+
+  let addr = null;
+  if (typeof addrResultBytes === "string" && addrResultBytes) {
+    try {
+      addr = decodeFunctionResult({
+        abi: simpleResolverAbi,
+        functionName: "addr",
+        data: addrResultBytes
+      });
+    } catch (_error) {
+      addr = null;
+    }
+  }
+
+  const textValues = textResultBytes.map((data) => {
+    if (typeof data !== "string" || !data) {
+      return null;
+    }
+    try {
+      const value = decodeFunctionResult({
+        abi: simpleResolverAbi,
+        functionName: "text",
+        data
+      });
+      return toNonEmptyString(value);
+    } catch (_error) {
+      return null;
+    }
+  });
 
   const text = {};
   for (let i = 0; i < TEXT_KEYS.length; i += 1) {

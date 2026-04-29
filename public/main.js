@@ -25,6 +25,20 @@ function normalizeEnsNameInput(rawValue) {
   return normalized;
 }
 
+function deriveAgentIdFromEnsName(ensNameRaw) {
+  const normalizedEns = normalizeEnsNameInput(ensNameRaw);
+  const label = String(normalizedEns || "").split(".")[0] || "";
+  const safe = label
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!safe) {
+    return "";
+  }
+  return `agent-${safe}`;
+}
+
 function debugEnsLog(hypothesisId, location, message, data = {}) {
   // #region agent log
   fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -54,6 +68,9 @@ let lastAgentSessionId = "";
 let lastEnsJudgeResolve = null;
 let lastU8ChallengeId = "";
 let lastU8SubmissionId = "";
+let ensSubmissionTimerHandle = null;
+let ensSubmissionStartedAtMs = 0;
+let lastAutoAgentId = "";
 
 function extractCircleWalletDetails(payload) {
   const wallet =
@@ -403,6 +420,60 @@ function setEnsJudgeChip({ statusId, chipText, variant }) {
   target.textContent = chipText;
 }
 
+function stopEnsSubmissionTimer() {
+  if (ensSubmissionTimerHandle) {
+    cancelAnimationFrame(ensSubmissionTimerHandle);
+    ensSubmissionTimerHandle = null;
+  }
+  ensSubmissionStartedAtMs = 0;
+  debugEnsLog("H11", "public/main.js:stopEnsSubmissionTimer", "stopped ENS submission timer", {});
+}
+
+function maybeAutoFillAgentIdFromEnsName() {
+  const ensNameRaw = document.getElementById("ens-name-input")?.value || document.getElementById("agent-ens-name")?.value || "";
+  const nextAuto = deriveAgentIdFromEnsName(ensNameRaw);
+  if (!nextAuto) {
+    return;
+  }
+  const input = document.getElementById("ens-agent-id");
+  if (!input) {
+    return;
+  }
+  const current = String(input.value || "").trim();
+  const canOverwrite = !current || current === lastAutoAgentId;
+  if (!canOverwrite) {
+    debugEnsLog("H12", "public/main.js:maybeAutoFillAgentIdFromEnsName", "skip auto-fill due manual agentId", {
+      currentLength: current.length,
+      lastAutoLength: lastAutoAgentId.length
+    });
+    return;
+  }
+  input.value = nextAuto;
+  lastAutoAgentId = nextAuto;
+  debugEnsLog("H12", "public/main.js:maybeAutoFillAgentIdFromEnsName", "auto-filled agentId", {
+    agentIdLength: nextAuto.length
+  });
+}
+
+function startEnsSubmissionTimer() {
+  stopEnsSubmissionTimer();
+  ensSubmissionStartedAtMs = Date.now();
+  debugEnsLog("H11", "public/main.js:startEnsSubmissionTimer", "started ENS submission timer", {});
+  const render = () => {
+    if (!ensSubmissionStartedAtMs) {
+      return;
+    }
+    const elapsedSec = Math.floor((Date.now() - ensSubmissionStartedAtMs) / 1000);
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: `Submitting ENS setup transaction... ${elapsedSec}s elapsed. If name is unowned, commit->register can take ~60-90s.`,
+      variant: "warning"
+    });
+    ensSubmissionTimerHandle = requestAnimationFrame(render);
+  };
+  ensSubmissionTimerHandle = requestAnimationFrame(render);
+}
+
 function updateAgentRunDisabledByEnsGating() {
   const runBtn = document.getElementById("agent-run-session");
   if (!runBtn) {
@@ -557,6 +628,11 @@ async function registerUpdateEnsJudgeIdentityForUi() {
         : "Submitting ENS setup transaction... If ENS name is unowned, commit->register can take ~60-90s.",
     variant: "warning"
   });
+  if (writeMode !== "demo") {
+    startEnsSubmissionTimer();
+  } else {
+    stopEnsSubmissionTimer();
+  }
 
   const payload = {
     ensName,
@@ -598,6 +674,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
           chipText: "MetaMask account connection was not approved.",
           variant: "warning"
         });
+      stopEnsSubmissionTimer();
         return;
       }
 
@@ -627,6 +704,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
         chipText: error?.message || "MetaMask interaction failed.",
         variant: "warning"
       });
+      stopEnsSubmissionTimer();
       return;
     }
   }
@@ -667,6 +745,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
       chipText: displayMessage,
       variant: "warning"
     });
+    stopEnsSubmissionTimer();
     return;
   }
 
@@ -676,10 +755,12 @@ async function registerUpdateEnsJudgeIdentityForUi() {
       chipText: "Demo mode: payload validated. No onchain write was sent.",
       variant: "success"
     });
+    stopEnsSubmissionTimer();
     print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
     return;
   }
 
+  stopEnsSubmissionTimer();
   print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
   await resolveEnsJudgeIdentityForUi();
 }
@@ -1341,6 +1422,7 @@ document.getElementById("ens-name-input")?.addEventListener("input", (event) => 
   if (globalInput) {
     globalInput.value = value;
   }
+  maybeAutoFillAgentIdFromEnsName();
 });
 
 document.getElementById("ens-name-input")?.addEventListener("blur", (event) => {
@@ -1356,9 +1438,11 @@ document.getElementById("ens-name-input")?.addEventListener("blur", (event) => {
   if (globalInput) {
     globalInput.value = normalized;
   }
+  maybeAutoFillAgentIdFromEnsName();
 });
 
 document.getElementById("ens-name-input")?.addEventListener("change", async () => {
+  maybeAutoFillAgentIdFromEnsName();
   try {
     await checkEnsNameStatusFromUi();
   } catch (_error) {

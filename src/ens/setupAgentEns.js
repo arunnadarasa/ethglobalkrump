@@ -222,6 +222,11 @@ async function setupAgentEns({
   // Re-fetch ownership info in case registration created a wrapped name.
   const refreshedOwner = await getOwner(publicClient, { name: ensName });
   const refreshedOwnershipLevel = refreshedOwner?.ownershipLevel || null;
+  debugEnsServerLog("S13", "src/ens/setupAgentEns.js:owner-refresh", "refreshed owner after register/ownership checks", {
+    hasRefreshedOwner: Boolean(refreshedOwner),
+    refreshedOwnershipLevel: refreshedOwnershipLevel || null,
+    refreshedOwnerAddress: refreshedOwner?.owner || null
+  });
 
   // Ensure resolver is the public resolver.
   const resolverStartMs = Date.now();
@@ -238,12 +243,35 @@ async function setupAgentEns({
   });
   if (!currentResolver || String(currentResolver).toLowerCase() !== String(publicResolverAddress).toLowerCase()) {
     const contract = refreshedOwnershipLevel === "nameWrapper" ? "nameWrapper" : "registry";
-    const resolverHash = await setResolver(walletClient, {
-      name: ensName,
+    debugEnsServerLog("S14", "src/ens/setupAgentEns.js:setResolver:attempt", "attempting setResolver", {
       contract,
-      resolverAddress: publicResolverAddress
+      currentResolver: currentResolver || null,
+      targetResolver: publicResolverAddress,
+      signer
     });
-    await publicClient.waitForTransactionReceipt({ hash: resolverHash });
+    try {
+      const resolverHash = await setResolver(walletClient, {
+        name: ensName,
+        contract,
+        resolverAddress: publicResolverAddress
+      });
+      debugEnsServerLog("S14", "src/ens/setupAgentEns.js:setResolver:submitted", "setResolver tx submitted", {
+        hasResolverHash: Boolean(resolverHash)
+      });
+      await publicClient.waitForTransactionReceipt({ hash: resolverHash });
+      debugEnsServerLog("S14", "src/ens/setupAgentEns.js:setResolver:confirmed", "setResolver tx confirmed", {});
+    } catch (error) {
+      debugEnsServerLog("S15", "src/ens/setupAgentEns.js:setResolver:failed", "setResolver failed", {
+        message: error?.message || String(error),
+        shortMessage: error?.shortMessage || null,
+        details: error?.details || null
+      });
+      throw error;
+    }
+  } else {
+    debugEnsServerLog("S14", "src/ens/setupAgentEns.js:setResolver:skipped", "resolver already set; skipped", {
+      currentResolver
+    });
   }
 
   // Set addr record (coin=60/ETH) to arcActorAddress.
