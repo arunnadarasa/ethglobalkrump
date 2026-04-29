@@ -482,13 +482,15 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
   const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  const writeMode = document.getElementById("ens-write-mode")?.value || "demo";
   debugEnsLog("H3", "public/main.js:registerUpdateEnsJudgeIdentityForUi", "register clicked with form state", {
     hasJudgeEnsInputElement: Boolean(judgeEnsInputEl),
     hasGlobalEnsInputElement: Boolean(globalEnsInputEl),
     ensNameLength: ensName.length,
     arcActorAddressLength: arcActorAddress.length,
     agentIdLength: agentId.length,
-    selectedIntent
+    selectedIntent,
+    writeMode
   });
 
   if (!ensName) {
@@ -507,7 +509,11 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     return;
   }
 
-  setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Submitting ENS setup transaction...", variant: "warning" });
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: writeMode === "demo" ? "Preparing ENS setup (demo mode)..." : "Submitting ENS setup transaction...",
+    variant: "warning"
+  });
 
   const payload = {
     ensName,
@@ -515,14 +521,45 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     agentId,
     tokenUri,
     capabilitiesUri,
-    allowedIntent: selectedIntent
+    allowedIntent: selectedIntent,
+    writeMode
   };
+  if (writeMode === "metamask") {
+    debugEnsLog("M1", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-preflight", "metamask mode preflight", {
+      hasEthereumProvider: Boolean(window.ethereum),
+      hasRequestMethod: Boolean(window.ethereum && typeof window.ethereum.request === "function"),
+      selectedIntent
+    });
+    try {
+      const chainId = window.ethereum && typeof window.ethereum.request === "function"
+        ? await window.ethereum.request({ method: "eth_chainId" })
+        : null;
+      const accounts = window.ethereum && typeof window.ethereum.request === "function"
+        ? await window.ethereum.request({ method: "eth_accounts" })
+        : [];
+      debugEnsLog("M2", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-state", "metamask provider state", {
+        chainId: chainId || null,
+        accountCount: Array.isArray(accounts) ? accounts.length : 0
+      });
+    } catch (error) {
+      debugEnsLog("M2", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-state", "metamask provider state failed", {
+        error: error?.message || String(error)
+      });
+    }
+  }
 
   const data = await request("/api/ens/setup-agent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
+  if (writeMode === "metamask") {
+    debugEnsLog("M3", "public/main.js:registerUpdateEnsJudgeIdentityForUi:metamask-server-response", "metamask mode server response", {
+      status: data.status,
+      ok: data.ok,
+      errorCode: data.body?.error?.code || null
+    });
+  }
 
   if (!data.ok) {
     setEnsJudgeChip({
@@ -533,8 +570,102 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     return;
   }
 
+  if (data.body?.demo_mode) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Demo mode: payload validated. No onchain write was sent.",
+      variant: "success"
+    });
+    print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
+    return;
+  }
+
   print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
   await resolveEnsJudgeIdentityForUi();
+}
+
+async function checkEnsSignerBalanceFromUi() {
+  debugEnsLog("H6", "public/main.js:checkEnsSignerBalanceFromUi", "checking signer balance", {});
+  const data = await request("/api/ens/signer-balance", { method: "GET" });
+  if (!data.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-signer-balance-chip",
+      chipText: data.body?.error?.message || "Failed to load ENS signer balance.",
+      variant: "warning"
+    });
+    return;
+  }
+  const needsTopUp = Boolean(data.body?.needs_top_up);
+  setEnsJudgeChip({
+    statusId: "ens-signer-balance-chip",
+    chipText: `Circle signer ${data.body?.signer_address || ""} | Sepolia ETH: ${data.body?.balance_eth || "0"}${needsTopUp ? " (top up required)" : ""}`,
+    variant: needsTopUp ? "warning" : "success"
+  });
+  print("ens-identity-output", { route: "/api/ens/signer-balance", body: data.body });
+}
+
+async function fillEnsArcActorAddressFromSelectedSource() {
+  const source = document.getElementById("ens-arc-address-source")?.value || "metamask";
+  const targetInput = document.getElementById("ens-arc-actor-address");
+  if (!targetInput) {
+    return;
+  }
+  debugEnsLog("H7", "public/main.js:fillEnsArcActorAddressFromSelectedSource", "arc actor fill requested", {
+    source,
+    hasConnectedAccount: Boolean(connectedAccount),
+    hasLastCreatedCircleWallet: Boolean(lastCreatedCircleWallet)
+  });
+
+  if (source === "metamask") {
+    if (!window.ethereum) {
+      setEnsJudgeChip({
+        statusId: "ens-identity-status",
+        chipText: "MetaMask provider not found in browser.",
+        variant: "warning"
+      });
+      return;
+    }
+    await connectMetaMask();
+    if (!connectedAccount) {
+      setEnsJudgeChip({
+        statusId: "ens-identity-status",
+        chipText: "No MetaMask account connected yet.",
+        variant: "warning"
+      });
+      return;
+    }
+    targetInput.value = connectedAccount;
+    debugEnsLog("H8", "public/main.js:fillEnsArcActorAddressFromSelectedSource", "filled arc actor from metamask", {
+      source,
+      addressLength: connectedAccount.length
+    });
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Arc actor address filled from MetaMask connected wallet.",
+      variant: "success"
+    });
+    return;
+  }
+
+  const circle = lastCreatedCircleWallet || getWalletDetailsFromOutputPane();
+  if (!circle?.walletAddress) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "No created Circle wallet found yet. Create/save a Circle wallet first.",
+      variant: "warning"
+    });
+    return;
+  }
+  targetInput.value = circle.walletAddress;
+  debugEnsLog("H8", "public/main.js:fillEnsArcActorAddressFromSelectedSource", "filled arc actor from circle wallet", {
+    source,
+    addressLength: circle.walletAddress.length
+  });
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: "Arc actor address filled from created Circle wallet.",
+    variant: "success"
+  });
 }
 
 async function getLastAgentSessionFromUi() {
@@ -1004,6 +1135,43 @@ document.getElementById("ens-register-update")?.addEventListener("click", async 
       chipText: error?.message || String(error),
       variant: "warning"
     });
+  }
+});
+
+document.getElementById("ens-check-signer-balance")?.addEventListener("click", async () => {
+  try {
+    await checkEnsSignerBalanceFromUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-signer-balance-chip",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-fill-arc-actor")?.addEventListener("click", async () => {
+  try {
+    await fillEnsArcActorAddressFromSelectedSource();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-write-mode")?.addEventListener("change", async (event) => {
+  const mode = event?.target?.value || "demo";
+  if (mode !== "circle_wallet") {
+    setEnsJudgeChip({ statusId: "ens-signer-balance-chip", chipText: "", variant: null });
+    return;
+  }
+  try {
+    await checkEnsSignerBalanceFromUi();
+  } catch (_error) {
+    // no-op; handled inside helper
   }
 });
 

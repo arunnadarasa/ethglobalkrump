@@ -42,6 +42,19 @@ async function setupAgentEns({
   capabilitiesUri,
   allowedIntent
 } = {}) {
+  const runStartMs = Date.now();
+  const rpcHost = (() => {
+    try {
+      return new URL(String(sepoliaRpcUrl || "")).host || "invalid-url";
+    } catch (_err) {
+      return "invalid-url";
+    }
+  })();
+  debugEnsServerLog("T1", "src/ens/setupAgentEns.js:start", "setup run started", {
+    rpcHost,
+    usesDefaultRpc: String(sepoliaRpcUrl || "") === DEFAULT_ENS_SEPOLIA_RPC_URL
+  });
+
   if (!ensName || typeof ensName !== "string") {
     throw new Error("ensName is required (string)");
   }
@@ -112,8 +125,21 @@ async function setupAgentEns({
 
   const signer = account.address;
   const publicResolverAddress = ensChain.contracts.ensPublicResolver.address;
+  const signerBalanceWei = await publicClient.getBalance({ address: signer });
+  debugEnsServerLog("S11", "src/ens/setupAgentEns.js:signer-balance", "loaded signer Sepolia balance", {
+    signer,
+    signerBalanceWei: signerBalanceWei.toString()
+  });
 
+  const ownerStartMs = Date.now();
+  debugEnsServerLog("T2", "src/ens/setupAgentEns.js:getOwner:start", "calling getOwner", {
+    elapsedMsFromStart: ownerStartMs - runStartMs
+  });
   const nameOwner = await getOwner(publicClient, { name: ensName });
+  debugEnsServerLog("T2", "src/ens/setupAgentEns.js:getOwner:done", "getOwner returned", {
+    elapsedMsFromStart: Date.now() - runStartMs,
+    callDurationMs: Date.now() - ownerStartMs
+  });
   const currentOwnershipLevel = nameOwner?.ownershipLevel || null;
   debugEnsServerLog("S5", "src/ens/setupAgentEns.js:owner-check", "checked ENS ownership state", {
     hasNameOwner: Boolean(nameOwner),
@@ -126,6 +152,11 @@ async function setupAgentEns({
   // Register if unowned.
   if (!nameOwner) {
     debugEnsServerLog("S6", "src/ens/setupAgentEns.js:register-branch", "name unowned; entering commit/register flow", {});
+    if (signerBalanceWei <= 0n) {
+      throw new Error(
+        `Circle wallet mode requires Sepolia ETH for ENS signer gas. Signer ${signer} has 0 wei; fund it and retry.`
+      );
+    }
     const secret = randomSecret();
 
     // Commit then register.
@@ -172,7 +203,15 @@ async function setupAgentEns({
   const refreshedOwnershipLevel = refreshedOwner?.ownershipLevel || null;
 
   // Ensure resolver is the public resolver.
+  const resolverStartMs = Date.now();
+  debugEnsServerLog("T3", "src/ens/setupAgentEns.js:getResolver:start", "calling getResolver", {
+    elapsedMsFromStart: resolverStartMs - runStartMs
+  });
   const currentResolver = await getResolver(publicClient, { name: ensName });
+  debugEnsServerLog("T3", "src/ens/setupAgentEns.js:getResolver:done", "getResolver returned", {
+    elapsedMsFromStart: Date.now() - runStartMs,
+    callDurationMs: Date.now() - resolverStartMs
+  });
   debugEnsServerLog("S9", "src/ens/setupAgentEns.js:resolver-check", "checked resolver before update", {
     hasCurrentResolver: Boolean(currentResolver)
   });
@@ -217,6 +256,9 @@ async function setupAgentEns({
     await publicClient.waitForTransactionReceipt({ hash: txHash });
   }
   debugEnsServerLog("S10", "src/ens/setupAgentEns.js:complete", "ENS setup completed all writes", {});
+  debugEnsServerLog("T4", "src/ens/setupAgentEns.js:finish", "setup run finished", {
+    totalDurationMs: Date.now() - runStartMs
+  });
 }
 
 module.exports = {

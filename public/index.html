@@ -135,12 +135,24 @@
           />
         </div>
         <div class="row">
+          <select id="ens-arc-address-source" style="min-width: 230px">
+            <option value="metamask">Arc actor source: MetaMask connected wallet</option>
+            <option value="circle_wallet">Arc actor source: Created Circle wallet</option>
+          </select>
+          <button id="ens-fill-arc-actor" type="button">Use selected wallet address</button>
+          <select id="ens-write-mode" style="min-width: 200px">
+            <option value="demo">ENS write mode: Demo</option>
+            <option value="circle_wallet">ENS write mode: Circle Wallet</option>
+            <option value="metamask">ENS write mode: MetaMask</option>
+          </select>
+          <button id="ens-check-signer-balance" type="button">Check Circle signer Sepolia ETH</button>
           <button id="ens-resolve-identity" type="button">Resolve ENS for Vyper agent</button>
           <button id="ens-register-update" type="button">Register/Update ENS Identity</button>
         </div>
         <div class="row">
           <div id="ens-identity-status" class="hint-chip hidden"></div>
           <div id="ens-gating-chip" class="hint-chip hidden"></div>
+          <div id="ens-signer-balance-chip" class="hint-chip hidden"></div>
         </div>
         <pre id="ens-identity-output"></pre>
       </section>

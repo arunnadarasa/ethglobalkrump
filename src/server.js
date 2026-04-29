@@ -990,19 +990,49 @@ app.get("/api/ens/resolve", async (req, res) => {
   }
 });
 
-app.post("/api/ens/setup-agent", async (req, res) => {
+app.get("/api/ens/signer-balance", async (_req, res) => {
   try {
     if (!ENS_PRIVATE_KEY) {
-      return sendError(res, 400, "ens_private_key_missing", "Set ENS_PRIVATE_KEY in env to write ENS records");
+      return sendError(res, 400, "ens_private_key_missing", "Set ENS_PRIVATE_KEY in env first.");
     }
+    const viem = await import("viem");
+    const viemAccounts = await import("viem/accounts");
+    const viemChains = await import("viem/chains");
+    const { createPublicClient, http, formatEther } = viem;
+    const { privateKeyToAccount } = viemAccounts;
+    const { sepolia } = viemChains;
+
+    const account = privateKeyToAccount(ENS_PRIVATE_KEY);
+    const client = createPublicClient({
+      chain: sepolia,
+      transport: http(ENS_SEPOLIA_RPC_URL)
+    });
+    const balanceWei = await client.getBalance({ address: account.address });
+
+    return res.json({
+      ok: true,
+      signer_address: account.address,
+      balance_wei: balanceWei.toString(),
+      balance_eth: formatEther(balanceWei),
+      needs_top_up: balanceWei <= 0n
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_signer_balance_failed", error.message || String(error));
+  }
+});
+
+app.post("/api/ens/setup-agent", async (req, res) => {
+  try {
     const {
       ensName,
       arcActorAddress,
       agentId,
       tokenUri,
       capabilitiesUri,
-      allowedIntent
+      allowedIntent,
+      writeMode
     } = req.body || {};
+    const normalizedWriteMode = String(writeMode || "demo").trim().toLowerCase();
 
     if (!ensName || typeof ensName !== "string") {
       return sendError(res, 400, "ens_name_required", "ensName is required");
@@ -1015,6 +1045,36 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     }
     if (!allowedIntent || typeof allowedIntent !== "string") {
       return sendError(res, 400, "allowed_intent_required", "allowedIntent is required (single intent id)");
+    }
+    if (!["demo", "circle_wallet", "metamask"].includes(normalizedWriteMode)) {
+      return sendError(res, 400, "ens_write_mode_invalid", "writeMode must be demo, circle_wallet, or metamask");
+    }
+
+    if (normalizedWriteMode === "demo") {
+      return res.json({
+        ok: true,
+        demo_mode: true,
+        write_mode: normalizedWriteMode,
+        ens_name: ensName.trim(),
+        preview: {
+          agent_actor_address: arcActorAddress.trim(),
+          text: {
+            agentId: agentId.trim(),
+            tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
+            capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
+            allowedIntents: [allowedIntent.trim()],
+            arcAddress: arcActorAddress.trim()
+          }
+        }
+      });
+    }
+    if (!ENS_PRIVATE_KEY) {
+      return sendError(
+        res,
+        400,
+        "ens_private_key_missing",
+        "Set ENS_PRIVATE_KEY in env (funded with Sepolia ETH) for circle_wallet/metamask ENS writes."
+      );
     }
 
     await setupAgentEns({
@@ -1046,7 +1106,8 @@ app.post("/api/ens/setup-agent", async (req, res) => {
         allowedIntents: resolved.allowedIntents,
         arcAddress: resolved.text?.arcAddress || null
       },
-      allowed_intents: resolved.allowedIntents
+      allowed_intents: resolved.allowedIntents,
+      write_mode: normalizedWriteMode
     });
   } catch (error) {
     return sendError(res, 502, "ens_setup_failed", error.message || String(error));
