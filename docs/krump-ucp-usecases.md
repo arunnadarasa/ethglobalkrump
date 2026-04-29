@@ -179,6 +179,7 @@ Tie-break rules:
 
 - Why now: Judges understand it instantly and it is operationally practical.
 - Core flow: registration checkout, roster lock, winner settlement.
+- Optional: on-chain winner payout via **KeeperHub** (`execute_via_keeperhub`), including **online** mode (Arc USDC → Bridge Kit → destination testnet → KeeperHub transfer) when keys and wallets are funded.
 - Demo proof points:
   - 4 entrants checkout
   - bracket result update
@@ -204,3 +205,13 @@ flowchart LR
 - UCP track narrative: interoperable commerce primitives for creator and event ecosystems.
 - Circle narrative: gas-free USDC nanopayments + batched settlement for high-frequency low-value transactions.
 - Arc narrative: testnet-native chain execution for transparent programmable settlement and payout logic.
+
+## 7) Cross-chain online execution (OpenAgents / KeeperHub + Circle)
+
+For **online** `execution_mode`, the app bridges **Arc USDC** to a selected testnet using **Circle Bridge Kit** (CCTP), then may call **KeeperHub** `POST /execute/transfer` on that destination for the USDC payout leg. Operators should fund:
+
+1. **Arc** online source wallet with USDC (bridge fuel).
+2. **Destination chain** Circle wallet used as the CCTP signer with **native gas** (e.g. POL on Polygon Amoy) and USDC as surfaced in the UI/API.
+3. **KeeperHub organization executor** on the **same destination chain** with native gas for the payout transaction (separate from the Circle signer — documented in README and `online-destination-gas` fund-hint responses).
+
+This matters most for **U5** (`execute_via_keeperhub`) and the KeeperHub demo transfer, but the same execution selectors apply across payment-bearing demos.

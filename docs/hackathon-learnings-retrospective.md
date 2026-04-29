@@ -180,6 +180,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 15. Keep a one-click KeeperHub "Refresh balances" control so operators can re-check source/destination funding without opening faucet pages.
 16. Pre-provision destination signer wallets for all target chains in demo environments to avoid fallback-mode confusion during judging.
 
+17. **Document the two-wallet gas story in product copy, not only in logs**
+   - Judges hit “mint failed” when **Circle bridge signer** POL was barely enough for pending txs; separately, **KeeperHub’s org executor** needs native gas for `/execute/transfer`.
+   - Surfacing both in **API `instructions`**, **fund-hint** payloads (`keeperhub_executor_gas_hint`), and a **static KeeperHub funding reminder** in the UI reduced misdiagnosis (“RPC is down”) vs insufficient gas headroom.
+
 ## Outcome Snapshot
 
 - MVP tracks: implemented and runnable
@@ -201,3 +205,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - KeeperHub destination signer UX: source-vs-destination signer mode, wallet-id hints, and fallback warnings are now shown inline in the demo panel
 - Multi-chain destination wallet provisioning: destination Circle wallets were provisioned for Base Sepolia, Ethereum Sepolia, Polygon Amoy, Arbitrum Sepolia, and Avalanche Fuji
 - KeeperHub operator ergonomics: added "Refresh balances" action in panel to reload Arc source and destination signer funding state without launching faucets
+- KeeperHub funding UX: persistent panel note to top up with **USDC + native token** for the **selected execution network**; destination gas API returns clearer **Circle signer vs org executor** instructions and executor gas hints
+- CCTP / Bridge Kit: Amoy and other destinations tunable via `POLYGON_AMOY_RPC_URL`, `POLYGON_AMOY_RPC_PUBLIC_FIRST`, `ALLOW_LOW_DESTINATION_GAS`, `ARC_BRIDGE_TRANSFER_SPEED`; per-chain recommended native minimums (e.g. Amoy **POL**) live in `src/settlement/cctpBridge.js`
+- KeeperHub execute mapping: some destination networks require **numeric chain `network`** values on `/execute/transfer` (implemented in `src/keeperhub/client.js`) when string slugs are rejected upstream
+- Debug hygiene: local `127.0.0.1` ingest telemetry removed from shipped KeeperHub client paths for cleaner production-style runs

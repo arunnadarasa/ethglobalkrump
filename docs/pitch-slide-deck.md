@@ -27,7 +27,7 @@ Speaker note: Existing solutions force a tradeoff between agent intelligence and
 - Agent orchestration layer for H2A, A2A, A2H.
 - Vyper settlement policy for enforcement credibility.
 - Circle + Arc rails for practical payment operations.
-- **KeeperHub** (ETHGlobal OpenAgents sponsor): dual execution mode — local Arc and online testnet mode via Arc USDC CCTP bridge (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji).
+- **KeeperHub** (ETHGlobal OpenAgents sponsor): dual execution mode — local Arc and online testnet mode via **Circle Bridge Kit** CCTP from Arc USDC (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji), then KeeperHub payout on the destination chain.
 
 Speaker note: We did not replace standards. We composed them, then layered sponsor-grade execution where it helps.
 
@@ -42,7 +42,7 @@ In one interface, users can:
 - Run settlement policy checks
 - View UCP discovery/conformance outputs
 - Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `offchain_demo`)
-- KeeperHub operator panel now includes one-click `Refresh balances` and explicit destination signer source + wallet-id hints
+- KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
 
 Speaker note: Every action is explainable and auditable in real time.
 
@@ -99,11 +99,12 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 4. Highlight trace events and settlement proof.
 5. Trigger one payment flow with MetaMask and one with Circle (all payment-bearing flows support live rail selection in UI).
 6. Show UCP checkout/order endpoints.
-7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc -> CCTP -> target testnet transfer).
-8. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-9. Show Arc deployment proof in README.
+7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
+8. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
+9. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
+10. Show Arc deployment proof in README.
 
-Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (KeeperHub executes; UCP decides commerce shape).
+Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape).
 
 ---
 
@@ -134,8 +135,8 @@ Speaker note: We already have the core stack. Next is distribution and integrati
 
 - UCP endpoints in `src/server.js`
 - Agent orchestration in `src/agents/orchestrator.js`
-- KeeperHub client in `src/keeperhub/client.js`; routes `/api/keeperhub/*` and `execute_via_keeperhub` on declare-winner in `src/server.js`
-- KeeperHub UI controls and signer hints in `public/main.js` + `public/index.html`
+- KeeperHub client in `src/keeperhub/client.js`; online bridge in `src/settlement/cctpBridge.js`; routes `/api/keeperhub/*` (including `online-*-wallet/fund-hint`) and `execute_via_keeperhub` on declare-winner in `src/server.js`
+- KeeperHub UI controls, `#keeperhub-funding-reminder`, and signer/gas hints in `public/main.js` + `public/index.html`
 - Vyper contract in `contracts/AgentSettlementPolicy.vy`
 - Tests in `tests/titanoboa/test_agent_settlement_policy.py`
 - Deployment helper in `scripts/deploy_vyper_policy.py`

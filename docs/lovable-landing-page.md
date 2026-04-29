@@ -66,6 +66,8 @@ We built a full loop:
   - one-click `Refresh balances` for source Arc USDC + destination signer balances
   - explicit destination signer source mode (`destination wallet` vs `source fallback`)
   - destination signer wallet-id hints per chain
+  - a clear **funding reminder**: top up on the **selected execution network** with **USDC** and that chain’s **native gas** (POL on Amoy, ETH on Sepolia networks, AVAX on Fuji, etc.)
+  - gas readiness messaging that distinguishes **Circle CCTP bridge signer** balances from **KeeperHub organization executor** native requirements (API `keeperhub_executor_gas_hint` + `instructions` on destination fund-hint)
 
 ## Architecture (high level)
 
@@ -85,6 +87,12 @@ We built a full loop:
   - `ARB-SEPOLIA`
   - `AVAX-FUJI`
 - Polygon Amoy native gas labeling uses `POL` in UX hints and warnings.
+- Online bridging uses **Circle Bridge Kit** (Arc App Kit) from Arc USDC; optional env tuning for Amoy RPCs and bridge speed (`POLYGON_AMOY_RPC_URL`, `POLYGON_AMOY_RPC_PUBLIC_FIRST`, `ARC_BRIDGE_TRANSFER_SPEED`, `ALLOW_LOW_DESTINATION_GAS` — see `.env.example`).
+
+### 6) Operator-facing funding APIs
+
+- `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc USDC source for the bridge
+- `POST /api/keeperhub/online-destination-gas/fund-hint` — destination signer balances, recommended native minimum, executor gas hints, and human-readable `instructions`
 
 ## Who this is for
 
@@ -101,7 +109,7 @@ We built a full loop:
 4. Show session trace with settlement proof.
 5. Show UCP checkout/order responses.
 6. Show Arc deployment proof and Vyper fallback toggle.
-7. Optionally: KeeperHub status + one demo transfer or U5 payout with “Execute via KeeperHub” checked.
+7. Optionally: KeeperHub status + funding reminder + **Refresh balances** / fund-hint output + one demo transfer or U5 payout with “Execute via KeeperHub” checked.
 
 ## Credibility Proof
 
@@ -117,7 +125,8 @@ We built a full loop:
 - Titanoboa + pytest
 - Circle developer-controlled wallets
 - Arc testnet
-- [KeeperHub](https://docs.keeperhub.com/api) REST (chains + direct execution) for OpenAgents sponsor story
+- [KeeperHub](https://docs.keeperhub.com/api) REST (chains + direct execution) for OpenAgents sponsor story  
+- `@circle-fin/bridge-kit`, `@circle-fin/app-kit`, `@circle-fin/adapter-circle-wallets` for **online** CCTP bridging from Arc
 
 ## Call to Action
 

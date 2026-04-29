@@ -14,7 +14,7 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - Real creator economy flows, not toy examples: live tips, paid tutorials, and battle payouts.
 - Dual rails by design: MetaMask on-chain and Circle wallet transfers in one UI.
 - Optional KeeperHub layer for reliable on-chain transfers (demo + U5 payout) without replacing UCP or Circle as the commerce core.
-- Built for demo-day reliability: onboarding UX, wallet save state, balance visibility, and funding cues.
+- Built for demo-day reliability: onboarding UX, wallet save state, balance visibility, funding cues, and **KeeperHub online** guidance (USDC + native gas on the selected chain, plus org executor hints).
 - Built for auditability: incremental commits, explicit docs, and reproducible setup.
 - Conformance-aware by design: schema-validated UCP endpoints and built-in self-test route.
 
@@ -139,7 +139,8 @@ If testnet RPC or key issues appear close to demo time, set `ENABLE_VYPER_SETTLE
 ### Project Structure
 
 - `src/server.js` - Express API for tracks, Circle rails, and official UCP endpoints
-- `src/keeperhub/client.js` - KeeperHub REST client (chains discovery + direct execution transfers)
+- `src/settlement/cctpBridge.js` - Arc → destination testnet USDC bridge via Circle **Bridge Kit** / App Kit (online execution)
+- `src/keeperhub/client.js` - KeeperHub REST client (chains discovery + direct execution transfers; numeric `network` IDs for select online chains)
 - `src/agents/orchestrator.js` - in-repo H2A/A2H/A2A session orchestration
 - `src/settlement/vyperPolicy.js` - deep settlement policy evaluator (Node-side mirror)
 - `src/state.js` - in-memory demo state and helper utilities
@@ -231,15 +232,29 @@ The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes)
 
 - `GET /api/keeperhub/status` — whether a key is set, whether Arc appears in KeeperHub’s chain list, and the resolved execute `network` slug when possible
 - `GET /api/keeperhub/chains` — proxied chain list (auth: Bearer `kh_…`, per [Authentication](https://docs.keeperhub.com/api/authentication))
-- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; local mode uses Arc execution directly, online mode uses CCTP bridge then [transfer](https://docs.keeperhub.com/api/direct-execution) on selected target network
+- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; local mode uses Arc execution directly, online mode runs **Circle Bridge Kit** CCTP from Arc then [KeeperHub transfer](https://docs.keeperhub.com/api/direct-execution) on the selected target network
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — resolves/creates the Arc online source wallet and returns wallet address + faucet hint to fund bridge source USDC
+- `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns destination signer address, **native + USDC** balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` (short and long variants), `instructions` (fund Circle **bridge signer** for CCTP mint gas **and** KeeperHub **organization executor** for the USDC payout leg), and chain faucet URL when applicable
 - `POST /api/battle/declare-winner` — optional body flag `execute_via_keeperhub: true` with the same semantics as the UI checkbox (pushes pool to winner wallet via KeeperHub when configured)
 - `GET /api/execution/networks` — supported execution modes and online destination networks
+
+### Online bridge tuning (`.env`)
+
+Documented in `.env.example` alongside KeeperHub:
+
+- `POLYGON_AMOY_RPC_URL` — optional dedicated Amoy RPC when public endpoints are flaky during mint
+- `POLYGON_AMOY_RPC_PUBLIC_FIRST` — order public vs custom Amoy RPCs for Bridge Kit (`true` by default)
+- `ALLOW_LOW_DESTINATION_GAS` — when `true`, allows attempting the bridge even if destination native balance is below the **recommended** minimum (use for debugging only)
+- `ARC_BRIDGE_TRANSFER_SPEED` — `FAST` or `SLOW` for Bridge Kit attestation pacing
+
+Per-chain **recommended minimum native gas** for the Circle signer (before CCTP mint) is defined in `src/settlement/cctpBridge.js` (e.g. Polygon Amoy uses **POL** with a small floor for pending-tx headroom).
 
 ### UI
 
 - **KeeperHub** section: status, chain list, and a small **demo transfer** form (minor units match the rest of the app: `amount_minor / 100` is the human token amount sent to KeeperHub).
+- **Funding reminder** (above the operator buttons): prompts operators to top up KeeperHub-related wallets on the **selected execution network** with **USDC** and that chain’s **native gas** (e.g. POL on Polygon Amoy).
 - **KeeperHub** section includes **Fund online source (Arc USDC)** to copy the exact source wallet address and open [Circle Faucet](https://faucet.circle.com/) before online bridging.
+- **Fund destination gas wallet** refreshes destination signer balances and surfaces a **gas readiness** chip that distinguishes **Circle bridge signer** native balance from the separate **KeeperHub org executor** gas requirement (see API hints above).
 - Every payment action now includes `Execution local|online` selector and destination network selector for online mode.
 - **U5**: checkbox **Execute winner payout on-chain via KeeperHub** on declare winner.
 
@@ -265,6 +280,7 @@ KeeperHub’s prize page asks for a demo, public repo with README, and a short w
 - Circle and MetaMask balances are visible in the same demo for operational confidence.
 - Official UCP discovery/checkout/order responses are exposed with schema-backed validation.
 - KeeperHub status/chains and demo transfer UI exercise the sponsor integration without changing UCP semantics.
+- Online path: Arc USDC → Bridge Kit CCTP → destination testnet → KeeperHub USDC payout, with operator-visible balance and gas guidance.
 
 ## Additional API surface
 

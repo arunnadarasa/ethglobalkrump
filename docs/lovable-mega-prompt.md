@@ -14,7 +14,7 @@ Recreate the app **functionally equivalent** to this specification. Prefer clari
 
 ## Tech stack (must match)
 
-- **Backend:** Node.js **20+** + Express + `dotenv` (see `package.json`: `@ucp-js/sdk`, `express`, `dotenv`; scripts `start` + `dev`)
+- **Backend:** Node.js **20+** + Express + `dotenv` (see `package.json`: `@ucp-js/sdk`, `@circle-fin/app-kit`, `@circle-fin/bridge-kit`, `@circle-fin/adapter-circle-wallets`, `express`, `dotenv`; scripts `start` + `dev`)
 - **UCP:** `@ucp-js/sdk` Zod schemas:
   - `CheckoutCreateRequestSchema`
   - `UcpCheckoutResponseSchema`
@@ -33,7 +33,8 @@ src/server.js                 # Express app + all routes
 src/state.js                  # dancers, clips, payments, battle, helpers
 src/agents/orchestrator.js    # agent sessions + trace
 src/settlement/vyperPolicy.js # Node-side policy mirror + spend ledger
-src/keeperhub/client.js       # KeeperHub REST: chains, execute/transfer, execution status
+src/settlement/cctpBridge.js  # Online mode: Arc USDC -> destination via Circle Bridge Kit CCTP + balance/gas hints
+src/keeperhub/client.js       # KeeperHub REST: chains, execute/transfer, execution status (numeric network ids where required)
 contracts/AgentSettlementPolicy.vy
 scripts/deploy_vyper_policy.py
 tests/titanoboa/requirements.txt
@@ -95,12 +96,16 @@ docs/*                        # optional marketing/pitch md
 - `KEEPERHUB_TOKEN_DECIMALS`, `KEEPERHUB_TOKEN_SYMBOL`, `KEEPERHUB_GAS_LIMIT_MULTIPLIER` — optional
 - `KEEPERHUB_ONLINE_DEFAULT_NETWORK` — default online destination (`base-sepolia` recommended)
 
-### CCTP online execution (optional)
+### Online CCTP bridge (Circle Bridge Kit; optional)
 
-- `CIRCLE_CCTP_TRANSFER_PATH` — default `/v1/cctp/transfers`
-- `CIRCLE_CCTP_STATUS_PATH` — default `/v1/cctp/transfers`
-- `CIRCLE_CCTP_TIMEOUT_MS` — bridge finality timeout
-- `CIRCLE_CCTP_POLL_MS` — status poll interval
+Bridge Kit drives burns/mints from **Arc testnet USDC** to the selected destination testnet. Tune with:
+
+- `POLYGON_AMOY_RPC_URL` — optional dedicated Polygon Amoy HTTP RPC
+- `POLYGON_AMOY_RPC_PUBLIC_FIRST` — `true` (default) to try public Amoy RPCs before `POLYGON_AMOY_RPC_URL`
+- `ARC_BRIDGE_TRANSFER_SPEED` — `FAST` or `SLOW` (Bridge Kit attestation pacing)
+- `ALLOW_LOW_DESTINATION_GAS` — `true` to attempt bridge when destination native is below **recommended** minimum (debug only)
+
+Recommended **minimum native gas** per destination (Circle signer, pre-mint) is implemented in `src/settlement/cctpBridge.js` (chain-accurate symbols in API/UI, e.g. **POL** on `polygon-amoy`).
 
 ## HTTP API (must implement)
 
@@ -122,8 +127,10 @@ docs/*                        # optional marketing/pitch md
 - `GET /api/keeperhub/status` — JSON: `configured`, `api_base`, `arc_chain_id`, `arc_supported`, `execute_network`, matched `chain` summary, `token_address_configured`, or `error` string if chains call failed.
 - `GET /api/keeperhub/chains?includeDisabled=true|false` — requires key; returns `{ ok, arc_chain_id, matched, chains }`.
 - `GET /api/execution/networks` — returns `{ modes, online_default_network, online_networks }`.
-- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; `local` mode keeps Arc transfer path, `online` mode runs CCTP Arc→target then KeeperHub execute transfer on target network.
-- **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL.
+- `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; `local` mode keeps Arc transfer path, `online` mode runs **Bridge Kit** CCTP Arc→target then KeeperHub execute transfer on target network.
+- `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc online bridge source wallet + USDC balance + Circle faucet cue.
+- `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns signer address, native + USDC balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` / `_short`, `instructions` (Circle signer vs KeeperHub org executor).
+- **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL; map some online destinations to **numeric** `network` chain IDs for `/execute/transfer` when string slugs are rejected.
 
 ### UCP (official stack)
 
@@ -395,6 +402,7 @@ Inputs/buttons as in reference:
 
 ### KeeperHub (UI)
 
+- `#keeperhub-funding-reminder` — persistent note: fund with **USDC** + selected chain **native gas** for online execution (updates when `#keeperhub-execution-network` changes).
 - `#keeperhub-load-status`, `#keeperhub-load-chains`, `#keeperhub-demo-recipient`, `#keeperhub-demo-amount`, `#keeperhub-demo-transfer`
 - Add `#keeperhub-refresh-balances` button to re-fetch source + destination balances without opening faucet links.
 - Include inline hints:
@@ -454,8 +462,8 @@ Three modes:
   - `avalanche-fuji`
 - Native-symbol labels in UX should be chain-accurate (`POL` for Polygon Amoy, `AVAX` for Avalanche Fuji).
 - Online mode backend behavior:
-  1. bridge USDC from Arc testnet to target network via CCTP
-  2. execute KeeperHub transfer on target network
+  1. bridge USDC from Arc testnet to target network via **Circle Bridge Kit** CCTP (`src/settlement/cctpBridge.js`)
+  2. execute KeeperHub transfer on target network (`network` slug or numeric id per `src/keeperhub/client.js`)
   3. return combined receipt metadata (`bridge`, `keeperhub`, `payment_ref`)
 
 ## Vyper contract + tests + deploy
@@ -491,9 +499,9 @@ Arcscan supports Blockscout v2 verification API:
 - `node --check` on `src/server.js`, `src/agents/orchestrator.js`, `src/settlement/vyperPolicy.js`, `src/keeperhub/client.js`, `public/main.js`
 - Python 3.11: `pip install -r tests/titanoboa/requirements.txt` + `pytest tests/titanoboa -q`
 
-## Known “debug telemetry” (optional)
+## Debug telemetry
 
-Current reference code may include `fetch('http://127.0.0.1:7488/ingest/...')` blocks in `src/server.js` and `public/main.js` for local debugging. For a clean Lovable rebuild, **omit** these unless you want parity including debug noise.
+Shipped reference code should **not** POST to local ingest URLs. If you fork an older snapshot that still contains `127.0.0.1:7488` ingest calls, remove them for production-like builds.
 
 ## Acceptance checklist (must pass)
 
@@ -506,7 +514,7 @@ Current reference code may include `fetch('http://127.0.0.1:7488/ingest/...')` b
 7. U3/U6/U7/U8/U4/U10 flows are runnable from UI and return deterministic JSON records.
 8. Agent capabilities include expanded intents (`judge_feedback_request`, `crew_split_settlement`, `practice_room_reserve`, `sample_pack_purchase`, `challenge_payout`, `merch_concierge_checkout`) and UI syncs dropdown from capabilities.
 9. CI jobs pass.
-10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
+10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); `online-source-wallet` / `online-destination-gas` fund-hint routes return structured balances + gas guidance; optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
 
 ---
 

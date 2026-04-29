@@ -57,7 +57,7 @@ You are working in a **new workspace** (fresh clone). Goal: run **[KeeperHub/kee
 
    Krump should run with `PORT` **different** from KeeperHub if both are local.
 
-   Reference implementation in Krump: `src/keeperhub/client.js`, routes under `/api/keeperhub/*`, README KeeperHub section.
+   Reference implementation in Krump: `src/keeperhub/client.js` (including **numeric `network` chain IDs** for some public testnets when `/execute/transfer` rejects string slugs), `src/settlement/cctpBridge.js` (Bridge Kit online bridge + gas hints), routes under `/api/keeperhub/*`, README KeeperHub section.
 
 ## Deliverables (what you output back to the user)
 
