@@ -698,7 +698,7 @@ async function checkEnsSignerBalanceFromUi() {
   const needsTopUp = Boolean(data.body?.needs_top_up);
   setEnsJudgeChip({
     statusId: "ens-signer-balance-chip",
-    chipText: `Circle signer ${data.body?.signer_address || ""} | Sepolia ETH: ${data.body?.balance_eth || "0"}${needsTopUp ? " (top up required)" : ""}`,
+    chipText: `Wallet ${data.body?.signer_address || ""} | Sepolia ETH: ${data.body?.balance_eth || "0"}${needsTopUp ? " (top up required)" : ""}`,
     variant: needsTopUp ? "warning" : "success"
   });
   print("ens-identity-output", { route: "/api/ens/signer-balance", body: data.body });
