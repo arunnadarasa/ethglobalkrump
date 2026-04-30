@@ -90,7 +90,63 @@ const AISA_X402_PILOT_INTENTS = String(process.env.AISA_X402_PILOT_INTENTS || "j
   .split(",")
   .map((entry) => entry.trim())
   .filter(Boolean);
-const AISA_LLM_ALLOWED_MODELS = ["gpt-5.3-codex", "claude-opus-4.6", "gemini-3.1-pro", "sonar"];
+const AISA_LLM_ALLOWED_MODELS = [
+  "claude-3-7-sonnet-20250219",
+  "claude-3-7-sonnet-20250219-thinking",
+  "claude-opus-4-1-20250805",
+  "claude-opus-4-1-20250805-thinking",
+  "claude-opus-4-20250514",
+  "claude-opus-4-20250514-thinking",
+  "claude-opus-4-5-20251101",
+  "claude-opus-4-6",
+  "claude-opus-4-7",
+  "claude-sonnet-4-20250514",
+  "claude-sonnet-4-20250514-thinking",
+  "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-6",
+  "claude-sonnet-4-6-thinking",
+  "deepseek-v3.2",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-3-pro-image-preview",
+  "gemini-3-pro-preview",
+  "gemini-3.1-pro-preview",
+  "glm-5",
+  "gpt-4.1",
+  "gpt-4.1-mini",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-5",
+  "gpt-5-mini",
+  "gpt-5.2",
+  "gpt-5.2-chat-latest",
+  "gpt-5.3-codex",
+  "gpt-5.4",
+  "kimi-k2-thinking",
+  "kimi-k2.5",
+  "MiniMax-M2.5",
+  "qwen-flash",
+  "qwen-mt-flash",
+  "qwen-mt-lite",
+  "qwen-plus-2025-12-01",
+  "qwen3-coder-plus",
+  "qwen3-max",
+  "qwen3-vl-flash",
+  "qwen3-vl-flash-2025-10-15",
+  "qwen3-vl-plus",
+  "qwen3.6-plus",
+  "seed-1-6-250915",
+  "seed-1-6-flash-250715",
+  "seed-1-8-251228",
+  "seed-2-0-lite-260228",
+  "seed-2-0-mini-260215",
+  "seed-2-0-pro-260328",
+  "seedream-4-5-251128",
+  "wan2.7-image",
+  "wan2.7-image-pro",
+  "sonar"
+];
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -1005,7 +1061,7 @@ app.post("/api/payments/x402/authorize", async (req, res) => {
 
 app.post("/api/aisa/llm/chat", async (req, res) => {
   try {
-    const { mode, model, messages, temperature, max_tokens } = req.body || {};
+    const { mode, model, messages, temperature, max_tokens, endpoint_path, capability } = req.body || {};
     const selectedMode = String(mode || "api_key_proxy").trim();
     const selectedModel = String(model || "").trim();
     // #region agent log
@@ -1021,6 +1077,8 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
         data: {
           mode: selectedMode,
           model: selectedModel,
+          capability: String(capability || "text"),
+          endpoint_path: String(endpoint_path || ""),
           messagesCount: Array.isArray(messages) ? messages.length : -1
         },
         timestamp: Date.now()
@@ -1061,7 +1119,9 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
     }
 
     if (selectedMode === "api_key_proxy") {
-      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/v1/chat/completions`;
+      const endpointPath = String(endpoint_path || "/v1/chat/completions").trim();
+      const normalizedEndpointPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedEndpointPath}`;
       // #region agent log
       fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
         method: "POST",
@@ -1075,6 +1135,8 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
           data: {
             url,
             model: selectedModel,
+            capability: String(capability || "text"),
+            endpointPath: normalizedEndpointPath,
             temperature: Number(temperature ?? 0.2),
             maxTokens: Number(max_tokens ?? 256)
           },
@@ -1143,7 +1205,9 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
     }
 
     if (selectedMode === "x402_probe") {
-      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/apis/v2/perplexity/sonar`;
+      const endpointPath = String(endpoint_path || "/apis/v2/perplexity/sonar").trim();
+      const normalizedEndpointPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedEndpointPath}`;
       // #region agent log
       fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
         method: "POST",
@@ -1156,7 +1220,9 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
           message: "x402 probe upstream request",
           data: {
             url,
-            model: selectedModel
+            model: selectedModel,
+            capability: String(capability || "text"),
+            endpointPath: normalizedEndpointPath
           },
           timestamp: Date.now()
         })

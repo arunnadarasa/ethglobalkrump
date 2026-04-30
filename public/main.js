@@ -52,6 +52,63 @@ let lastU8SubmissionId = "";
 let ensSubmissionTimerHandle = null;
 let ensSubmissionStartedAtMs = 0;
 let lastAutoAgentId = "";
+const AISA_LLM_MODEL_CATALOG = [
+  { id: "claude-3-7-sonnet-20250219", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "claude-3-7-sonnet-20250219-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "claude-opus-4-1-20250805", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-1-20250805-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-20250514", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-20250514-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-5-20251101", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-6", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-opus-4-7", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-sonnet-4-20250514", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-sonnet-4-20250514-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-sonnet-4-5-20250929", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-sonnet-4-6", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "claude-sonnet-4-6-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "deepseek-v3.2", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gemini-2.5-flash", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "vision"] },
+  { id: "gemini-2.5-flash-lite", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "vision"] },
+  { id: "gemini-2.5-pro", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "coding", "vision"] },
+  { id: "gemini-3-pro-image-preview", endpoint: "/v1/chat/completions", capabilities: ["image", "vision"] },
+  { id: "gemini-3-pro-preview", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "gemini-3.1-pro-preview", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "glm-5", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-4.1", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "gpt-4.1-mini", endpoint: "/v1/chat/completions", capabilities: ["text", "coding", "vision"] },
+  { id: "gpt-4o", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "vision"] },
+  { id: "gpt-4o-mini", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "vision"] },
+  { id: "gpt-5", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-5-mini", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-5.2", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-5.2-chat-latest", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-5.3-codex", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "gpt-5.4", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "kimi-k2-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "kimi-k2.5", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "MiniMax-M2.5", endpoint: "/v1/chat/completions", capabilities: ["text", "audio", "vision"] },
+  { id: "qwen-flash", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "qwen-mt-flash", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "qwen-mt-lite", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "qwen-plus-2025-12-01", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "qwen3-coder-plus", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "qwen3-max", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "qwen3-vl-flash", endpoint: "/v1/chat/completions", capabilities: ["vision", "text"] },
+  { id: "qwen3-vl-flash-2025-10-15", endpoint: "/v1/chat/completions", capabilities: ["vision", "text"] },
+  { id: "qwen3-vl-plus", endpoint: "/v1/chat/completions", capabilities: ["vision", "text"] },
+  { id: "qwen3.6-plus", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
+  { id: "seed-1-6-250915", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seed-1-6-flash-250715", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seed-1-8-251228", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seed-2-0-lite-260228", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seed-2-0-mini-260215", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seed-2-0-pro-260328", endpoint: "/v1/chat/completions", capabilities: ["text"] },
+  { id: "seedream-4-5-251128", endpoint: "/v1/chat/completions", capabilities: ["image"] },
+  { id: "wan2.7-image", endpoint: "/v1/chat/completions", capabilities: ["image"] },
+  { id: "wan2.7-image-pro", endpoint: "/v1/chat/completions", capabilities: ["image"] },
+  { id: "sonar", endpoint: "/v1/chat/completions", capabilities: ["text"] }
+];
 
 function extractCircleWalletDetails(payload) {
   const wallet =
@@ -1244,6 +1301,8 @@ async function authorizeAisaX402FromUi() {
 async function runAisaLlmFromUi() {
   const mode = document.getElementById("aisa-llm-mode")?.value || "api_key_proxy";
   const model = document.getElementById("aisa-llm-model")?.value || "gpt-5.3-codex";
+  const capability = document.getElementById("aisa-llm-capability")?.value || "text";
+  const endpointPath = document.getElementById("aisa-llm-endpoint")?.value?.trim() || "/v1/chat/completions";
   const temperature = Number(document.getElementById("aisa-llm-temperature")?.value || 0.2);
   const maxTokens = Number(document.getElementById("aisa-llm-max-tokens")?.value || 256);
   const systemPrompt = document.getElementById("aisa-llm-system")?.value?.trim() || "";
@@ -1254,6 +1313,8 @@ async function runAisaLlmFromUi() {
     body: JSON.stringify({
       mode,
       model,
+      capability,
+      endpoint_path: endpointPath,
       temperature,
       max_tokens: maxTokens,
       messages: [
@@ -1269,12 +1330,50 @@ async function runAisaLlmFromUi() {
     request: {
       mode,
       model,
+      capability,
+      endpoint_path: endpointPath,
       temperature,
       max_tokens: maxTokens,
       user_prompt: userPrompt
     },
     body: response.body
   });
+}
+
+function refreshAisaLlmModelOptions() {
+  const capability = document.getElementById("aisa-llm-capability")?.value || "text";
+  const modelSelect = document.getElementById("aisa-llm-model");
+  const endpointInput = document.getElementById("aisa-llm-endpoint");
+  if (!modelSelect || !endpointInput) {
+    return;
+  }
+  const previous = modelSelect.value;
+  const filtered = AISA_LLM_MODEL_CATALOG.filter((entry) => entry.capabilities.includes(capability));
+  const candidates = filtered.length > 0 ? filtered : AISA_LLM_MODEL_CATALOG;
+  modelSelect.innerHTML = "";
+  candidates.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.id;
+    modelSelect.appendChild(option);
+  });
+  if (candidates.some((entry) => entry.id === previous)) {
+    modelSelect.value = previous;
+  }
+  const selected = candidates.find((entry) => entry.id === modelSelect.value) || candidates[0];
+  endpointInput.value = selected?.endpoint || "/v1/chat/completions";
+}
+
+function syncAisaLlmEndpointToModel() {
+  const model = document.getElementById("aisa-llm-model")?.value || "";
+  const endpointInput = document.getElementById("aisa-llm-endpoint");
+  if (!endpointInput) {
+    return;
+  }
+  const selected = AISA_LLM_MODEL_CATALOG.find((entry) => entry.id === model);
+  if (selected?.endpoint) {
+    endpointInput.value = selected.endpoint;
+  }
 }
 
 async function createCircleWalletFromUi() {
@@ -1575,6 +1674,12 @@ document.getElementById("aisa-llm-run")?.addEventListener("click", async () => {
   } catch (error) {
     print("aisa-llm-output", { error: error.message });
   }
+});
+document.getElementById("aisa-llm-capability")?.addEventListener("change", () => {
+  refreshAisaLlmModelOptions();
+});
+document.getElementById("aisa-llm-model")?.addEventListener("change", () => {
+  syncAisaLlmEndpointToModel();
 });
 
 document.getElementById("agent-load-capabilities").addEventListener("click", async () => {
@@ -2499,6 +2604,7 @@ async function bootstrap() {
   print("aisa-llm-output", {
     info: "Use this panel to run model responses through AIsa in API-key or x402 probe mode."
   });
+  refreshAisaLlmModelOptions();
   print("agent-output", {
     info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."
   });
