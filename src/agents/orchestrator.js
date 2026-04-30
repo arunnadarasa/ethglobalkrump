@@ -6,7 +6,8 @@ function makeAgentOrchestrator({
   createCheckout,
   getOrderStatus,
   evaluateSettlementPolicy,
-  getAgentIdentity
+  getAgentIdentity,
+  authorizeX402Payment
 }) {
   const sessions = new Map();
   const defaultHighRiskIntents = ["challenge_payout", "crew_split_settlement"];
@@ -177,6 +178,54 @@ function makeAgentOrchestrator({
           payout_receiver: context?.payout_receiver || context?.agent_actor_address || null
         }
       });
+      if (paymentMode === "x402") {
+        const pilotIntents = Array.isArray(context?.__x402PilotIntents) ? context.__x402PilotIntents : [];
+        const pilotRestricted = pilotIntents.length > 0;
+        if (pilotRestricted && !pilotIntents.includes(intent)) {
+          throw new Error(
+            `x402 rail is limited to pilot intents: ${pilotIntents.join(", ")}. Received: ${intent}`
+          );
+        }
+        const x402AmountMinor = Number(context?.amount_minor || 0);
+        appendEvent(session, {
+          kind: "x402_request_started",
+          message: "x402 enrichment/payment trace started.",
+          data: {
+            intent,
+            amount_minor: x402AmountMinor,
+            payment_ref: context?.payment_ref || null
+          }
+        });
+        if (!context?.payment_ref && typeof authorizeX402Payment === "function") {
+          try {
+            const x402Result = authorizeX402Payment({
+              intent,
+              amountMinor: x402AmountMinor,
+              sessionHint: session.id,
+              memo: `agent-${intent}`,
+              context
+            });
+            if (x402Result?.payment_ref) {
+              context.payment_ref = String(x402Result.payment_ref);
+              context.__x402Receipt = x402Result.receipt || null;
+            }
+          } catch (x402Error) {
+            appendEvent(session, {
+              kind: "x402_failed",
+              message: x402Error.message
+            });
+            throw x402Error;
+          }
+        }
+        appendEvent(session, {
+          kind: "x402_paid",
+          message: "x402 payment context validated for session.",
+          data: {
+            intent,
+            payment_ref: context?.payment_ref || null
+          }
+        });
+      }
       appendEvent(session, {
         kind: "ens_policy",
         message: "Resolved ENS trust/privacy/version policy state.",

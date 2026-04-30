@@ -352,7 +352,7 @@ async function runAgentSessionFromUi() {
     merch_concierge_checkout: 5000
   };
   const amountMinor = Number(parsedContext.amount_minor || fallbackAmounts[intent] || 100);
-  const payment = await resolvePaymentReference(paymentMode, amountMinor, `agent-${intent}`);
+  const payment = await resolvePaymentReference(paymentMode, amountMinor, `agent-${intent}`, intent);
   const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
   const context = {
     ...parsedContext,
@@ -1139,7 +1139,30 @@ async function sendCirclePayment(amountMinor, memo) {
   return { txId, receipt: response.body };
 }
 
-async function resolvePaymentReference(mode, amountMinor, memo) {
+async function sendX402Payment(amountMinor, memo, intent = "") {
+  const response = await request("/api/payments/x402/authorize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount_minor: Number(amountMinor || 0),
+      memo: String(memo || ""),
+      intent: String(intent || ""),
+      metadata: {
+        source: "ui",
+        at: new Date().toISOString()
+      }
+    })
+  });
+  if (!response.ok) {
+    throw new Error(response.body?.error?.message || "x402 payment authorization failed");
+  }
+  return {
+    txId: response.body?.payment_ref || null,
+    receipt: response.body
+  };
+}
+
+async function resolvePaymentReference(mode, amountMinor, memo, intent = "") {
   if (mode === "offchain_demo") {
     return { mode, ref: null, receipt: null };
   }
@@ -1150,6 +1173,10 @@ async function resolvePaymentReference(mode, amountMinor, memo) {
   if (mode === "circle_wallet") {
     const circle = await sendCirclePayment(amountMinor, memo);
     return { mode, ref: circle.txId, receipt: circle.receipt };
+  }
+  if (mode === "x402") {
+    const x402 = await sendX402Payment(amountMinor, memo, intent);
+    return { mode, ref: x402.txId, receipt: x402.receipt };
   }
   throw new Error(`Unsupported payment mode: ${mode}`);
 }

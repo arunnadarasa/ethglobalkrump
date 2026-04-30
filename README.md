@@ -9,12 +9,13 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 - Strict ENSIP-25 trust verification via parameterized text records (`agent-registration[<registryERC7930>][<agentId>]` with non-empty value semantics)
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
+- Optional AIsa x402 pay-per-call rail for metered API authorization (`x402` mode in UI/API)
 - Optional [KeeperHub](https://docs.keeperhub.com/api) direct execution on Arc (ETHGlobal [OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor track)
 
 ## Why this app is awesome
 
 - Real creator economy flows, not toy examples: live tips, paid tutorials, and battle payouts.
-- Dual rails by design: MetaMask on-chain and Circle wallet transfers in one UI.
+- Multi-rail by design: MetaMask on-chain, Circle wallet transfers, and optional AIsa x402 authorization in one UI.
 - Optional KeeperHub layer for reliable on-chain transfers (demo + U5 payout) without replacing UCP or Circle as the commerce core.
 - Built for demo-day reliability: onboarding UX, wallet save state, balance visibility, funding cues, and **KeeperHub online** guidance (USDC + native gas on the selected chain, plus org executor hints).
 - Built for auditability: incremental commits, explicit docs, and reproducible setup.
@@ -318,6 +319,24 @@ Put your Circle credentials in `.env`:
 If your Circle account uses a different transfer endpoint, update:
 
 - `CIRCLE_TRANSFER_PATH`
+
+### AIsa x402 setup (optional pilot rail)
+
+Set these in `.env` to enable x402 authorization:
+
+- `AISA_X402_ENABLED=true`
+- `AISA_X402_API_BASE` (AIsa API base URL)
+- `AISA_X402_API_KEY` (Bearer token)
+- `AISA_X402_AUTH_PATH` (default `/payments/authorize`)
+- `AISA_X402_TIMEOUT_MS` (request timeout guardrail)
+- `AISA_X402_MAX_SPEND_MINOR` (per-request budget ceiling)
+- `AISA_X402_PILOT_INTENTS` (comma-separated allowlist; default `judge_feedback_request`)
+
+Runtime behavior:
+
+- `GET /api/config` surfaces `rails.x402` enablement + pilot settings.
+- `POST /api/payments/x402/authorize` enforces budget + pilot intent checks and returns `payment_ref` + receipt.
+- `POST /api/agents/sessions` with `context.payment_mode="x402"` preserves ENS/ENSIP-25 gates, emits x402 trace events, and keeps UCP checkout/order flow unchanged.
 
 ### MetaMask setup
 

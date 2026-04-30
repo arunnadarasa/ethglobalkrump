@@ -32,6 +32,7 @@ const { makeAgentOrchestrator } = require("./agents/orchestrator");
 const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
 const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
+const { createX402Client } = require("./x402/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
 const { setupAgentEns } = require("./ens/setupAgentEns");
 const {
@@ -77,6 +78,18 @@ const DEFAULT_HIGH_RISK_INTENTS = ["challenge_payout", "crew_split_settlement"];
 const ENSIP25_REGISTRY_INTEROP = process.env.ENSIP25_REGISTRY_INTEROP || "";
 const ENSIP25_REGISTRY_ADDRESS = process.env.ENSIP25_REGISTRY_ADDRESS || "";
 const ENSIP25_REGISTRY_CHAIN_ID = Number(process.env.ENSIP25_REGISTRY_CHAIN_ID || ARCTESTNET_CHAIN_ID || "5042002");
+const AISA_X402_API_BASE = process.env.AISA_X402_API_BASE || "";
+const AISA_X402_API_KEY = process.env.AISA_X402_API_KEY || "";
+const AISA_X402_AUTH_PATH = process.env.AISA_X402_AUTH_PATH || "/payments/authorize";
+const AISA_X402_TIMEOUT_MS = Number(process.env.AISA_X402_TIMEOUT_MS || 12000);
+const AISA_X402_MAX_SPEND_MINOR = Number(process.env.AISA_X402_MAX_SPEND_MINOR || 3000);
+const AISA_X402_ENABLED =
+  String(process.env.AISA_X402_ENABLED || "").toLowerCase() === "true" ||
+  Boolean(AISA_X402_API_BASE && AISA_X402_API_KEY);
+const AISA_X402_PILOT_INTENTS = String(process.env.AISA_X402_PILOT_INTENTS || "judge_feedback_request")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -85,6 +98,13 @@ const vyperSettlement = createVyperSettlementPolicy();
 const executionRouter = createExecutionRouter({
   keeperhub,
   defaultNetwork: ONLINE_EXECUTION_DEFAULT_NETWORK
+});
+const x402Client = createX402Client({
+  apiBase: AISA_X402_API_BASE,
+  apiKey: AISA_X402_API_KEY,
+  authPath: AISA_X402_AUTH_PATH,
+  timeoutMs: AISA_X402_TIMEOUT_MS,
+  enabled: AISA_X402_ENABLED
 });
 
 app.use(express.json());
@@ -173,6 +193,14 @@ function getRailConfig() {
         api_base: CIRCLE_API_BASE,
         transfer_path: CIRCLE_TRANSFER_PATH
       },
+      x402: {
+        enabled: x402Client.isEnabled(),
+        provider: "aisa",
+        api_base: x402Client.getBaseUrl() || null,
+        timeout_ms: AISA_X402_TIMEOUT_MS,
+        max_spend_minor: AISA_X402_MAX_SPEND_MINOR,
+        pilot_intents: AISA_X402_PILOT_INTENTS
+      },
       keeperhub: {
         api_key_configured: keeperhub.isConfigured(),
         api_base: keeperhub.getBaseUrl(),
@@ -182,6 +210,22 @@ function getRailConfig() {
       }
     }
   };
+}
+
+function enforceX402Budget(amountMinor, maxSpendMinor = AISA_X402_MAX_SPEND_MINOR) {
+  const numeric = Number(amountMinor || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    const error = new Error("amount_minor must be > 0 for x402 authorization.");
+    error.code = "x402_invalid_amount";
+    error.status = 400;
+    throw error;
+  }
+  if (numeric > maxSpendMinor) {
+    const error = new Error(`x402 amount ${numeric} exceeds max allowed ${maxSpendMinor} minor units.`);
+    error.code = "x402_budget_exceeded";
+    error.status = 400;
+    throw error;
+  }
 }
 
 async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amountMinor, recipientAddress, memo }) {
@@ -844,6 +888,45 @@ app.get("/api/config", (_req, res) => {
   res.json(getRailConfig());
 });
 
+app.post("/api/payments/x402/authorize", async (req, res) => {
+  try {
+    const { amount_minor, memo, intent, session_hint, metadata } = req.body || {};
+    const normalizedIntent = String(intent || "").trim();
+    if (
+      normalizedIntent &&
+      Array.isArray(AISA_X402_PILOT_INTENTS) &&
+      AISA_X402_PILOT_INTENTS.length > 0 &&
+      !AISA_X402_PILOT_INTENTS.includes(normalizedIntent)
+    ) {
+      return sendError(
+        res,
+        400,
+        "x402_intent_not_enabled",
+        `x402 pilot currently supports intents: ${AISA_X402_PILOT_INTENTS.join(", ")}`
+      );
+    }
+    enforceX402Budget(amount_minor);
+    const result = await x402Client.authorizePayment({
+      amountMinor: amount_minor,
+      memo,
+      intent: normalizedIntent,
+      sessionHint: session_hint,
+      metadata: metadata || {}
+    });
+    return res.status(201).json({
+      ok: true,
+      mode: "x402",
+      provider: "aisa",
+      amount_minor: Number(amount_minor),
+      payment_ref: result.payment_ref,
+      receipt: result.receipt
+    });
+  } catch (error) {
+    const status = Number(error?.status || 502);
+    return sendError(res, status, error?.code || "x402_authorize_failed", error?.message || "x402 authorize failed");
+  }
+});
+
 app.get("/api/execution/networks", (_req, res) => {
   return res.json({
     ok: true,
@@ -1047,7 +1130,19 @@ const agentOrchestrator = makeAgentOrchestrator({
   createCheckout: createUcpCheckoutResponse,
   getOrderStatus: createUcpOrderResponse,
   evaluateSettlementPolicy: ENABLE_VYPER_SETTLEMENT ? vyperSettlement.evaluate : null,
-  getAgentIdentity: getAgentIdentityMetadata
+  getAgentIdentity: getAgentIdentityMetadata,
+  authorizeX402Payment: ({ amountMinor, context }) => {
+    if (!x402Client.isEnabled()) {
+      const error = new Error("x402 rail is not enabled in server configuration.");
+      error.code = "x402_not_configured";
+      throw error;
+    }
+    enforceX402Budget(amountMinor, Number(context?.__x402MaxSpendMinor || AISA_X402_MAX_SPEND_MINOR));
+    return {
+      payment_ref: context?.payment_ref || null,
+      receipt: context?.__x402Receipt || null
+    };
+  }
 });
 
 app.get("/api/agents/capabilities", (_req, res) => {
@@ -1521,6 +1616,18 @@ app.post("/api/agents/sessions", async (req, res) => {
   }
 
   const ctx = context || {};
+  if (String(ctx.payment_mode || "").trim() === "x402") {
+    if (!x402Client.isEnabled()) {
+      return sendError(res, 503, "x402_not_configured", "x402 rail is disabled or missing configuration.");
+    }
+    try {
+      enforceX402Budget(ctx.amount_minor, AISA_X402_MAX_SPEND_MINOR);
+    } catch (error) {
+      return sendError(res, Number(error?.status || 400), error?.code || "x402_budget_exceeded", error.message);
+    }
+    ctx.__x402PilotIntents = AISA_X402_PILOT_INTENTS;
+    ctx.__x402MaxSpendMinor = AISA_X402_MAX_SPEND_MINOR;
+  }
   if (ctx.agent_ens_name && typeof ctx.agent_ens_name === "string") {
     try {
       const ensInitial = await resolveAgentEns({

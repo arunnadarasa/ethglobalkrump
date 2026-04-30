@@ -26,7 +26,7 @@ Speaker note: Existing solutions force a tradeoff between agent intelligence and
 - UCP-native commerce backend for standardized checkout + order flows.
 - Agent orchestration layer for H2A, A2A, A2H.
 - Vyper settlement policy for enforcement credibility.
-- Circle + Arc rails for practical payment operations.
+- Circle + Arc rails for practical payment operations, plus optional AIsa x402 pay-per-call authorization for metered agent enrichment.
 - **KeeperHub** (ETHGlobal OpenAgents sponsor): dual execution mode — local Arc and online testnet mode via **Circle Bridge Kit** CCTP from Arc USDC (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji), then KeeperHub payout on the destination chain.
 
 Speaker note: We did not replace standards. We composed them, then layered sponsor-grade execution where it helps.
@@ -41,7 +41,7 @@ In one interface, users can:
 - Inspect live orchestration traces
 - Run settlement policy checks
 - View UCP discovery/conformance outputs
-- Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `offchain_demo`)
+- Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `x402`, `offchain_demo`)
 - ENS judge card: check name ownership + registration estimate, signer Sepolia ETH, mode selection (`demo/circle_wallet/metamask`), and resolve/gating proof in one place
 - ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper (`agent.<label>`), source-aware wallet balance checks, and in-flight setup timer
 - ENS workshop v2 proof points: strict ENSIP-25 parameterized text-record trust (registry interop + agent id), privacy payout mode chip, and version compatibility chip
@@ -100,7 +100,7 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 2. Show `GET /api/agents/identity` (ERC-8004 style metadata).
 3. Run `tip_dancer` agent session.
 4. Highlight trace events and settlement proof.
-5. Trigger one payment flow with MetaMask and one with Circle (all payment-bearing flows support live rail selection in UI).
+5. Trigger one payment flow with MetaMask and one with AIsa x402 pilot rail (`judge_feedback_request`) to show metered external authorization.
 6. Show UCP checkout/order endpoints.
 7. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 8. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
