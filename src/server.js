@@ -1008,6 +1008,25 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
     const { mode, model, messages, temperature, max_tokens } = req.body || {};
     const selectedMode = String(mode || "api_key_proxy").trim();
     const selectedModel = String(model || "").trim();
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "pre-fix",
+        hypothesisId: "L1",
+        location: "src/server.js:/api/aisa/llm/chat",
+        message: "LLM route entered",
+        data: {
+          mode: selectedMode,
+          model: selectedModel,
+          messagesCount: Array.isArray(messages) ? messages.length : -1
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     if (!selectedModel) {
       return sendError(res, 400, "aisa_model_required", "model is required.");
     }
@@ -1043,6 +1062,26 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
 
     if (selectedMode === "api_key_proxy") {
       const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/v1/chat/completions`;
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "L2",
+          location: "src/server.js:/api/aisa/llm/chat",
+          message: "API key mode upstream request",
+          data: {
+            url,
+            model: selectedModel,
+            temperature: Number(temperature ?? 0.2),
+            maxTokens: Number(max_tokens ?? 256)
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       const startedAt = Date.now();
       const upstream = await fetch(url, {
         method: "POST",
@@ -1064,6 +1103,27 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
       } catch (_error) {
         body = { raw: text };
       }
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "L3",
+          location: "src/server.js:/api/aisa/llm/chat",
+          message: "API key mode upstream response",
+          data: {
+            upstreamStatus: upstream.status,
+            upstreamOk: upstream.ok,
+            errorCode: body?.error?.code || null,
+            errorType: body?.error?.type || null,
+            answerPresent: Boolean(body?.choices?.[0]?.message?.content || body?.answer || body?.output_text)
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       const answer =
         body?.choices?.[0]?.message?.content ||
         body?.choices?.[0]?.text ||
@@ -1084,6 +1144,24 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
 
     if (selectedMode === "x402_probe") {
       const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/apis/v2/perplexity/sonar`;
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "L4",
+          location: "src/server.js:/api/aisa/llm/chat",
+          message: "x402 probe upstream request",
+          data: {
+            url,
+            model: selectedModel
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       const startedAt = Date.now();
       const upstream = await fetch(url, {
         method: "POST",
