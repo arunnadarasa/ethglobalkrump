@@ -64,6 +64,20 @@
         <pre id="ucp-output"></pre>
       </section>
       <section>
+        <h2>AIsa x402 Demo Rail</h2>
+        <p class="subtitle">
+          Dedicated hackathon demo controls for AIsa pay-per-call authorization (keeps UCP checkout flow unchanged).
+        </p>
+        <div class="row">
+          <button id="aisa-x402-load-config" type="button">Check x402 Config</button>
+          <input id="aisa-x402-intent" value="judge_feedback_request" placeholder="Intent (pilot allowlist)" />
+          <input id="aisa-x402-amount" type="number" min="1" value="600" />
+          <input id="aisa-x402-memo" value="pitch-demo-aisa-x402" placeholder="Memo" style="min-width: 240px" />
+          <button id="aisa-x402-authorize" type="button">Authorize x402 Payment</button>
+        </div>
+        <pre id="aisa-x402-output"></pre>
+      </section>
+      <section>
         <h2>Agent Orchestration (H2A / A2H / A2A)</h2>
         <div class="row">
           <button id="agent-load-capabilities" type="button">Load Agent Capabilities</button>

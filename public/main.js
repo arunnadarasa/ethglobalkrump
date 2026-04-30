@@ -1192,6 +1192,48 @@ async function loadConfig() {
   print("rail-config", railConfig);
 }
 
+async function loadAisaX402ConfigFromUi() {
+  const response = await request("/api/config");
+  const x402 = response.body?.rails?.x402 || null;
+  print("aisa-x402-output", {
+    route: "/api/config",
+    ok: response.ok,
+    status: response.status,
+    x402
+  });
+}
+
+async function authorizeAisaX402FromUi() {
+  const amountMinor = Number(document.getElementById("aisa-x402-amount")?.value || 0);
+  const intent = document.getElementById("aisa-x402-intent")?.value?.trim() || "";
+  const memo = document.getElementById("aisa-x402-memo")?.value?.trim() || "aisa-x402-demo";
+  const response = await request("/api/payments/x402/authorize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount_minor: amountMinor,
+      intent,
+      memo,
+      session_hint: "hackathon-pitch-demo",
+      metadata: {
+        source: "aisa-demo-panel",
+        at: new Date().toISOString()
+      }
+    })
+  });
+  print("aisa-x402-output", {
+    route: "/api/payments/x402/authorize",
+    ok: response.ok,
+    status: response.status,
+    request: {
+      amount_minor: amountMinor,
+      intent,
+      memo
+    },
+    body: response.body
+  });
+}
+
 async function createCircleWalletFromUi() {
   const payload = {
     wallet_name: document.getElementById("circle-wallet-name").value || "",
@@ -1466,6 +1508,22 @@ document.getElementById("ucp-run-self-test").addEventListener("click", async () 
 
 document.getElementById("ucp-run-sample-checkout").addEventListener("click", async () => {
   await runUcpSampleCheckoutFromUi();
+});
+
+document.getElementById("aisa-x402-load-config")?.addEventListener("click", async () => {
+  try {
+    await loadAisaX402ConfigFromUi();
+  } catch (error) {
+    print("aisa-x402-output", { error: error.message });
+  }
+});
+
+document.getElementById("aisa-x402-authorize")?.addEventListener("click", async () => {
+  try {
+    await authorizeAisaX402FromUi();
+  } catch (error) {
+    print("aisa-x402-output", { error: error.message });
+  }
 });
 
 document.getElementById("agent-load-capabilities").addEventListener("click", async () => {
@@ -2383,6 +2441,9 @@ async function bootstrap() {
   });
   print("ucp-output", {
     info: "Use the UCP buttons to view discovery, run self-test, and execute a sample checkout."
+  });
+  print("aisa-x402-output", {
+    info: "Use this panel to verify x402 config and run a direct AIsa authorization demo call."
   });
   print("agent-output", {
     info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."
