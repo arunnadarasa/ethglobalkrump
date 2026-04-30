@@ -106,8 +106,7 @@ const AISA_LLM_MODEL_CATALOG = [
   { id: "seed-2-0-pro-260328", endpoint: "/v1/chat/completions", capabilities: ["text"] },
   { id: "seedream-4-5-251128", endpoint: "/v1/chat/completions", capabilities: ["image"] },
   { id: "wan2.7-image", endpoint: "/v1/chat/completions", capabilities: ["image"] },
-  { id: "wan2.7-image-pro", endpoint: "/v1/chat/completions", capabilities: ["image"] },
-  { id: "sonar", endpoint: "/v1/chat/completions", capabilities: ["text"] }
+  { id: "wan2.7-image-pro", endpoint: "/v1/chat/completions", capabilities: ["image"] }
 ];
 
 function extractCircleWalletDetails(payload) {
@@ -1307,6 +1306,28 @@ async function runAisaLlmFromUi() {
   const maxTokens = Number(document.getElementById("aisa-llm-max-tokens")?.value || 256);
   const systemPrompt = document.getElementById("aisa-llm-system")?.value?.trim() || "";
   const userPrompt = document.getElementById("aisa-llm-user")?.value?.trim() || "";
+  const startedAt = Date.now();
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "pre-fix",
+      hypothesisId: "U1",
+      location: "public/main.js:runAisaLlmFromUi",
+      message: "LLM submit started",
+      data: {
+        mode,
+        capability,
+        model,
+        endpointPath,
+        userPromptLength: userPrompt.length
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   const response = await request("/api/aisa/llm/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1323,6 +1344,32 @@ async function runAisaLlmFromUi() {
       ]
     })
   });
+  const elapsedMs = Date.now() - startedAt;
+  const outputEl = document.getElementById("aisa-llm-output");
+  const outputStyle = outputEl ? window.getComputedStyle(outputEl) : null;
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "pre-fix",
+      hypothesisId: "U2",
+      location: "public/main.js:runAisaLlmFromUi",
+      message: "LLM submit completed",
+      data: {
+        elapsedMs,
+        httpStatus: response.status,
+        ok: response.ok,
+        answerPresent: Boolean(response.body?.answer),
+        outputWhiteSpace: outputStyle?.whiteSpace || null,
+        outputOverflowWrap: outputStyle?.overflowWrap || null,
+        outputWordBreak: outputStyle?.wordBreak || null
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   print("aisa-llm-output", {
     route: "/api/aisa/llm/chat",
     ok: response.ok,
@@ -1366,8 +1413,15 @@ function refreshAisaLlmModelOptions() {
 
 function syncAisaLlmEndpointToModel() {
   const model = document.getElementById("aisa-llm-model")?.value || "";
+  const mode = document.getElementById("aisa-llm-mode")?.value || "api_key_proxy";
   const endpointInput = document.getElementById("aisa-llm-endpoint");
   if (!endpointInput) {
+    return;
+  }
+  if (mode === "x402_probe") {
+    if (!String(endpointInput.value || "").trim().startsWith("/apis/v2/")) {
+      endpointInput.value = "";
+    }
     return;
   }
   const selected = AISA_LLM_MODEL_CATALOG.find((entry) => entry.id === model);
@@ -1679,6 +1733,9 @@ document.getElementById("aisa-llm-capability")?.addEventListener("change", () =>
   refreshAisaLlmModelOptions();
 });
 document.getElementById("aisa-llm-model")?.addEventListener("change", () => {
+  syncAisaLlmEndpointToModel();
+});
+document.getElementById("aisa-llm-mode")?.addEventListener("change", () => {
   syncAisaLlmEndpointToModel();
 });
 

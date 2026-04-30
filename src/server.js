@@ -144,8 +144,7 @@ const AISA_LLM_ALLOWED_MODELS = [
   "seed-2-0-pro-260328",
   "seedream-4-5-251128",
   "wan2.7-image",
-  "wan2.7-image-pro",
-  "sonar"
+  "wan2.7-image-pro"
 ];
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
@@ -1205,8 +1204,24 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
     }
 
     if (selectedMode === "x402_probe") {
-      const endpointPath = String(endpoint_path || "/apis/v2/perplexity/sonar").trim();
+      const endpointPath = String(endpoint_path || "").trim();
+      if (!endpointPath) {
+        return sendError(
+          res,
+          400,
+          "aisa_x402_probe_endpoint_required",
+          "x402_probe mode requires a supported /apis/v2/* endpoint path."
+        );
+      }
       const normalizedEndpointPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+      if (!normalizedEndpointPath.startsWith("/apis/v2/")) {
+        return sendError(
+          res,
+          400,
+          "aisa_x402_probe_endpoint_invalid",
+          "x402_probe mode requires an /apis/v2/* endpoint path."
+        );
+      }
       const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedEndpointPath}`;
       // #region agent log
       fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -1233,7 +1248,7 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: selectedModel === "sonar" ? "sonar" : "sonar",
+          model: selectedModel,
           messages: normalizedMessages
         })
       });
