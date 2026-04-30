@@ -5,6 +5,8 @@ Krump x UCP MVP Demo.
 An ETHGlobal-ready app that turns Krump culture into programmable commerce using:
 
 - Official Universal Commerce Protocol (UCP) stack (JS SDK + schema validation + conformance checks)
+- ENS-based agent identity (Sepolia writes, Universal Resolver reads) for human-readable session identity and intent gating
+- Strict ENSIP-25 trust verification via parameterized text records (`agent-registration[<registryERC7930>][<agentId>]` with non-empty value semantics)
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
 - Optional [KeeperHub](https://docs.keeperhub.com/api) direct execution on Arc (ETHGlobal [OpenAgents](https://ethglobal.com/events/openagents/prizes) sponsor track)
