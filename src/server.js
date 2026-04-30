@@ -1427,6 +1427,28 @@ app.get("/api/execution/networks", (_req, res) => {
 app.get("/api/keeperhub/status", async (_req, res) => {
   try {
     const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "pre-fix",
+        hypothesisId: "KB1",
+        location: "src/server.js:/api/keeperhub/status",
+        message: "keeperhub status summary",
+        data: {
+          apiBase: summary?.api_base || null,
+          arcSupported: Boolean(summary?.arc_supported),
+          executeNetwork: summary?.execute_network || null,
+          hasBaseLocal: Boolean(String(process.env.KEEPERHUB_API_BASE_LOCAL || "").trim()),
+          hasBaseOnline: Boolean(String(process.env.KEEPERHUB_API_BASE_ONLINE || "").trim()),
+          hasBaseShared: Boolean(String(process.env.KEEPERHUB_API_BASE || "").trim())
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     return res.json({ ok: true, ...summary });
   } catch (error) {
     return sendError(res, 500, "keeperhub_status_failed", error.message);
@@ -1464,11 +1486,56 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 1");
     }
     const selectedMode = String(execution_mode || DEFAULT_EXECUTION_MODE).toLowerCase();
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "pre-fix",
+        hypothesisId: "KB2",
+        location: "src/server.js:/api/keeperhub/execute-transfer",
+        message: "execute transfer request received",
+        data: {
+          selectedMode,
+          requestedExecutionNetwork: execution_network || null,
+          keeperhubBaseAtEntry: keeperhub.getBaseUrl(),
+          hasBaseLocal: Boolean(String(process.env.KEEPERHUB_API_BASE_LOCAL || "").trim()),
+          hasBaseOnline: Boolean(String(process.env.KEEPERHUB_API_BASE_ONLINE || "").trim()),
+          hasBaseShared: Boolean(String(process.env.KEEPERHUB_API_BASE || "").trim()),
+          hasKeyLocal: Boolean(String(process.env.KEEPERHUB_API_KEY_LOCAL || "").trim()),
+          hasKeyOnline: Boolean(String(process.env.KEEPERHUB_API_KEY_ONLINE || "").trim()),
+          hasKeyShared: Boolean(String(process.env.KEEPERHUB_API_KEY || "").trim()),
+          executeNetworkOverride: String(process.env.KEEPERHUB_EXECUTE_NETWORK || "").trim() || null
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     let transfer = null;
     let summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
     let online = null;
     let execution_status = null;
     if (selectedMode === "online") {
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "KB3",
+          location: "src/server.js:/api/keeperhub/execute-transfer",
+          message: "online mode about to execute bridge+keeperhub",
+          data: {
+            summaryApiBase: summary?.api_base || null,
+            summaryExecuteNetwork: summary?.execute_network || null,
+            requestedExecutionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       online = await maybeExecuteOnlineTransfer({
         executionMode: selectedMode,
         executionNetwork: execution_network || ONLINE_EXECUTION_DEFAULT_NETWORK,
@@ -1479,11 +1546,31 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       transfer = online.keeperhub;
       summary = {
         ...summary,
-        execute_network: online.network
+        execute_network: online.network,
+        api_base: keeperhub.getBaseUrl("online")
       };
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "KB4",
+          location: "src/server.js:/api/keeperhub/execute-transfer",
+          message: "online mode execution completed",
+          data: {
+            onlineNetwork: online?.network || null,
+            keeperhubExecutionId: online?.keeperhub?.executionId || null,
+            summaryApiBaseAfterOnline: summary?.api_base || null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       if (transfer?.executionId) {
         try {
-          execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+          execution_status = await keeperhub.getExecutionStatus(transfer.executionId, { mode: "online" });
         } catch (_e) {
           execution_status = null;
         }
@@ -1496,16 +1583,37 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
           recipientAddress: recipient_address.trim(),
           amountMinor: amount_minor,
           network: online.keeperhub?.network || online.network,
-          includeTokenConfig: false
+          includeTokenConfig: false,
+          mode: "online"
         });
         transfer = retryTransfer;
         try {
-          execution_status = retryTransfer?.executionId ? await keeperhub.getExecutionStatus(retryTransfer.executionId) : null;
+          execution_status = retryTransfer?.executionId
+            ? await keeperhub.getExecutionStatus(retryTransfer.executionId, { mode: "online" })
+            : null;
         } catch (_e) {
           execution_status = null;
         }
       }
     } else {
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "KB5",
+          location: "src/server.js:/api/keeperhub/execute-transfer",
+          message: "local mode about to execute keeperhub",
+          data: {
+            summaryApiBase: summary?.api_base || null,
+            summaryExecuteNetwork: summary?.execute_network || null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
       if (!summary.execute_network) {
         return sendError(
           res,
@@ -1517,12 +1625,15 @@ app.post("/api/keeperhub/execute-transfer", async (req, res) => {
       transfer = await keeperhub.executeTransferPayout({
         recipientAddress: recipient_address.trim(),
         amountMinor: amount_minor,
-        network: summary.execute_network
+        network: summary.execute_network,
+        mode: "local"
       });
     }
     if (!execution_status && transfer?.executionId) {
       try {
-        execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+        execution_status = await keeperhub.getExecutionStatus(transfer.executionId, {
+          mode: selectedMode === "online" ? "online" : "local"
+        });
       } catch (_e) {
         execution_status = null;
       }

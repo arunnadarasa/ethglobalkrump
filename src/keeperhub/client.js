@@ -37,8 +37,19 @@ function logKeeperhubDebug(hypothesisId, message, data) {
  * If KEEPERHUB_API_BASE is set to `https://app.keeperhub.com` (no `/api`),
  * requests hit `/chains` instead of `/api/chains` and return HTML 404.
  */
-function getBaseUrl() {
-  let base = (process.env.KEEPERHUB_API_BASE || DEFAULT_BASE).trim().replace(/\/$/, "");
+function getBaseUrl(mode = "auto") {
+  const normalizedMode = String(mode || "auto").toLowerCase();
+  const sharedBase = (process.env.KEEPERHUB_API_BASE || "").trim();
+  const localBase = (process.env.KEEPERHUB_API_BASE_LOCAL || "").trim();
+  const onlineBase = (process.env.KEEPERHUB_API_BASE_ONLINE || "").trim();
+  const sharedLooksLocal = /localhost|127\.0\.0\.1/i.test(sharedBase);
+  let base =
+    normalizedMode === "local"
+      ? localBase || sharedBase || DEFAULT_BASE
+      : normalizedMode === "online"
+        ? onlineBase || (sharedLooksLocal ? DEFAULT_BASE : sharedBase) || DEFAULT_BASE
+        : sharedBase || DEFAULT_BASE;
+  base = base.replace(/\/$/, "");
   if (/^https?:\/\/app\.keeperhub\.com$/i.test(base)) {
     return DEFAULT_BASE;
   }
@@ -53,11 +64,14 @@ function resolveApiKeySource(baseUrl = getBaseUrl()) {
   return "online";
 }
 
-function getApiKey() {
+function getApiKey(mode = "auto") {
   const legacy = (process.env.KEEPERHUB_API_KEY || "").trim();
   const local = (process.env.KEEPERHUB_API_KEY_LOCAL || "").trim();
   const online = (process.env.KEEPERHUB_API_KEY_ONLINE || "").trim();
-  const source = resolveApiKeySource();
+  const source =
+    mode === "local" || mode === "online"
+      ? mode
+      : resolveApiKeySource(getBaseUrl(mode));
   if (source === "local") {
     return local || legacy;
   }
@@ -87,14 +101,15 @@ function isConfigured() {
  * KeeperHub REST: most routes use Bearer (see authentication docs).
  * Direct execution docs also mention X-API-Key — we send both when calling /execute/*.
  */
-async function keeperhubFetch(path, { method = "GET", body, executeRoute = false } = {}) {
-  const key = getApiKey();
+async function keeperhubFetch(path, { method = "GET", body, executeRoute = false, mode = "auto" } = {}) {
+  const resolvedBase = getBaseUrl(mode);
+  const key = getApiKey(mode);
   logKeeperhubDebug("KH1", "keeperhub fetch called", {
     path,
     method,
     executeRoute,
-    apiBase: getBaseUrl(),
-    keySource: resolveApiKeySource(),
+    apiBase: resolvedBase,
+    keySource: mode === "auto" ? resolveApiKeySource(resolvedBase) : mode,
     keyPresent: Boolean(key),
     keyType: key.startsWith("kh_") ? "kh" : key.startsWith("wfb_") ? "wfb" : key ? "other" : "none"
   });
@@ -104,7 +119,7 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     throw err;
   }
   assertOrgApiKeyForRest();
-  const url = `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = `${resolvedBase}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -245,7 +260,7 @@ function resolveTokenAddress() {
 /**
  * Transfer ERC-20 (e.g. USDC on Arc) or native if no token address.
  */
-async function executeTransferPayout({ recipientAddress, amountMinor, network, includeTokenConfig = true }) {
+async function executeTransferPayout({ recipientAddress, amountMinor, network, includeTokenConfig = true, mode = "auto" }) {
   const amount = minorToTransferAmountString(amountMinor);
   const executeNetwork = resolveKeeperhubExecuteNetwork(network);
   const networkKey = String(network || "").toLowerCase();
@@ -273,21 +288,23 @@ async function executeTransferPayout({ recipientAddress, amountMinor, network, i
   return keeperhubFetch("/execute/transfer", {
     method: "POST",
     body: payload,
-    executeRoute: true
+    executeRoute: true,
+    mode
   });
 }
 
-async function getExecutionStatus(executionId) {
+async function getExecutionStatus(executionId, { mode = "auto" } = {}) {
   const id = encodeURIComponent(String(executionId || ""));
-  return keeperhubFetch(`/execute/${id}/status`, { method: "GET", executeRoute: true });
+  return keeperhubFetch(`/execute/${id}/status`, { method: "GET", executeRoute: true, mode });
 }
 
 async function getStatusSummary(arcChainId) {
+  const baseForSummary = getBaseUrl("auto");
   const configured = isConfigured();
   if (!configured) {
     return {
       configured: false,
-      api_base: getBaseUrl(),
+      api_base: baseForSummary,
       arc_chain_id: Number(arcChainId),
       arc_supported: false,
       execute_network: null,
@@ -301,7 +318,7 @@ async function getStatusSummary(arcChainId) {
     const executeNetwork = resolveExecuteNetworkSlug(chain);
     return {
       configured: true,
-      api_base: getBaseUrl(),
+      api_base: baseForSummary,
       arc_chain_id: Number(arcChainId),
       arc_supported: Boolean(chain),
       execute_network: executeNetwork,
@@ -320,7 +337,7 @@ async function getStatusSummary(arcChainId) {
   } catch (error) {
     return {
       configured: true,
-      api_base: getBaseUrl(),
+      api_base: baseForSummary,
       arc_chain_id: Number(arcChainId),
       arc_supported: false,
       execute_network: null,

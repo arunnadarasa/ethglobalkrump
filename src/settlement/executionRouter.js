@@ -58,7 +58,8 @@ function createExecutionRouter({ keeperhub, defaultNetwork = "base-sepolia" }) {
     const transfer = await keeperhub.executeTransferPayout({
       recipientAddress,
       amountMinor,
-      network: online.keeperhubNetwork
+      network: online.keeperhubNetwork,
+      mode: "online"
     });
     return {
       mode: "online",
