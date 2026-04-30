@@ -36,7 +36,10 @@ const { createX402Client } = require("./x402/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
 const { setupAgentEns } = require("./ens/setupAgentEns");
 const { createAgentRegistryClient } = require("./ens/registryClient");
+const { createAgentRegistryWriter } = require("./ens/registryWriter");
 const {
+  parseCaip10LikeRegistry,
+  parseInteroperableRegistryAddress,
   getRegistryInteropAddress,
   buildEnsip25Key,
   hasEnsip25Attestation
@@ -164,7 +167,7 @@ const x402Client = createX402Client({
   timeoutMs: AISA_X402_TIMEOUT_MS,
   enabled: AISA_X402_ENABLED
 });
-let registryClientPromise = null;
+const registryClientPromiseByAddress = new Map();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -435,24 +438,63 @@ function resolveEnsip25RegistryInteropAddress(registryCandidate) {
   });
 }
 
-async function getRegistryClient() {
-  if (!ERC8004_AGENT_REGISTRY) {
-    return null;
+function resolveRegistryContractAddress(registryCandidate) {
+  const candidate = String(registryCandidate || "").trim();
+  if (/^0x[a-fA-F0-9]{40}$/.test(candidate)) {
+    return candidate.toLowerCase();
   }
-  if (!registryClientPromise) {
-    registryClientPromise = createAgentRegistryClient({
-      rpcUrl: ERC8004_REGISTRY_RPC_URL || ENS_SEPOLIA_RPC_URL,
-      registryAddress: ERC8004_AGENT_REGISTRY
-    }).catch((error) => {
-      registryClientPromise = null;
-      throw error;
-    });
+  const parsedInteropCandidate = parseInteroperableRegistryAddress(candidate);
+  if (parsedInteropCandidate) {
+    return parsedInteropCandidate.address.toLowerCase();
   }
-  return registryClientPromise;
+  const parsedCaipCandidate = parseCaip10LikeRegistry(candidate);
+  if (parsedCaipCandidate) {
+    return parsedCaipCandidate.address.toLowerCase();
+  }
+  if (/^0x[a-fA-F0-9]{40}$/.test(String(ENSIP25_REGISTRY_ADDRESS || "").trim())) {
+    return String(ENSIP25_REGISTRY_ADDRESS || "").trim().toLowerCase();
+  }
+  const parsedInteropConfigured = parseInteroperableRegistryAddress(String(ENSIP25_REGISTRY_INTEROP || "").trim());
+  if (parsedInteropConfigured) {
+    return parsedInteropConfigured.address.toLowerCase();
+  }
+  const parsedCaipConfigured = parseCaip10LikeRegistry(String(ERC8004_AGENT_REGISTRY || "").trim());
+  if (parsedCaipConfigured) {
+    return parsedCaipConfigured.address.toLowerCase();
+  }
+  if (/^0x[a-fA-F0-9]{40}$/.test(String(ERC8004_AGENT_REGISTRY || "").trim())) {
+    return String(ERC8004_AGENT_REGISTRY || "").trim().toLowerCase();
+  }
+  throw new Error("registryAddress must be a valid EVM address");
 }
 
-async function getRegistryVerification({ agentId, ensName } = {}) {
-  const client = await getRegistryClient();
+async function getRegistryClient(registryCandidate) {
+  let registryAddress = null;
+  try {
+    registryAddress = resolveRegistryContractAddress(String(registryCandidate || "").trim());
+  } catch (_error) {
+    return null;
+  }
+  if (!registryAddress) {
+    return null;
+  }
+  const existing = registryClientPromiseByAddress.get(registryAddress);
+  if (existing) {
+    return existing;
+  }
+  const created = createAgentRegistryClient({
+      rpcUrl: ERC8004_REGISTRY_RPC_URL || ENS_SEPOLIA_RPC_URL,
+      registryAddress
+    }).catch((error) => {
+      registryClientPromiseByAddress.delete(registryAddress);
+      throw error;
+    });
+  registryClientPromiseByAddress.set(registryAddress, created);
+  return created;
+}
+
+async function getRegistryVerification({ agentId, ensName, registryCandidate } = {}) {
+  const client = await getRegistryClient(registryCandidate);
   if (!client) {
     return {
       available: false,
@@ -544,7 +586,8 @@ async function deriveTrustForIntent(ens, intent, options = {}) {
   });
   const registry = await getRegistryVerification({
     agentId: ensip25.agent_id,
-    ensName: ens?.ens_name
+    ensName: ens?.ens_name,
+    registryCandidate: options.registryCandidate
   });
   const ensSideVerified = Boolean(ensip25.ens_side_verified);
   const registrySideVerified = Boolean(registry?.available && registry?.exists && registry?.ens_link_match);
@@ -1957,6 +2000,63 @@ app.post("/api/ens/verify-attestation", async (req, res) => {
   }
 });
 
+app.post("/api/ens/registry/upsert-agent", async (req, res) => {
+  try {
+    if (!ENS_PRIVATE_KEY) {
+      return sendError(res, 400, "ens_private_key_missing", "Set ENS_PRIVATE_KEY in env for registry writes.");
+    }
+    const ensName = String(req.body?.ensName || "").trim().toLowerCase();
+    const agentId = String(req.body?.agentId || "").trim();
+    const controllerInput = String(req.body?.controller || "").trim();
+    const tokenUri = String(req.body?.tokenUri || "").trim();
+    const capabilitiesUri = String(req.body?.capabilitiesUri || "").trim();
+    const metadataUri = String(req.body?.metadataUri || "").trim();
+    const active = req.body?.active === undefined ? true : Boolean(req.body?.active);
+    const registryCandidate = String(req.body?.registry || "").trim();
+
+    if (!ensName) {
+      return sendError(res, 400, "ens_name_required", "ensName is required.");
+    }
+    if (!agentId) {
+      return sendError(res, 400, "ensip25_agent_id_required", "agentId is required.");
+    }
+
+    let registryAddress = null;
+    try {
+      registryAddress = resolveRegistryContractAddress(registryCandidate);
+    } catch (error) {
+      return sendError(res, 400, "ensip25_registry_invalid", error.message || "registryAddress must be a valid EVM address");
+    }
+
+    const writer = await createAgentRegistryWriter({
+      rpcUrl: ERC8004_REGISTRY_RPC_URL || ENS_SEPOLIA_RPC_URL,
+      privateKey: ENS_PRIVATE_KEY,
+      registryAddress
+    });
+    const controller = controllerInput || writer.signerAddress;
+    const result = await writer.upsertAgent({
+      agentId,
+      controller,
+      ensName,
+      tokenUri,
+      capabilitiesUri,
+      metadataUri,
+      active
+    });
+    return res.json({
+      ok: true,
+      tx_hash: result.tx_hash,
+      contract_address: result.registry_address,
+      signer: result.signer,
+      agent_id: agentId,
+      ens_name: ensName,
+      active
+    });
+  } catch (error) {
+    return sendError(res, 502, "ens_registry_upsert_failed", error.message || String(error));
+  }
+});
+
 app.get("/api/ens/signer-balance", async (_req, res) => {
   try {
     if (!ENS_PRIVATE_KEY) {
@@ -2247,7 +2347,10 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
 
-    const trust = await deriveTrustForIntent(resolved, allowedIntent.trim());
+    const trust = await deriveTrustForIntent(resolved, allowedIntent.trim(), {
+      agentIdCandidate: normalizedEnsip25AgentId,
+      registryCandidate: registryInteropAddress
+    });
     const versioning = deriveVersionForIntent(resolved, allowedIntent.trim());
     return res.json({
       ok: true,
@@ -2332,7 +2435,10 @@ app.post("/api/agents/sessions", async (req, res) => {
       ctx.__ensResolvedIdentity = ens;
       ctx.agent_actor_address = ens.agent_address;
       ctx.__ensAllowedIntents = ens.allowedIntents;
-      ctx.__ensTrust = await deriveTrustForIntent(ens, intent);
+      ctx.__ensTrust = await deriveTrustForIntent(ens, intent, {
+        agentIdCandidate: agentIdForEnsip25,
+        registryCandidate: String(ctx.ensip25_registry || "").trim()
+      });
       ctx.__ensPrivacy = ens.privacy || { payout_mode: "public", privacy_receiver: null, privacy_updated_at: null };
       ctx.__ensVersioning = deriveVersionForIntent(ens, intent);
       const privacyReceiver = ctx.__ensPrivacy?.privacy_receiver;

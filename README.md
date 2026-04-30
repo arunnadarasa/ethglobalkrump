@@ -148,6 +148,8 @@ Associated endpoints:
   - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, plus privacy/versioning workshop fields and the **strict ENSIP-25** parameterized text key (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`).
 - `POST /api/ens/verify-attestation`
   - body `{ ensName, intent, registry, agentId }` — verifies ENSIP-25 baseline (non-empty value) and registry backlink; returns `trust` plus `ensip25` details (`key`, `verified`, `spec_verified`, `bidirectional_verified`, `value`).
+- `POST /api/ens/registry/upsert-agent`
+  - body `{ ensName, agentId, registry?, controller?, tokenUri?, capabilitiesUri?, metadataUri?, active? }` — submits on-chain `upsertAgent(...)` on the configured registry contract so registry backlink verification can pass in the app.
 
 #### ENSIP-25 registry defaults (env)
 
@@ -182,8 +184,9 @@ Use this sequence for a fast proof that trust/privacy/versioning enforcement is 
 1. `GET /api/ens/resolve?name=<ensName>&intent=challenge_payout&registry=<interopHex>&agentId=<agentId>`
 2. `POST /api/ens/verify-attestation` with `{ ensName, intent: "challenge_payout", registry, agentId }`
 3. `POST /api/ens/setup-agent` in `demo` mode with `ensip25Registry`, `ensip25AgentId`, `ensip25Value` and privacy/version fields
-4. `POST /api/agents/sessions` high-risk intent with ENS-only attestation (expect blocked)
-5. `POST /api/agents/sessions` same intent after ENS + registry backlink match (expect allowed)
+4. `POST /api/ens/registry/upsert-agent` with the same `ensName` + `agentId` (or use UI button `Upsert registry link`)
+5. `POST /api/agents/sessions` high-risk intent with ENS-only attestation (expect blocked)
+6. `POST /api/agents/sessions` same intent after ENS + registry backlink match (expect allowed)
 
 Example outcomes you should see when rehearsing:
 

@@ -220,7 +220,12 @@
             style="min-width: 240px"
           />
           <input id="ens-attestor" placeholder="attestor (optional)" style="min-width: 220px" />
-          <input id="ensip25-registry" placeholder="ENSIP-25 registry interop (optional override)" style="min-width: 320px" />
+          <input
+            id="ensip25-registry"
+            value="0x000100000103aa36a714d4978db542eec50e225ad8441662e96ed75612a8"
+            placeholder="ENSIP-25 registry interop (optional override)"
+            style="min-width: 320px"
+          />
           <input id="ens-agent-version" placeholder="agentVersion (e.g. v1)" style="min-width: 180px" />
           <input id="ens-capabilities-version" placeholder="capabilitiesVersion (e.g. 2026.04)" style="min-width: 220px" />
         </div>
@@ -237,6 +242,7 @@
           </select>
           <button id="ens-check-signer-balance" type="button">Check wallet Sepolia ETH</button>
           <button id="ens-check-name-status" type="button">Check ENS name status</button>
+          <button id="ens-registry-upsert" type="button">Upsert registry link</button>
           <button id="ens-verify-attestation" type="button">Verify ENSIP-25 trust</button>
           <button id="ens-resolve-identity" type="button">Resolve ENS for Vyper agent</button>
           <button id="ens-register-update" type="button">Register/Update ENS Identity</button>

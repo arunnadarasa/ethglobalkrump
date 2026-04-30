@@ -899,10 +899,85 @@ async function verifyEnsAttestationFromUi() {
   const ensip25 = response.body?.ensip25 || {};
   setEnsJudgeChip({
     statusId: "ens-trust-chip",
-    chipText: `Trust verify: verified=${ensip25.verified}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}; key=${ensip25.key || "unset"}`,
+    chipText: `Trust verify: spec=${trust.ensip25_spec_verified}; registry=${trust.registry_side_verified}; bidirectional=${trust.ensip25_bidirectional_verified}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}; key=${ensip25.key || "unset"}`,
     variant: trust.is_trusted_for_intent ? "success" : "warning"
   });
   print("ens-identity-output", { route: "/api/ens/verify-attestation", body: response.body });
+}
+
+async function upsertRegistryLinkFromUi() {
+  const ensInput = document.getElementById("ens-name-input");
+  const globalInput = document.getElementById("agent-ens-name");
+  const ensName = normalizeEnsNameInput(ensInput?.value || globalInput?.value || "");
+  const agentId = document.getElementById("ensip25-agent-id")?.value?.trim() || document.getElementById("ens-agent-id")?.value?.trim() || "";
+  const registry = document.getElementById("ensip25-registry")?.value?.trim() || "";
+  const tokenUri = document.getElementById("ens-token-uri")?.value?.trim() || "";
+  const capabilitiesUri = document.getElementById("ens-capabilities-uri")?.value?.trim() || "";
+  const active = true;
+
+  if (!ensName) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Set ENS name first.",
+      variant: "warning"
+    });
+    return;
+  }
+  if (!agentId) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Set ENSIP-25 agentId first.",
+      variant: "warning"
+    });
+    return;
+  }
+  if (!registry) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Set ENSIP-25 registry interop first.",
+      variant: "warning"
+    });
+    return;
+  }
+
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: "Submitting registry upsert...",
+    variant: "warning"
+  });
+
+  const response = await request("/api/ens/registry/upsert-agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ensName,
+      agentId,
+      registry,
+      tokenUri,
+      capabilitiesUri,
+      metadataUri: "",
+      active
+    })
+  });
+  if (!response.ok) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: response.body?.error?.message || "Registry upsert failed.",
+      variant: "warning"
+    });
+    print("ens-identity-output", { route: "/api/ens/registry/upsert-agent", request: { ensName, agentId, registry }, body: response.body });
+    return;
+  }
+
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: `Registry upsert submitted: ${response.body?.tx_hash || "ok"}`,
+    variant: "success"
+  });
+  print("ens-identity-output", { route: "/api/ens/registry/upsert-agent", request: { ensName, agentId, registry }, body: response.body });
+
+  await verifyEnsAttestationFromUi();
+  await resolveEnsJudgeIdentityForUi();
 }
 
 async function checkEnsSignerBalanceFromUi() {
@@ -1826,6 +1901,18 @@ document.getElementById("ens-check-name-status")?.addEventListener("click", asyn
   } catch (error) {
     setEnsJudgeChip({
       statusId: "ens-name-status-chip",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-registry-upsert")?.addEventListener("click", async () => {
+  try {
+    await upsertRegistryLinkFromUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
       chipText: error?.message || String(error),
       variant: "warning"
     });

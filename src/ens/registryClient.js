@@ -34,6 +34,21 @@ const AGENT_REGISTRY_ABI = [
       { name: "ensName", type: "string" }
     ],
     outputs: [{ name: "", type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "upsertAgent",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "agentId", type: "string" },
+      { name: "controller", type: "address" },
+      { name: "ensName", type: "string" },
+      { name: "tokenUri", type: "string" },
+      { name: "capabilitiesUri", type: "string" },
+      { name: "metadataUri", type: "string" },
+      { name: "active", type: "bool" }
+    ],
+    outputs: []
   }
 ];
 
