@@ -370,6 +370,12 @@ Current live status (important for demos):
 - Upstream still returned `402` with settlement errors (`insufficient_balance` / `authorization_validity_too_short`) during live paid replay attempts.
 - For judge demos, present `x402_probe` + `x402_external_settle` as production-ready handoff architecture, with full paid settlement currently dependent on upstream acceptance/accounting conditions.
 
+Practical demo guidance:
+
+- Use `api_key_proxy` for guaranteed answer output in the live demo.
+- Use `x402_probe` to prove challenge detection (`402` is expected success signal).
+- Use `x402_external_settle` to prove replay contract and typed settlement error handling while waiting for upstream minimum-balance confirmation.
+
 ### MetaMask setup
 
 Set these in `.env` so the UI can switch/add chain and send tx:

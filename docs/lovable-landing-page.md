@@ -136,6 +136,7 @@ We built a full loop:
   2) replay with externally generated x402 payment headers.
 - This keeps wallet custody/signing out of the app while enabling final answer delivery in the same demo panel.
 - If upstream settlement is not accepted for the active wallet/network, the same panel returns typed `402` settlement errors instead of opaque failures, so operators can diagnose funding/policy mismatches quickly.
+- Real-world test note: we validated funded-wallet + gas + on-chain approve/deposit flows, and still surfaced provider-side `insufficient_balance` constraints; this reinforces why typed failure UX is part of the product value.
 
 ## Who this is for
 

@@ -148,6 +148,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
   - challenge step: no replay headers, return normalized challenge payload on `402`.
   - replay step: require `replay_requested=true` and `replay_headers` (JSON object) to retry and return final answer.
   - when upstream does not accept settlement, preserve typed `402` replay errors (`insufficient_balance`, validity/policy reasons) in normalized response.
+  - demo fallback: if paid replay is blocked upstream, operators should pivot to `api_key_proxy` for answer output while still showcasing x402 challenge/replay capability.
 - Keep fixed model allowlist on server-side validation and reject unsupported models with typed errors.
 
 ### KeeperHub (sponsor execution layer)

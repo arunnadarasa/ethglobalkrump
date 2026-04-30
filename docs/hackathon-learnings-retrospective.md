@@ -205,6 +205,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 18. **Separate "integration complete" from "upstream settlement accepted" in test criteria**
    - A successful engineering checkpoint for x402 is: challenge parse + replay artifact handoff + deterministic typed error surface.
    - A successful business/ops checkpoint is: upstream settlement acceptance for the funded wallet on the selected network.
+19. **Funding on-chain was necessary but not sufficient for live x402 settlement**
+   - We funded wallet `0xad52...FA51` on Base, added Base ETH gas, and executed successful on-chain `approve` + `deposit` txs to gateway contracts.
+   - Paid calls still returned upstream `insufficient_balance`, indicating additional provider-side minimums/accounting conditions beyond local chain funding.
+   - Action: escalate to AIsa support for exact minimum balance and accepted gateway ledger requirements per endpoint/network.
 
 ## Outcome Snapshot
 
