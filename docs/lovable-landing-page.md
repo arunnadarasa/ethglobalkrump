@@ -135,6 +135,7 @@ We built a full loop:
   1) detect challenge from `/apis/v2/*`,
   2) replay with externally generated x402 payment headers.
 - This keeps wallet custody/signing out of the app while enabling final answer delivery in the same demo panel.
+- If upstream settlement is not accepted for the active wallet/network, the same panel returns typed `402` settlement errors instead of opaque failures, so operators can diagnose funding/policy mismatches quickly.
 
 ## Who this is for
 

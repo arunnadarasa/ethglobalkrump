@@ -363,6 +363,13 @@ Request fields for external settle:
 
 Use [AIsa nanopayment-x402](https://github.com/AIsa-team/nanopayment-x402) / [SKILL.md](https://raw.githubusercontent.com/AIsa-team/nanopayment-x402/main/SKILL.md) to generate paid replay headers via external wallet signing flow.
 
+Current live status (important for demos):
+
+- The app-side flow is implemented and verified (`challenge` -> `replay` contract works).
+- We validated funded wallets, Base gas, and on-chain `approve`/`deposit` calls to gateway contracts.
+- Upstream still returned `402` with settlement errors (`insufficient_balance` / `authorization_validity_too_short`) during live paid replay attempts.
+- For judge demos, present `x402_probe` + `x402_external_settle` as production-ready handoff architecture, with full paid settlement currently dependent on upstream acceptance/accounting conditions.
+
 ### MetaMask setup
 
 Set these in `.env` so the UI can switch/add chain and send tx:

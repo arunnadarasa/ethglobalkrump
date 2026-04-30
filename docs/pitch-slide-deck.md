@@ -102,7 +102,7 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 4. Highlight trace events and settlement proof.
 5. Trigger one payment flow with MetaMask and one with AIsa x402 pilot rail (`judge_feedback_request`) to show metered external authorization.
 6. In AIsa LLM panel, run `x402_probe` with `/apis/v2/perplexity/sonar` and call out that `upstream_status: 402` + `expected_payment_challenge: true` is a successful challenge-detection proof.
-7. Switch to `x402_external_settle`, paste external replay headers from AIsa nanopayment client, and show final answer return in the same panel.
+7. Switch to `x402_external_settle`, paste external replay headers from AIsa nanopayment client, and show deterministic replay outcome handling (`200` answer when accepted, typed `402` settlement error otherwise).
 8. Show UCP checkout/order endpoints.
 9. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 10. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
@@ -112,7 +112,7 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 14. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
 15. Show Arc deployment proof in README.
 
-Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape).
+Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape). For x402, emphasize that challenge handling and replay architecture are live even when upstream settlement policy blocks specific funded wallets.
 
 ---
 

@@ -171,6 +171,11 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Added `x402_external_settle` as a two-step route contract: challenge detection first, then replay with externally generated payment headers.
    - This keeps wallet signing outside the app while still enabling final answer retrieval from `/apis/v2/*`.
 
+17. **Live paid x402 readiness depends on upstream settlement acceptance**
+   - We confirmed Base wallet funding, Base ETH gas top-up, and successful on-chain `approve` + `deposit` transactions to gateway contracts.
+   - Even with valid replay artifacts and signed Base challenge selection (`eip155:8453`), upstream continued to return `402` with `insufficient_balance` / `authorization_validity_too_short`.
+   - Conclusion: the app integration is correct, but final paid-answer success still depends on upstream balance/accounting policy alignment.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -197,6 +202,9 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 17. **Document the two-wallet gas story in product copy, not only in logs**
    - Judges hit “mint failed” when **Circle bridge signer** POL was barely enough for pending txs; separately, **KeeperHub’s org executor** needs native gas for `/execute/transfer`.
    - Surfacing both in **API `instructions`**, **fund-hint** payloads (`keeperhub_executor_gas_hint`), and a **static KeeperHub funding reminder** in the UI reduced misdiagnosis (“RPC is down”) vs insufficient gas headroom.
+18. **Separate "integration complete" from "upstream settlement accepted" in test criteria**
+   - A successful engineering checkpoint for x402 is: challenge parse + replay artifact handoff + deterministic typed error surface.
+   - A successful business/ops checkpoint is: upstream settlement acceptance for the funded wallet on the selected network.
 
 ## Outcome Snapshot
 

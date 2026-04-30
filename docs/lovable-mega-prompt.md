@@ -147,6 +147,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - External-settle semantics:
   - challenge step: no replay headers, return normalized challenge payload on `402`.
   - replay step: require `replay_requested=true` and `replay_headers` (JSON object) to retry and return final answer.
+  - when upstream does not accept settlement, preserve typed `402` replay errors (`insufficient_balance`, validity/policy reasons) in normalized response.
 - Keep fixed model allowlist on server-side validation and reject unsupported models with typed errors.
 
 ### KeeperHub (sponsor execution layer)
@@ -503,6 +504,7 @@ Inputs/buttons as in reference:
   - show formatted response with `upstream_status`, `expected_payment_challenge`, and raw payload.
   - treat `402` in probe mode as a success indicator for challenge detection.
   - include replay controls (`replay_requested`, `replay_headers`) for external settlement handoff.
+  - surface replay failure reasons as first-class UX output (do not collapse into generic errors).
 
 ### ENS Judge card (must match)
 
