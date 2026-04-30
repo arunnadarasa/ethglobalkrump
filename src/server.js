@@ -1204,15 +1204,7 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
     }
 
     if (selectedMode === "x402_probe") {
-      const endpointPath = String(endpoint_path || "").trim();
-      if (!endpointPath) {
-        return sendError(
-          res,
-          400,
-          "aisa_x402_probe_endpoint_required",
-          "x402_probe mode requires a supported /apis/v2/* endpoint path."
-        );
-      }
+      const endpointPath = String(endpoint_path || "/apis/v2/perplexity/sonar").trim();
       const normalizedEndpointPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
       if (!normalizedEndpointPath.startsWith("/apis/v2/")) {
         return sendError(

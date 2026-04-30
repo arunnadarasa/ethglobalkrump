@@ -1420,7 +1420,7 @@ function syncAisaLlmEndpointToModel() {
   }
   if (mode === "x402_probe") {
     if (!String(endpointInput.value || "").trim().startsWith("/apis/v2/")) {
-      endpointInput.value = "";
+      endpointInput.value = "/apis/v2/perplexity/sonar";
     }
     return;
   }
