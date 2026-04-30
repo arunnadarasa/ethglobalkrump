@@ -105,13 +105,14 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 7. Switch to `x402_external_settle`, paste external replay headers from AIsa nanopayment client, and show deterministic replay outcome handling (`200` answer when accepted, typed `402` settlement error otherwise).
 8. If `402` persists after funded-wallet replay, call out this as an upstream settlement-policy boundary and continue demo with `api_key_proxy` for answer output.
 9. Show UCP checkout/order endpoints.
-10. **KeeperHub:** show local vs online mode on demo transfer, then run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
-11. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
-12. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-13. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) -> `Resolve ENS for Vyper agent` (same `registry` + `agentId` as query params for live trust fields).
-14. Run `challenge_payout` once with trust off (show blocked), then once with trust on (show allowed).
-15. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
-16. Show Arc deployment proof in README.
+10. **KeeperHub local proof first:** set `KeeperHub local (Arc)` and run one demo transfer end-to-end (call out `arc_supported: true`, `execute_network: arc-testnet`, and completed tx hash in response).
+11. **KeeperHub online proof second:** switch to `KeeperHub online (CCTP + target)` and run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
+12. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
+13. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
+14. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) -> `Resolve ENS for Vyper agent` (same `registry` + `agentId` as query params for live trust fields).
+15. Run `challenge_payout` once with trust off (show blocked), then once with trust on (show allowed).
+16. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
+17. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape). For x402, emphasize that challenge handling and replay architecture are live even when upstream settlement policy blocks specific funded wallets.
 

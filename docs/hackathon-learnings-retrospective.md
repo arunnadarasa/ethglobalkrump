@@ -176,6 +176,21 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Even with valid replay artifacts and signed Base challenge selection (`eip155:8453`), upstream continued to return `402` with `insufficient_balance` / `authorization_validity_too_short`.
    - Conclusion: the app integration is correct, but final paid-answer success still depends on upstream balance/accounting policy alignment.
 
+18. **KeeperHub local Arc path reached fully successful execution**
+   - Runtime was verified with `KEEPERHUB_API_BASE=http://localhost:3001/api`, `arc_supported: true`, and `execute_network: arc-testnet`.
+   - Local `POST /api/keeperhub/execute-transfer` completed with tx `0xa5520fcd83734141a51cda1a4010b15d8983c573cab87b8239c3620158e58e08` on Arc testnet.
+   - Practical win: local debug can be demonstrated as Arc-only (no CCTP dependency) while keeping online mode for cross-chain sponsor narrative.
+
+19. **Separate local and online KeeperHub key routing avoids 401 drift**
+   - `/chains` success alone was not enough; `/execute/transfer` in local KeeperHub enforces local-org key validation.
+   - Supporting `KEEPERHUB_API_KEY_LOCAL` and `KEEPERHUB_API_KEY_ONLINE` (with legacy fallback) removed ambiguous auth behavior across environments.
+   - This made environment switching deterministic for demo-day troubleshooting.
+
+20. **Arc execute network must use stable slug, not internal chain row id**
+   - Local chain list includes an opaque row id (e.g. `u93e...`) that is not accepted by `/execute/transfer`.
+   - Resolving Arc to `arc-testnet` fixed "unsupported network" failures and restored end-to-end transfer completion.
+   - Lesson: execute-network derivation should prioritize protocol-recognized slugs over persistence-layer identifiers.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -202,10 +217,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 17. **Document the two-wallet gas story in product copy, not only in logs**
    - Judges hit “mint failed” when **Circle bridge signer** POL was barely enough for pending txs; separately, **KeeperHub’s org executor** needs native gas for `/execute/transfer`.
    - Surfacing both in **API `instructions`**, **fund-hint** payloads (`keeperhub_executor_gas_hint`), and a **static KeeperHub funding reminder** in the UI reduced misdiagnosis (“RPC is down”) vs insufficient gas headroom.
-18. **Separate "integration complete" from "upstream settlement accepted" in test criteria**
+21. **Separate "integration complete" from "upstream settlement accepted" in test criteria**
    - A successful engineering checkpoint for x402 is: challenge parse + replay artifact handoff + deterministic typed error surface.
    - A successful business/ops checkpoint is: upstream settlement acceptance for the funded wallet on the selected network.
-19. **Funding on-chain was necessary but not sufficient for live x402 settlement**
+22. **Funding on-chain was necessary but not sufficient for live x402 settlement**
    - We funded wallet `0xad52...FA51` on Base, added Base ETH gas, and executed successful on-chain `approve` + `deposit` txs to gateway contracts.
    - Paid calls still returned upstream `insufficient_balance`, indicating additional provider-side minimums/accounting conditions beyond local chain funding.
    - Action: escalate to AIsa support for exact minimum balance and accepted gateway ledger requirements per endpoint/network.
@@ -232,6 +247,8 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 - Multi-chain destination wallet provisioning: destination Circle wallets were provisioned for Base Sepolia, Ethereum Sepolia, Polygon Amoy, Arbitrum Sepolia, and Avalanche Fuji
 - KeeperHub operator ergonomics: added "Refresh balances" action in panel to reload Arc source and destination signer funding state without launching faucets
 - KeeperHub funding UX: persistent panel note to top up with **USDC + native token** for the **selected execution network**; destination gas API returns clearer **Circle signer vs org executor** instructions and executor gas hints
+- KeeperHub local Arc execution: now confirmed end-to-end on local KeeperHub (`api_base=http://localhost:3001/api`, `execute_network=arc-testnet`) with successful on-chain transfer proof
+- KeeperHub auth/network hardening: separate local/online API key routing and Arc execute-slug mapping prevent local `401`/unsupported-network false starts
 - CCTP / Bridge Kit: Amoy and other destinations tunable via `POLYGON_AMOY_RPC_URL`, `POLYGON_AMOY_RPC_PUBLIC_FIRST`, `ALLOW_LOW_DESTINATION_GAS`, `ARC_BRIDGE_TRANSFER_SPEED`; per-chain recommended native minimums (e.g. Amoy **POL**) live in `src/settlement/cctpBridge.js`
 - KeeperHub execute mapping: some destination networks require **numeric chain `network`** values on `/execute/transfer` (implemented in `src/keeperhub/client.js`) when string slugs are rejected upstream
 - Debug hygiene: local `127.0.0.1` ingest telemetry removed from shipped KeeperHub client paths for cleaner production-style runs

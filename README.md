@@ -400,12 +400,31 @@ The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes)
 2. Add to `.env` (never commit the real key):
 
    - `KEEPERHUB_API_KEY` — required for any KeeperHub call (`kh_…` only)
+   - `KEEPERHUB_API_KEY_LOCAL` — optional; preferred when `KEEPERHUB_API_BASE` points to local/self-hosted KeeperHub
+   - `KEEPERHUB_API_KEY_ONLINE` — optional; preferred when `KEEPERHUB_API_BASE` points to hosted KeeperHub
    - `KEEPERHUB_API_BASE` — optional, default `https://app.keeperhub.com/api` (must include `/api`; if you omit it, the client normalizes `https://app.keeperhub.com` to the default)
    - `KEEPERHUB_EXECUTE_NETWORK` — optional; if Arc testnet (`ARC_CHAIN_ID`, default `5042002`) is listed under `GET /api/chains` but direct execution expects a different `network` string, set it explicitly (see [Direct execution](https://docs.keeperhub.com/api/direct-execution))
    - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for USDC-style ERC-20 transfers. Leave unset only if you intend a **native** transfer on that network.
    - `KEEPERHUB_TOKEN_DECIMALS` / `KEEPERHUB_TOKEN_SYMBOL` — optional metadata for non-standard tokens (defaults `6` / `USDC`)
 
 3. In KeeperHub, ensure your **organization wallet / spending** is configured for Arc testnet so `POST /execute/transfer` succeeds (see KeeperHub wallet docs if you hit `422`).
+
+### Local KeeperHub + Arc validation (confirmed)
+
+We verified successful local KeeperHub execution on Arc testnet in this repo's current implementation:
+
+- app API base switched to local KeeperHub: `http://localhost:3001/api`
+- `GET /api/keeperhub/status` returned:
+  - `arc_supported: true`
+  - `execute_network: "arc-testnet"`
+- `POST /api/keeperhub/execute-transfer` in `execution_mode: "local"` completed with on-chain proof:
+  - tx: `0xa5520fcd83734141a51cda1a4010b15d8983c573cab87b8239c3620158e58e08`
+  - explorer: [ArcScan](https://testnet.arcscan.app/tx/0xa5520fcd83734141a51cda1a4010b15d8983c573cab87b8239c3620158e58e08)
+
+Implementation details that unblocked this:
+
+- key routing supports local vs hosted KeeperHub (`KEEPERHUB_API_KEY_LOCAL` / `KEEPERHUB_API_KEY_ONLINE`, fallback `KEEPERHUB_API_KEY`)
+- Arc execute slug resolves to `arc-testnet` (instead of using opaque chain-row IDs that local `/execute/transfer` rejects)
 
 ### API routes (this repo)
 

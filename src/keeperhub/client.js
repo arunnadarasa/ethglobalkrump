@@ -16,6 +16,22 @@ const NETWORK_USDC_ADDRESSES = {
   "avalanche-fuji": "0x5425890298aed601595a70ab815c96711a31bc65"
 };
 
+function logKeeperhubDebug(hypothesisId, message, data) {
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "post-fix",
+      hypothesisId,
+      location: "src/keeperhub/client.js",
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+}
+
 /**
  * KeeperHub docs use host `app.keeperhub.com` with API root `/api`.
  * If KEEPERHUB_API_BASE is set to `https://app.keeperhub.com` (no `/api`),
@@ -29,11 +45,23 @@ function getBaseUrl() {
   return base;
 }
 
+function resolveApiKeySource(baseUrl = getBaseUrl()) {
+  const normalizedBase = String(baseUrl || "").toLowerCase();
+  if (normalizedBase.includes("localhost") || normalizedBase.includes("127.0.0.1")) {
+    return "local";
+  }
+  return "online";
+}
+
 function getApiKey() {
   const legacy = (process.env.KEEPERHUB_API_KEY || "").trim();
   const local = (process.env.KEEPERHUB_API_KEY_LOCAL || "").trim();
   const online = (process.env.KEEPERHUB_API_KEY_ONLINE || "").trim();
-  return legacy;
+  const source = resolveApiKeySource();
+  if (source === "local") {
+    return local || legacy;
+  }
+  return online || legacy;
 }
 
 function assertOrgApiKeyForRest() {
@@ -61,6 +89,15 @@ function isConfigured() {
  */
 async function keeperhubFetch(path, { method = "GET", body, executeRoute = false } = {}) {
   const key = getApiKey();
+  logKeeperhubDebug("KH1", "keeperhub fetch called", {
+    path,
+    method,
+    executeRoute,
+    apiBase: getBaseUrl(),
+    keySource: resolveApiKeySource(),
+    keyPresent: Boolean(key),
+    keyType: key.startsWith("kh_") ? "kh" : key.startsWith("wfb_") ? "wfb" : key ? "other" : "none"
+  });
   if (!key) {
     const err = new Error("KEEPERHUB_API_KEY is not set");
     err.code = "keeperhub_not_configured";
@@ -107,6 +144,13 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
     parsed = { raw: text };
   }
   if (!response.ok) {
+    logKeeperhubDebug("KH2", "keeperhub fetch non-ok response", {
+      path,
+      method,
+      executeRoute,
+      status: response.status,
+      bodyPreview: String(text || "").slice(0, 300)
+    });
     if (text.trimStart().startsWith("<!") || text.includes("<title>Error</title>")) {
       const err = new Error(
         `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
@@ -155,12 +199,14 @@ function resolveExecuteNetworkSlug(chainRow) {
   if (!chainRow) {
     return null;
   }
+  if (Number(chainRow.chainId) === 5042002) {
+    return "arc-testnet";
+  }
   const direct =
     chainRow.slug ||
     chainRow.networkSlug ||
     chainRow.network ||
-    chainRow.shortName ||
-    chainRow.id;
+    chainRow.shortName;
   if (direct && typeof direct === "string" && !direct.startsWith("chain_")) {
     return direct.toLowerCase();
   }

@@ -63,12 +63,19 @@ We built a full loop:
 - `GET /api/keeperhub/status` and `GET /api/keeperhub/chains` for Arc discovery
 - `POST /api/keeperhub/execute-transfer` for demos; U5 **declare winner** with `execute_via_keeperhub` for prize pool → winner wallet
 - Documented in `README.md` and `docs/hackathon-learnings-retrospective.md`
+- Confirmed local Arc success: app now runs KeeperHub local execution with `api_base=http://localhost:3001/api`, `arc_supported=true`, and `execute_network=arc-testnet`, including completed on-chain transfer proof.
 - Live operator UX includes:
   - one-click `Refresh balances` for source Arc USDC + destination signer balances
   - explicit destination signer source mode (`destination wallet` vs `source fallback`)
   - destination signer wallet-id hints per chain
   - a clear **funding reminder**: top up on the **selected execution network** with **USDC** and that chain’s **native gas** (POL on Amoy, ETH on Sepolia networks, AVAX on Fuji, etc.)
   - gas readiness messaging that distinguishes **Circle CCTP bridge signer** balances from **KeeperHub organization executor** native requirements (API `keeperhub_executor_gas_hint` + `instructions` on destination fund-hint)
+
+### 4b) Local KeeperHub dedicated testing story (Arc-only)
+
+- Local test path is intentionally separated from online CCTP path in UI.
+- `KeeperHub local (Arc)` mode focuses on Arc-only transfer execution (no CCTP prerequisite).
+- The frontend now includes dedicated local guidance copy so judges can reproduce local Arc transfer quickly before optional online cross-chain demonstrations.
 
 ### 5) ENS Judge Identity UX (Sepolia writes, Universal Resolver reads)
 
