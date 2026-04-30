@@ -338,6 +338,14 @@ Runtime behavior:
 - `POST /api/payments/x402/authorize` enforces budget + pilot intent checks and returns `payment_ref` + receipt.
 - `POST /api/agents/sessions` with `context.payment_mode="x402"` preserves ENS/ENSIP-25 gates, emits x402 trace events, and keeps UCP checkout/order flow unchanged.
 
+### AIsa LLM x402 probe notes (demo-safe)
+
+- In the **AIsa LLM Chat Demo**, `x402_probe` should use a valid `/apis/v2/*` endpoint path.
+- Current known-good probe path: `/apis/v2/perplexity/sonar`.
+- Probe semantics: `upstream_status: 402` with `expected_payment_challenge: true` means the x402 challenge was detected correctly.
+- `x402_probe` is challenge detection only; it does not complete paid settlement/retry to produce a final LLM answer.
+- You only need a facilitator/payment client when implementing full paid retry flow after the `402` challenge.
+
 ### MetaMask setup
 
 Set these in `.env` so the UI can switch/add chain and send tx:

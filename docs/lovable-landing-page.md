@@ -49,6 +49,7 @@ We built a full loop:
 - `GET /api/ucp/conformance/self-test`
 - Top 6 use-case payment execution paths in UI with `metamask` or `circle_wallet` options
 - Per-request execution selectors (`local` vs `online`) with destination testnet options (Ethereum Sepolia, Base Sepolia, Polygon Amoy, Arbitrum Sepolia, Avalanche Fuji)
+- AIsa LLM demo includes `x402_probe` mode for nanopayment challenge detection on `/apis/v2/*` endpoints (demo default: `/apis/v2/perplexity/sonar`)
 
 ### 3) Deep Settlement Credibility
 
@@ -121,6 +122,12 @@ We built a full loop:
 
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc USDC source for the bridge
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — destination signer balances, recommended native minimum, executor gas hints, and human-readable `instructions`
+
+### 8) AIsa x402 LLM probe clarity
+
+- Probe mode success signal is protocol-level: `upstream_status: 402` + `expected_payment_challenge: true`.
+- This proves x402 challenge flow is reachable from the app.
+- Final model answers in x402 mode require a paid retry implementation (facilitator/payment client), not just probe mode.
 
 ## Who this is for
 

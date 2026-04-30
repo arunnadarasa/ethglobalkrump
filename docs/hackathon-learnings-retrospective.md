@@ -60,6 +60,11 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Kept existing execution-mode UX and KeeperHub destination payout contract intact.
    - Migration reduced endpoint fragility and aligned implementation with official docs.
 
+11. **AIsa x402 probe flow was validated with runtime evidence**
+   - `/apis/v2/openai/chat/completions` returned upstream `404` in probe mode and was removed as a default assumption.
+   - `/apis/v2/perplexity/sonar` consistently returned `402` challenge responses in `x402_probe`, confirming expected challenge-detection behavior.
+   - UI copy/defaults were aligned so sonar is used as convenience endpoint for probe runs while keeping mode label generic.
+
 ## What Failed / Pain Points
 
 1. **Repository assumption mismatch**
@@ -156,6 +161,11 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 14. **Signer-source transparency prevents false debugging loops**
    - Explicitly surfacing `destination_wallet` vs `source_wallet_fallback` in the UI removed ambiguity when source and destination addresses looked identical.
    - Unified EVM addressing can legitimately produce equal addresses across chains; this should be explained inline rather than treated as an error signal.
+
+15. **x402 probe success criteria must be documented explicitly**
+   - In probe mode, a `402` is a successful protocol signal, not a failed LLM request.
+   - Teams need separate "challenge detected" vs "answer delivered" UX states to avoid confusion during live demos.
+   - Facilitator/payment-client logic is only required for automatic paid retry after the challenge.
 
 ## Practical Recommendations for Next Iteration
 

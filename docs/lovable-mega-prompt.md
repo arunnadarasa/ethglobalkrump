@@ -132,6 +132,19 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
   - Also include `wallet_id`, `wallet_set_id`, token fields, `destination_address` (fallback to treasury), `api_base`, `transfer_path`.
   - `rails.keeperhub`: `{ api_key_configured, api_base }` (boolean reflects presence of `KEEPERHUB_API_KEY`, not the secret itself).
 
+### AIsa LLM x402 demo route
+
+- `POST /api/aisa/llm/chat` body `{ mode, model, capability, endpoint_path, temperature, max_tokens, messages[] }`
+- Modes:
+  - `api_key_proxy` -> `/v1/chat/completions` style path.
+  - `x402_probe` -> must target `/apis/v2/*` path.
+- For x402 probe demo parity, default/fallback endpoint should be `/apis/v2/perplexity/sonar`.
+- Probe response semantics:
+  - return `upstream_status` and `expected_payment_challenge`.
+  - `402` + `expected_payment_challenge: true` is considered successful challenge detection.
+  - probe mode may return `answer: null` by design.
+- Keep fixed model allowlist on server-side validation and reject unsupported models with typed errors.
+
 ### KeeperHub (sponsor execution layer)
 
 - `GET /api/keeperhub/status` — JSON: `configured`, `api_base`, `arc_chain_id`, `arc_supported`, `execute_network`, matched `chain` summary, `token_address_configured`, or `error` string if chains call failed.
@@ -469,6 +482,21 @@ Inputs/buttons as in reference:
 - output `#agent-output`
 - On `#agent-load-capabilities`: repopulate the `#agent-intent` dropdown from response `body.agents.intents` (keep currently selected value when still available).
 - On `#agent-run-session`: before posting session, resolve payment via selected rail and include `{ payment_mode, payment_ref, amount_minor }` in context; show `payment_receipt` in output.
+
+### AIsa LLM Chat Demo panel (must include)
+
+- Inputs and controls:
+  - mode select: `#aisa-llm-mode` (`api_key_proxy`, `x402_probe`)
+  - capability select: `#aisa-llm-capability` (`text`, `audio`, `coding`, `image`, `video`, `vision`)
+  - model select: `#aisa-llm-model` (filtered by capability from a fixed catalog)
+  - endpoint input: `#aisa-llm-endpoint`
+  - prompt inputs: `#aisa-llm-system`, `#aisa-llm-user`
+  - params: `#aisa-llm-temperature`, `#aisa-llm-max-tokens`
+  - action/output: `#aisa-llm-run`, `#aisa-llm-output`
+- Behavior:
+  - in `x402_probe`, auto-fill endpoint to `/apis/v2/perplexity/sonar` when empty/invalid.
+  - show formatted response with `upstream_status`, `expected_payment_challenge`, and raw payload.
+  - treat `402` in probe mode as a success indicator for challenge detection.
 
 ### ENS Judge card (must match)
 
