@@ -100,6 +100,8 @@ docs/*                        # optional marketing/pitch md
 ### KeeperHub (optional; ETHGlobal OpenAgents sponsor)
 
 - `KEEPERHUB_API_KEY` — **organization** key prefix `kh_` only (not user webhook `wfb_` keys)
+- `KEEPERHUB_API_KEY_LOCAL` — optional; preferred when `KEEPERHUB_API_BASE` points to local/self-hosted KeeperHub
+- `KEEPERHUB_API_KEY_ONLINE` — optional; preferred when `KEEPERHUB_API_BASE` points to hosted KeeperHub
 - `KEEPERHUB_API_BASE` — default `https://app.keeperhub.com/api` (must include `/api`; normalize `https://app.keeperhub.com` → default)
 - `KEEPERHUB_EXECUTE_NETWORK` — optional slug override for `POST /execute/transfer` `network` field when Arc auto-detection is insufficient
 - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for ERC-20 transfers; omit for native
@@ -160,6 +162,10 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc online bridge source wallet + USDC balance + Circle faucet cue.
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns signer address, native + USDC balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` / `_short`, `instructions` (Circle signer vs KeeperHub org executor).
 - **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL; map some online destinations to **numeric** `network` chain IDs for `/execute/transfer` when string slugs are rejected.
+- **Local Arc behavior (important):**
+  - when Arc chain id `5042002` is detected, resolve execute network to `arc-testnet` (do not use opaque chain row ids like `u93e...` as execute network).
+  - choose API key by base URL: local base (`localhost`/`127.0.0.1`) prefers `KEEPERHUB_API_KEY_LOCAL`; hosted base prefers `KEEPERHUB_API_KEY_ONLINE`; both fallback to `KEEPERHUB_API_KEY`.
+  - expected local success signals: `GET /api/keeperhub/status` returns `arc_supported: true` and `execute_network: "arc-testnet"`, and local `POST /api/keeperhub/execute-transfer` returns completed execution with tx hash.
 
 ### ENS Judge identity routes (must implement)
 
@@ -465,6 +471,10 @@ Inputs/buttons as in reference:
 ### KeeperHub (UI)
 
 - `#keeperhub-funding-reminder` — persistent note: fund with **USDC** + selected chain **native gas** for online execution (updates when `#keeperhub-execution-network` changes).
+- Add dedicated guidance blocks:
+  - `#keeperhub-local-dedicated` (Arc-only local testing, no CCTP prerequisite)
+  - `#keeperhub-online-dedicated` (online CCTP + destination-chain gas path)
+  - toggle visibility by `#keeperhub-execution-mode`
 - `#keeperhub-load-status`, `#keeperhub-load-chains`, `#keeperhub-demo-recipient`, `#keeperhub-demo-amount`, `#keeperhub-demo-transfer`
 - Add `#keeperhub-refresh-balances` button to re-fetch source + destination balances without opening faucet links.
 - Include inline hints:
@@ -474,6 +484,9 @@ Inputs/buttons as in reference:
   - signer wallet id (`#keeperhub-signer-wallet-id-hint`)
   - gas warning chip (`#keeperhub-gas-warning`) and fallback warning chip (`#keeperhub-signer-warning`)
 - Output `#keeperhub-output`
+- In `KeeperHub local (Arc)` mode:
+  - disable destination network selector and destination-gas funding button
+  - show Arc-only copy in chain/funding hints (explicitly "no CCTP" for local mode)
 
 ### Agent orchestration
 
@@ -627,6 +640,10 @@ Shipped reference code should **not** POST to local ingest URLs. If you fork an 
 8. Agent capabilities include expanded intents (`judge_feedback_request`, `crew_split_settlement`, `practice_room_reserve`, `sample_pack_purchase`, `challenge_payout`, `merch_concierge_checkout`) and UI syncs dropdown from capabilities.
 9. CI jobs pass.
 10. With `KEEPERHUB_API_KEY` set: `/api/keeperhub/status` returns JSON (not HTML); `online-source-wallet` / `online-destination-gas` fund-hint routes return structured balances + gas guidance; optional demo transfer or U5 `execute_via_keeperhub` path returns structured `keeperhub` metadata on the payout or transfer response.
+10b. Local KeeperHub Arc acceptance (explicit):
+    - app uses `KEEPERHUB_API_BASE=http://localhost:3001/api`
+    - `GET /api/keeperhub/status` shows `arc_supported: true` and `execute_network: "arc-testnet"`
+    - `POST /api/keeperhub/execute-transfer` with `execution_mode: "local"` succeeds (completed execution + tx hash)
 11. ENS workshop sanity flow passes:
     - `GET /api/ens/resolve?...&registry=...&agentId=...` -> `POST /api/ens/verify-attestation` -> `POST /api/ens/setup-agent` demo preview (shows `ensip25Key` / `ensip25Value`) -> high-risk blocked before non-empty ENSIP-25 value -> high-risk allowed after write.
     - allowed run includes policy trace showing trust/privacy/versioning state.
