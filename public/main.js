@@ -1994,6 +1994,8 @@ function updateKeeperhubChainHint() {
   const network = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
   const networkSelect = document.getElementById("keeperhub-execution-network");
   const destinationGasButton = document.getElementById("keeperhub-fund-destination-gas");
+  const localDedicated = document.getElementById("keeperhub-local-dedicated");
+  const onlineDedicated = document.getElementById("keeperhub-online-dedicated");
   const chainMap = {
     "base-sepolia": "BASE-SEPOLIA",
     "ethereum-sepolia": "ETH-SEPOLIA",
@@ -2010,6 +2012,15 @@ function updateKeeperhubChainHint() {
   };
   const destinationChain = chainMap[network] || String(network || "").toUpperCase();
   const isLocalMode = executionMode === "local";
+  if (localDedicated && onlineDedicated) {
+    if (isLocalMode) {
+      localDedicated.classList.remove("hidden");
+      onlineDedicated.classList.add("hidden");
+    } else {
+      localDedicated.classList.add("hidden");
+      onlineDedicated.classList.remove("hidden");
+    }
+  }
   if (networkSelect) {
     networkSelect.disabled = isLocalMode;
   }
@@ -2054,6 +2065,8 @@ function updateKeeperhubChainHint() {
           nativeSymbol: native,
           reminderText: reminder.textContent || "",
           chainHint: target?.textContent || "",
+          localDedicatedVisible: Boolean(localDedicated && !localDedicated.classList.contains("hidden")),
+          onlineDedicatedVisible: Boolean(onlineDedicated && !onlineDedicated.classList.contains("hidden")),
           networkDisabled: Boolean(networkSelect?.disabled),
           destinationGasButtonDisabled: Boolean(destinationGasButton?.disabled)
         },

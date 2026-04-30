@@ -275,6 +275,14 @@
           ARC-TESTNET and does not require CCTP or destination-chain gas funding. Start local dependencies first, then run Load
           KeeperHub Status.
         </div>
+        <div id="keeperhub-local-dedicated" role="note">
+          Local KeeperHub dedicated flow (Arc only): 1) keep execution mode on `KeeperHub local (Arc)`, 2) run Load KeeperHub Status,
+          3) run demo transfer on Arc Testnet. Ignore destination network selector and CCTP wording in this mode.
+        </div>
+        <div id="keeperhub-online-dedicated" role="note" class="hidden">
+          KeeperHub online dedicated flow: switch execution mode to `KeeperHub online (CCTP + target)` and then select a target testnet.
+          This path uses CCTP and requires destination-chain native gas funding for the signer wallet.
+        </div>
         <div id="keeperhub-funding-reminder" role="note"></div>
         <div class="row">
           <button id="keeperhub-load-status" type="button">Load KeeperHub Status</button>
