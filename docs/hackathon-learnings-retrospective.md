@@ -276,10 +276,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
   - bare ENS labels auto-normalize to `.eth`
   - `agentId` auto-helper (`agent.<ens-label>`) speeds setup while preserving manual override
 - ENS workshop enhancement (v2) now ships in three lanes:
-  - **Trust gate:** strict ENSIP-25 text key `agent-registration[<registryERC7930>][<agentId>]` with **non-empty** value semantics + high-risk intent enforcement
+  - **Trust gate:** ENSIP-25 baseline text key `agent-registration[<registryERC7930>][<agentId>]` with non-empty value semantics, plus registry backlink verification for high-risk intents
   - **Privacy lane:** ENS-controlled payout mode (`public|privacy`) with privacy receiver fallback
   - **Version lane:** agent/capability version tags + optional compatible-intent enforcement
 - Live sanity proof now reproducible in 5 calls:
-  - `GET /api/ens/resolve` (include `registry` + `agentId` query params when not using server defaults) -> `POST /api/ens/verify-attestation` `{ ensName, intent, registry, agentId }` -> `POST /api/ens/setup-agent` demo preview (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`) -> blocked high-risk before key -> allowed high-risk after key
+  - `GET /api/ens/resolve` (include `registry` + `agentId` query params when not using server defaults) -> `POST /api/ens/verify-attestation` `{ ensName, intent, registry, agentId }` (check `ensip25_spec_verified` vs `ensip25_bidirectional_verified`) -> `POST /api/ens/setup-agent` demo preview (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`) -> blocked high-risk on ENS-only proof -> allowed high-risk after registry backlink match
   - blocked path returns explicit trust-gate failure text
   - allowed path emits `ens_policy` trace with payout route + receiver in session events

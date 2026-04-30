@@ -41,6 +41,55 @@ function toInteroperableRegistryAddress({ registryAddress, chainId } = {}) {
   return `0x0001000001${toHexByteLength(chainHex)}${chainHex}${toHexByteLength(addrHex)}${addrHex}`;
 }
 
+function parseInteroperableRegistryAddress(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!/^0x[0-9a-f]+$/.test(raw)) {
+    return null;
+  }
+  const hex = raw.slice(2);
+  if (hex.length < 16 || hex.length % 2 !== 0) {
+    return null;
+  }
+  // ENSIP-25 examples rely on ERC-7930 style:
+  // 0001 | 000001 | <chainLen:1 byte> | <chainHex> | <addrLen:1 byte> | <addrHex>
+  if (!hex.startsWith("0001000001")) {
+    return null;
+  }
+  let cursor = 10;
+  const chainLen = Number.parseInt(hex.slice(cursor, cursor + 2), 16);
+  if (!Number.isInteger(chainLen) || chainLen <= 0) {
+    return null;
+  }
+  cursor += 2;
+  const chainHex = hex.slice(cursor, cursor + chainLen * 2);
+  if (chainHex.length !== chainLen * 2) {
+    return null;
+  }
+  cursor += chainLen * 2;
+  const addrLen = Number.parseInt(hex.slice(cursor, cursor + 2), 16);
+  if (!Number.isInteger(addrLen) || addrLen !== 20) {
+    return null;
+  }
+  cursor += 2;
+  const addrHex = hex.slice(cursor, cursor + addrLen * 2);
+  if (addrHex.length !== 40 || !/^[0-9a-f]{40}$/.test(addrHex)) {
+    return null;
+  }
+  cursor += addrLen * 2;
+  if (cursor !== hex.length) {
+    return null;
+  }
+  const chainId = Number.parseInt(chainHex || "0", 16);
+  if (!Number.isInteger(chainId) || chainId < 1) {
+    return null;
+  }
+  return {
+    normalized: raw,
+    chainId,
+    address: `0x${addrHex}`
+  };
+}
+
 function getRegistryInteropAddress({
   registryInteropAddress,
   registryAddress,
@@ -48,8 +97,12 @@ function getRegistryInteropAddress({
   fallbackRegistry
 } = {}) {
   const direct = String(registryInteropAddress || "").trim();
-  if (/^0x[0-9a-fA-F]+$/.test(direct) && direct.length > 10) {
-    return direct.toLowerCase();
+  if (direct) {
+    const parsedDirect = parseInteroperableRegistryAddress(direct);
+    if (!parsedDirect) {
+      throw new Error("registryInteropAddress must be a valid ERC-7930 interoperable address");
+    }
+    return parsedDirect.normalized;
   }
   const parsed = parseCaip10LikeRegistry(fallbackRegistry);
   if (parsed) {
@@ -85,6 +138,7 @@ function hasEnsip25Attestation(value) {
 
 module.exports = {
   parseCaip10LikeRegistry,
+  parseInteroperableRegistryAddress,
   toInteroperableRegistryAddress,
   getRegistryInteropAddress,
   buildEnsip25Key,

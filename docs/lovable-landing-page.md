@@ -95,14 +95,14 @@ We built a full loop:
   - ENS auto-normalization (`arun` → `arun.eth`)
   - `agentId` auto-helper (`agent.arun`)
   - submission timer with commit→register wait guidance
-  - workshop lanes shown in chips: Trust (strict ENSIP-25 key), Privacy (payout mode), Versioning (compatibility)
+  - workshop lanes shown in chips: Trust (ENSIP-25 baseline + bidirectional high-risk checks), Privacy (payout mode), Versioning (compatibility)
 
 ### 5b) Live proof flow used in demo rehearsal
 
-- Resolve ENS for high-risk intent (`challenge_payout`) with `registry` + `agentId` query params (or rely on server `ENSIP25_*` / `ERC8004_AGENT_REGISTRY` defaults) and show `ensip25_verified` / gating state.
+- Resolve ENS for high-risk intent (`challenge_payout`) with `registry` + `agentId` query params (or rely on server `ENSIP25_*` / `ERC8004_AGENT_REGISTRY` defaults) and show `ensip25_spec_verified` vs `ensip25_bidirectional_verified`.
 - Verify attestation via `POST /api/ens/verify-attestation` with `{ ensName, intent, registry, agentId }`.
 - Submit register/update in demo mode to show full text-record payload including `ensip25Key` / `ensip25Value` plus privacy/versioning keys.
-- Run high-risk session with ENSIP-25 value empty (blocked) and after non-empty write (allowed).
+- Run high-risk session with ENS-only proof (blocked) and then with matching registry backlink (allowed).
 - Show `ens_policy` trace proving payout route + version metadata at runtime.
 
 ## Architecture (high level)

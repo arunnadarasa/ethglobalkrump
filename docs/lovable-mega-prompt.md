@@ -84,9 +84,9 @@ docs/*                        # optional marketing/pitch md
 - `VYPER_POLICY_DAILY_CAP_MINOR` (default 25000)
 - `VYPER_SETTLEMENT_CONTRACT` (Arc address string; surfaced in settlement “proof” metadata)
 - `ERC8004_IDENTITY_REGISTRY` (string; surfaced in settlement “proof” metadata)
-- `ERC8004_AGENT_REGISTRY`, `ERC8004_AGENT_ID`, `ERC8004_AGENT_TOKEN_URI`, `ERC8004_AGENT_CAPABILITIES_URI`
+- `ERC8004_AGENT_REGISTRY`, `ERC8004_REGISTRY_RPC_URL`, `ERC8004_AGENT_ID`, `ERC8004_AGENT_TOKEN_URI`, `ERC8004_AGENT_CAPABILITIES_URI`
 
-### ENS / strict ENSIP-25 (optional judge flow)
+### ENS / ENSIP-25 baseline + bidirectional trust (optional judge flow)
 
 - `ENS_SEPOLIA_RPC_URL`, `ENS_UNIVERSAL_RESOLVER_ADDRESS`, `ENS_PRIVATE_KEY` (and related `ENS_*` / `AGENT_ARC_ADDRESS` from `.env.example` for scripted setup)
 - `ENSIP25_REGISTRY_INTEROP` — optional full ERC-7930 interoperable registry address hex (wins over address+chain derivation)
@@ -176,7 +176,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
     - `text` (`agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntents`, `arcAddress`)
     - `allowed_intents`
     - `is_allowed_for_intent`
-    - when `registry` + `agentId` resolve (or env defaults apply): `ensip25_verified`, `ensip25_key`, `ensip25_value` (and related trust metadata)
+    - when `registry` + `agentId` resolve (or env defaults apply): `ensip25_spec_verified`, `registry_side_verified`, `ensip25_bidirectional_verified`, `ensip25_key`, `ensip25_value` (and related trust metadata)
 - `GET /api/ens/signer-balance`
   - returns signer wallet + SepoliaETH balance from `ENS_PRIVATE_KEY`.
 - `GET /api/ens/name-status?name=<ensName>`
@@ -184,7 +184,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - `POST /api/ens/setup-agent`
   - accepts UI-driven fields:
     - `ensName`, `arcActorAddress`, `agentId`, `tokenUri`, `capabilitiesUri`, `allowedIntent`, `writeMode`
-    - strict ENSIP-25 write trio (all optional but should be set together for trust): `ensip25Registry`, `ensip25AgentId`, `ensip25Value` (non-empty `ensip25Value` required to pass high-risk gate later)
+    - ENSIP-25 write trio (all optional but should be set together for trust): `ensip25Registry`, `ensip25AgentId`, `ensip25Value` (non-empty `ensip25Value` is baseline proof; high-risk still requires registry backlink match)
     - workshop extras: `attestor`, `attestationUpdatedAt`, `highRiskIntents`, privacy + versioning text fields as in reference README
     - for `metamask` mode also require `metamaskSigner`, `metamaskProofMessage`, `metamaskProofSignature`
   - modes:
@@ -192,7 +192,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
     - `circle_wallet` / `metamask` => write on Sepolia via server signer
 - `POST /api/ens/verify-attestation`
   - accepts `{ ensName, intent, registry, agentId }`
-  - returns `trust` verdict fields (`ensip25_verified`, `ensip25_key`, `ensip25_value`, `is_high_risk_intent`, `is_trusted_for_intent`, …) plus an `ensip25` object with `key`, `verified`, `value`, and registry interop metadata where applicable
+  - returns `trust` verdict fields (`ensip25_spec_verified`, `registry_side_verified`, `ensip25_bidirectional_verified`, `ensip25_key`, `ensip25_value`, `is_high_risk_intent`, `is_trusted_for_intent`, …) plus an `ensip25` object with `key`, `verified`, `spec_verified`, `bidirectional_verified`, `value`, and registry interop metadata where applicable
 
 ### UCP (official stack)
 
@@ -243,7 +243,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
     - injects ENS-derived identity into `session.identity`
     - sets `context.agent_actor_address` (resolved addr/override) and `context.__ensAllowedIntents`
     - enforces ENS `allowedIntents` gating for which intents may run
-    - for **high-risk** intents (`challenge_payout`, `crew_split_settlement` by default), requires **verified** strict ENSIP-25 attestation (non-empty text at `agent-registration[<registryERC7930>][<agentId>]`) before the session proceeds
+    - for **high-risk** intents (`challenge_payout`, `crew_split_settlement` by default), requires `ensip25_bidirectional_verified=true` (ENSIP-25 baseline plus matching registry backlink) before the session proceeds
   - For `tip_dancer`: fan agent proposes plan.
   - For `battle_entry`: dancer agent proposes details.
   - Payments agent must create UCP checkout via internal builder (not a second protocol).

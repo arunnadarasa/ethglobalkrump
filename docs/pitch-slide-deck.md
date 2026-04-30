@@ -44,7 +44,7 @@ In one interface, users can:
 - Execute the top 6 use cases with selectable payment rails (`metamask`, `circle_wallet`, `x402`, `offchain_demo`)
 - ENS judge card: check name ownership + registration estimate, signer Sepolia ETH, mode selection (`demo/circle_wallet/metamask`), and resolve/gating proof in one place
 - ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper (`agent.<label>`), source-aware wallet balance checks, and in-flight setup timer
-- ENS workshop v2 proof points: strict ENSIP-25 parameterized text-record trust (registry interop + agent id), privacy payout mode chip, and version compatibility chip
+- ENS workshop v2 proof points: ENSIP-25 baseline proof (non-empty parameterized key), bidirectional registry backlink trust for high-risk intents, privacy payout mode chip, and version compatibility chip
 - KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
 
 Speaker note: Every action is explainable and auditable in real time.
@@ -109,8 +109,8 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 11. **KeeperHub online proof second:** switch to `KeeperHub online (CCTP + target)` and run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 12. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
 13. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-14. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) -> `Resolve ENS for Vyper agent` (same `registry` + `agentId` as query params for live trust fields).
-15. Run `challenge_payout` once with trust off (show blocked), then once with trust on (show allowed).
+14. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) and call out `ensip25_spec_verified` vs `ensip25_bidirectional_verified`.
+15. Run `challenge_payout` once with ENS-only proof (show blocked), then once with matching registry backlink (show allowed).
 16. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
 17. Show Arc deployment proof in README.
 

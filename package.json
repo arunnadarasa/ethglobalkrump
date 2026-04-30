@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "deploy:agent-registry:sepolia": "node scripts/ens/deploy-agent-registry.mjs"
   },
   "keywords": [
     "ucp",
@@ -23,6 +24,7 @@
     "@ucp-js/sdk": "^0.1.0",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
+    "solc": "^0.8.30",
     "viem": "^2.48.4"
   }
 }

@@ -6,7 +6,7 @@ An ETHGlobal-ready app that turns Krump culture into programmable commerce using
 
 - Official Universal Commerce Protocol (UCP) stack (JS SDK + schema validation + conformance checks)
 - ENS-based agent identity (Sepolia writes, Universal Resolver reads) for human-readable session identity and intent gating
-- Strict ENSIP-25 trust verification via parameterized text records (`agent-registration[<registryERC7930>][<agentId>]` with non-empty value semantics)
+- ENSIP-25 baseline verification via parameterized text records (`agent-registration[<registryERC7930>][<agentId>]` with non-empty value semantics), plus strict bidirectional trust checks for high-risk intents
 - Arc Testnet settlement rails
 - Circle developer-controlled wallets and micropayment patterns
 - Optional AIsa x402 pay-per-call rail for metered API authorization (`x402` mode in UI/API)
@@ -81,7 +81,7 @@ The app can use **ENS** as the human-readable identity layer for agent sessions.
 - the server resolves `agent_ens_name` via the ENS **Universal Resolver** using the configured Sepolia RPC
 - the resolved values are injected into the session trace identity and used to gate intents:
   - if ENS text record `allowedIntents` is set, only those intents can run
-  - **high-risk intents** (default: `challenge_payout`, `crew_split_settlement`) additionally require a **non-empty** ENSIP-25 text record at `agent-registration[<registryERC7930>][<agentId>]` (see env defaults below)
+  - **high-risk intents** (default: `challenge_payout`, `crew_split_settlement`) require **bidirectional verification**: ENSIP-25 baseline (non-empty key value) + matching backlink in the configured registry contract
 - when deep settlement is enabled, the resolved ENS address is also used as the `agentId` input for the Vyper settlement policy evaluation (so ENS identity becomes part of policy enforcement).
 
 #### ENS records to set (on the ENS resolver)
@@ -139,7 +139,7 @@ Additional judge UX refinements:
 Associated endpoints:
 
 - `GET /api/ens/resolve?name=<ensName>&intent=<optionalIntent>&registry=<optional>&agentId=<optional>`
-  - returns `agent_actor_address` (ENS `addr`), ENS text records, `is_allowed_for_intent`, and **strict ENSIP-25** trust fields when `registry` + `agentId` are provided (or derivable from env / resolved `agentId`).
+  - returns `agent_actor_address` (ENS `addr`), ENS text records, `is_allowed_for_intent`, and split trust fields (`ensip25_spec_verified`, `registry_side_verified`, `ensip25_bidirectional_verified`) when `registry` + `agentId` are provided (or derivable from env / resolved `agentId`).
 - `GET /api/ens/name-status?name=<ensName>`
   - returns ownership state, estimated registration value, signer balance, and shortfall.
 - `GET /api/ens/signer-balance`
@@ -147,12 +147,14 @@ Associated endpoints:
 - `POST /api/ens/setup-agent`
   - writes ENS `addr` + `agentId`/`tokenUri`/`capabilitiesUri`/`allowedIntents`/`arcAddress` text records on Sepolia, plus privacy/versioning workshop fields and the **strict ENSIP-25** parameterized text key (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`).
 - `POST /api/ens/verify-attestation`
-  - body `{ ensName, intent, registry, agentId }` — verifies that the ENSIP-25 key resolves to a **non-empty** value; returns `trust` plus `ensip25` details (`key`, `verified`, `value`).
+  - body `{ ensName, intent, registry, agentId }` — verifies ENSIP-25 baseline (non-empty value) and registry backlink; returns `trust` plus `ensip25` details (`key`, `verified`, `spec_verified`, `bidirectional_verified`, `value`).
 
 #### ENSIP-25 registry defaults (env)
 
 Optional server-side defaults (used when UI does not pass `registry` / session context omits overrides):
 
+- `ERC8004_AGENT_REGISTRY` — on-chain registry contract used for bidirectional backlink checks
+- `ERC8004_REGISTRY_RPC_URL` — optional RPC URL for registry reads (defaults to `ENS_SEPOLIA_RPC_URL`)
 - `ENSIP25_REGISTRY_INTEROP` — full ERC-7930 interoperable registry address hex (if set, wins over the address+chain derivation)
 - `ENSIP25_REGISTRY_ADDRESS` — EVM registry contract address (`0x…` 20 bytes)
 - `ENSIP25_REGISTRY_CHAIN_ID` — chain id used with `ENSIP25_REGISTRY_ADDRESS` (defaults to `ARC_CHAIN_ID`, e.g. Arc testnet `5042002`)
@@ -163,13 +165,13 @@ If neither `ENSIP25_REGISTRY_INTEROP` nor `ENSIP25_REGISTRY_ADDRESS` is set, the
 
 The ENS Judge flow now supports three additional metadata groups (all stored in ENS text records and surfaced by `/api/ens/resolve`):
 
-- **Trust (strict ENSIP-25):** `agent-registration[<registryERC7930>][<agentId>]` (non-empty value), plus optional `attestor`, `attestationUpdatedAt`, `highRiskIntents`
+- **Trust:** ENSIP-25 baseline key `agent-registration[<registryERC7930>][<agentId>]` (non-empty value), plus optional `attestor`, `attestationUpdatedAt`, `highRiskIntents`
 - **Privacy:** `payoutMode` (`public|privacy`), `privacyReceiver`, `privacyUpdatedAt`
 - **Versioning:** `agentVersion`, `capabilitiesVersion`, `compatibleIntents`
 
 Runtime behavior:
 
-- high-risk intents (default: `challenge_payout`, `crew_split_settlement`) require a **verified** ENSIP-25 attestation (non-empty value at the parameterized key)
+- high-risk intents (default: `challenge_payout`, `crew_split_settlement`) require `ensip25_bidirectional_verified=true`
 - payout route can switch from public `arcAddress` to `privacyReceiver`
 - optional `compatibleIntents` enforces version-intent compatibility before session execution
 
@@ -180,12 +182,12 @@ Use this sequence for a fast proof that trust/privacy/versioning enforcement is 
 1. `GET /api/ens/resolve?name=<ensName>&intent=challenge_payout&registry=<interopHex>&agentId=<agentId>`
 2. `POST /api/ens/verify-attestation` with `{ ensName, intent: "challenge_payout", registry, agentId }`
 3. `POST /api/ens/setup-agent` in `demo` mode with `ensip25Registry`, `ensip25AgentId`, `ensip25Value` and privacy/version fields
-4. `POST /api/agents/sessions` high-risk intent without ENSIP-25 key set (expect blocked)
-5. `POST /api/agents/sessions` same intent after writing non-empty ENSIP-25 key (expect allowed)
+4. `POST /api/agents/sessions` high-risk intent with ENS-only attestation (expect blocked)
+5. `POST /api/agents/sessions` same intent after ENS + registry backlink match (expect allowed)
 
 Example outcomes you should see when rehearsing:
 
-- `resolve` / `verify-attestation` report `ensip25_verified: false` when the name has no resolver yet or the ENSIP-25 key has no value
+- `resolve` / `verify-attestation` report `ensip25_spec_verified: false` when the key is empty, and `ensip25_bidirectional_verified: false` when registry backlink does not match
 - `setup-agent` demo preview includes `ensip25Key` / `ensip25Value` in the preview payload
 - `POST /api/agents/sessions` with `context.agent_ens_name` fails high-risk intents until the ENSIP-25 record exists on-chain (or you inject verified trust in a controlled test context)
 
@@ -219,9 +221,19 @@ If disabled, default Circle/UCP demo behavior remains active for maximum reliabi
 When configured, agent sessions include identity metadata and emit a dedicated identity trace event:
 
 - `ERC8004_AGENT_REGISTRY`
+- `ERC8004_REGISTRY_RPC_URL` (optional; defaults to Sepolia ENS RPC)
 - `ERC8004_AGENT_ID`
 - `ERC8004_AGENT_TOKEN_URI`
 - `ERC8004_AGENT_CAPABILITIES_URI`
+
+### Sepolia registry deployment (ENSIP-25 backlink checks)
+
+- Contract source: `contracts/AgentRegistry8004.sol`
+- Deploy command: `npm run deploy:agent-registry:sepolia`
+- Deployment artifact: `artifacts/agent-registry-sepolia.json`
+- Latest deployment in this workspace:
+  - tx: `0xcc0256b5e374e098b5bb51da35bd42a7202e0c2803ab7c6ce341f5dc165b8b11`
+  - contract: `0xd4978db542eec50e225ad8441662e96ed75612a8`
 
 ### Optional deploy to Arc
 

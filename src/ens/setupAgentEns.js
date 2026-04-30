@@ -296,7 +296,9 @@ async function setupAgentEns({
     ["capabilitiesUri", normalizedCapabilitiesUri || null],
     ["allowedIntents", allowedIntent],
     ["arcAddress", arcActorAddress],
-    ...(ensip25AttestationKey ? [[ensip25AttestationKey, String(ensip25AttestationValue || "1")]] : []),
+    ...(ensip25AttestationKey
+      ? [[ensip25AttestationKey, typeof ensip25AttestationValue === "string" ? ensip25AttestationValue : ""]]
+      : []),
     ["attestor", typeof attestor === "string" ? attestor.trim() : ""],
     ["attestationUpdatedAt", typeof attestationUpdatedAt === "string" ? attestationUpdatedAt.trim() : ""],
     ["highRiskIntents", normalizedHighRiskIntents],

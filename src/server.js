@@ -35,6 +35,7 @@ const keeperhub = require("./keeperhub/client");
 const { createX402Client } = require("./x402/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
 const { setupAgentEns } = require("./ens/setupAgentEns");
+const { createAgentRegistryClient } = require("./ens/registryClient");
 const {
   getRegistryInteropAddress,
   buildEnsip25Key,
@@ -65,6 +66,7 @@ const ARCTESTNET_SYMBOL = process.env.ARC_NATIVE_SYMBOL || "USDC";
 const ONCHAIN_TREASURY_ADDRESS = process.env.ONCHAIN_TREASURY_ADDRESS || "";
 const ENABLE_VYPER_SETTLEMENT = String(process.env.ENABLE_VYPER_SETTLEMENT || "").toLowerCase() === "true";
 const ERC8004_AGENT_REGISTRY = process.env.ERC8004_AGENT_REGISTRY || "";
+const ERC8004_REGISTRY_RPC_URL = process.env.ERC8004_REGISTRY_RPC_URL || "";
 const ERC8004_AGENT_ID = process.env.ERC8004_AGENT_ID || "";
 const ERC8004_AGENT_TOKEN_URI = process.env.ERC8004_AGENT_TOKEN_URI || "";
 const ERC8004_AGENT_CAPABILITIES_URI = process.env.ERC8004_AGENT_CAPABILITIES_URI || "";
@@ -162,6 +164,7 @@ const x402Client = createX402Client({
   timeoutMs: AISA_X402_TIMEOUT_MS,
   enabled: AISA_X402_ENABLED
 });
+let registryClientPromise = null;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -432,26 +435,73 @@ function resolveEnsip25RegistryInteropAddress(registryCandidate) {
   });
 }
 
+async function getRegistryClient() {
+  if (!ERC8004_AGENT_REGISTRY) {
+    return null;
+  }
+  if (!registryClientPromise) {
+    registryClientPromise = createAgentRegistryClient({
+      rpcUrl: ERC8004_REGISTRY_RPC_URL || ENS_SEPOLIA_RPC_URL,
+      registryAddress: ERC8004_AGENT_REGISTRY
+    }).catch((error) => {
+      registryClientPromise = null;
+      throw error;
+    });
+  }
+  return registryClientPromise;
+}
+
+async function getRegistryVerification({ agentId, ensName } = {}) {
+  const client = await getRegistryClient();
+  if (!client) {
+    return {
+      available: false,
+      exists: false,
+      ens_link_match: false,
+      agent: null,
+      error: null
+    };
+  }
+  try {
+    return await client.getVerification(agentId, ensName);
+  } catch (error) {
+    return {
+      available: true,
+      exists: false,
+      ens_link_match: false,
+      agent: null,
+      error: error?.message || String(error)
+    };
+  }
+}
+
 function buildEnsip25Context({ ens, agentIdCandidate, registryCandidate } = {}) {
   const trustKey = String(ens?.trust?.ensip25_key || "").trim();
+  const fallbackAgentId = String(agentIdCandidate || ens?.agentId || ERC8004_AGENT_ID || "").trim() || null;
+  let fallbackRegistry = null;
+  try {
+    fallbackRegistry = resolveEnsip25RegistryInteropAddress(registryCandidate);
+  } catch (_error) {
+    fallbackRegistry = null;
+  }
   if (trustKey) {
     const trustValue = ens?.text?.[trustKey] || ens?.trust?.ensip25_value || null;
     return {
-      agent_id: ens?.trust?.ensip25_agent_id || agentIdCandidate || ens?.agentId || null,
-      registry_interop_address: ens?.trust?.ensip25_registry || null,
+      agent_id: ens?.trust?.ensip25_agent_id || fallbackAgentId,
+      registry_interop_address: ens?.trust?.ensip25_registry || fallbackRegistry,
       attestation_key: trustKey,
       attestation_value: trustValue,
-      verified: hasEnsip25Attestation(trustValue)
+      ens_side_verified: hasEnsip25Attestation(trustValue)
     };
   }
-  const agentId = String(agentIdCandidate || ens?.agentId || ERC8004_AGENT_ID || "").trim();
+  const agentId = fallbackAgentId;
   if (!agentId) {
     return {
       agent_id: null,
       registry_interop_address: null,
       attestation_key: null,
       attestation_value: null,
-      verified: false
+      ens_side_verified: false
     };
   }
   let registryInteropAddress = null;
@@ -468,7 +518,7 @@ function buildEnsip25Context({ ens, agentIdCandidate, registryCandidate } = {}) 
       registry_interop_address: null,
       attestation_key: null,
       attestation_value: null,
-      verified: false
+      ens_side_verified: false
     };
   }
   const attestationValue = attestationKey ? ens?.text?.[attestationKey] || null : null;
@@ -477,7 +527,7 @@ function buildEnsip25Context({ ens, agentIdCandidate, registryCandidate } = {}) 
     registry_interop_address: registryInteropAddress,
     attestation_key: attestationKey,
     attestation_value: attestationValue,
-    verified: hasEnsip25Attestation(attestationValue)
+    ens_side_verified: hasEnsip25Attestation(attestationValue)
   };
 }
 
@@ -486,18 +536,36 @@ function getHighRiskIntentsFromEns(ens) {
   return fromRecord.length > 0 ? fromRecord : DEFAULT_HIGH_RISK_INTENTS;
 }
 
-function deriveTrustForIntent(ens, intent) {
-  const ensip25 = buildEnsip25Context({ ens });
+async function deriveTrustForIntent(ens, intent, options = {}) {
+  const ensip25 = buildEnsip25Context({
+    ens,
+    agentIdCandidate: options.agentIdCandidate,
+    registryCandidate: options.registryCandidate
+  });
+  const registry = await getRegistryVerification({
+    agentId: ensip25.agent_id,
+    ensName: ens?.ens_name
+  });
+  const ensSideVerified = Boolean(ensip25.ens_side_verified);
+  const registrySideVerified = Boolean(registry?.available && registry?.exists && registry?.ens_link_match);
+  const bidirectionalVerified = ensSideVerified && registrySideVerified;
   const highRiskIntents = getHighRiskIntentsFromEns(ens);
   const isHighRisk = intent ? highRiskIntents.includes(intent) : false;
-  const isTrustedForIntent = isHighRisk ? ensip25.verified : true;
+  const isTrustedForIntent = isHighRisk ? bidirectionalVerified : true;
   return {
-    attested: ensip25.verified,
-    ensip25_verified: ensip25.verified,
+    attested: bidirectionalVerified,
+    ensip25_verified: bidirectionalVerified,
+    ensip25_spec_verified: ensSideVerified,
+    ens_side_verified: ensSideVerified,
+    registry_side_verified: registrySideVerified,
+    ensip25_bidirectional_verified: bidirectionalVerified,
     ensip25_key: ensip25.attestation_key,
     ensip25_registry: ensip25.registry_interop_address,
     ensip25_agent_id: ensip25.agent_id,
     ensip25_value: ensip25.attestation_value,
+    registry_lookup_available: Boolean(registry?.available),
+    registry_lookup_error: registry?.error || null,
+    registry_record: registry?.agent || null,
     attestor: ens?.trust?.attestor || null,
     attestation_updated_at: ens?.trust?.attestation_updated_at || null,
     high_risk_intents: highRiskIntents,
@@ -1800,7 +1868,10 @@ app.get("/api/ens/resolve", async (req, res) => {
         : true
       : null;
 
-    const trust = deriveTrustForIntent(ens, intent);
+    const trust = await deriveTrustForIntent(ens, intent, {
+      agentIdCandidate: ensip25AgentId,
+      registryCandidate
+    });
     const versioning = deriveVersionForIntent(ens, intent);
     return res.json({
       ok: true,
@@ -1861,7 +1932,10 @@ app.post("/api/ens/verify-attestation", async (req, res) => {
       ensip25Key,
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
-    const trust = deriveTrustForIntent(ens, intent);
+    const trust = await deriveTrustForIntent(ens, intent, {
+      agentIdCandidate: agentId,
+      registryCandidate
+    });
     return res.json({
       ok: true,
       ens_name: ens.ens_name,
@@ -1872,7 +1946,10 @@ app.post("/api/ens/verify-attestation", async (req, res) => {
         registry_interop_address: registryInteropAddress,
         agent_id: agentId,
         value: ens.text?.[ensip25Key] || null,
-        verified: hasEnsip25Attestation(ens.text?.[ensip25Key] || null)
+        verified: hasEnsip25Attestation(ens.text?.[ensip25Key] || null),
+        spec_verified: trust.ensip25_spec_verified,
+        bidirectional_verified: trust.ensip25_bidirectional_verified,
+        registry_side_verified: trust.registry_side_verified
       }
     });
   } catch (error) {
@@ -2063,7 +2140,7 @@ app.post("/api/ens/setup-agent", async (req, res) => {
     } catch (error) {
       return sendError(res, 400, "ensip25_registry_invalid", error.message || "Unable to build ENSIP-25 registry key.");
     }
-    const normalizedEnsip25Value = String(ensip25Value || "1").trim() || "1";
+    const normalizedEnsip25Value = typeof ensip25Value === "string" ? ensip25Value.trim() : "";
     if (!["demo", "circle_wallet", "metamask"].includes(normalizedWriteMode)) {
       return sendError(res, 400, "ens_write_mode_invalid", "writeMode must be demo, circle_wallet, or metamask");
     }
@@ -2117,8 +2194,12 @@ app.post("/api/ens/setup-agent", async (req, res) => {
             compatibleIntents: parseCsvList(compatibleIntents)
           },
           trust: {
-            attested: hasEnsip25Attestation(normalizedEnsip25Value),
-            ensip25_verified: hasEnsip25Attestation(normalizedEnsip25Value),
+            attested: false,
+            ensip25_verified: false,
+            ensip25_spec_verified: hasEnsip25Attestation(normalizedEnsip25Value),
+            ens_side_verified: hasEnsip25Attestation(normalizedEnsip25Value),
+            registry_side_verified: false,
+            ensip25_bidirectional_verified: false,
             ensip25_key: ensip25AttestationKey,
             ensip25_registry: registryInteropAddress,
             ensip25_agent_id: normalizedEnsip25AgentId,
@@ -2166,7 +2247,7 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
 
-    const trust = deriveTrustForIntent(resolved, allowedIntent.trim());
+    const trust = await deriveTrustForIntent(resolved, allowedIntent.trim());
     const versioning = deriveVersionForIntent(resolved, allowedIntent.trim());
     return res.json({
       ok: true,
@@ -2251,7 +2332,7 @@ app.post("/api/agents/sessions", async (req, res) => {
       ctx.__ensResolvedIdentity = ens;
       ctx.agent_actor_address = ens.agent_address;
       ctx.__ensAllowedIntents = ens.allowedIntents;
-      ctx.__ensTrust = deriveTrustForIntent(ens, intent);
+      ctx.__ensTrust = await deriveTrustForIntent(ens, intent);
       ctx.__ensPrivacy = ens.privacy || { payout_mode: "public", privacy_receiver: null, privacy_updated_at: null };
       ctx.__ensVersioning = deriveVersionForIntent(ens, intent);
       const privacyReceiver = ctx.__ensPrivacy?.privacy_receiver;
