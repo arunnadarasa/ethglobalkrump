@@ -1943,6 +1943,29 @@ document.getElementById("settlement-evaluate").addEventListener("click", async (
 
 async function loadKeeperHubStatusFromUi() {
   const data = await request("/api/keeperhub/status");
+  renderKeeperhubLocalDebugHint(data.body || {});
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "pre-fix",
+      hypothesisId: "K1",
+      location: "public/main.js:loadKeeperHubStatusFromUi",
+      message: "keeperhub status loaded",
+      data: {
+        httpStatus: data.status,
+        configured: Boolean(data.body?.configured),
+        apiBase: data.body?.api_base || null,
+        arcSupported: data.body?.arc_supported ?? null,
+        executeNetwork: data.body?.execute_network || null,
+        error: data.body?.error || null
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   print("keeperhub-output", { status: data.status, body: data.body });
 }
 
@@ -1967,7 +1990,10 @@ function setKeeperhubDestinationGasWalletAddress(address) {
 
 function updateKeeperhubChainHint() {
   const target = document.getElementById("keeperhub-chain-hint");
+  const executionMode = document.getElementById("keeperhub-execution-mode")?.value || "local";
   const network = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
+  const networkSelect = document.getElementById("keeperhub-execution-network");
+  const destinationGasButton = document.getElementById("keeperhub-fund-destination-gas");
   const chainMap = {
     "base-sepolia": "BASE-SEPOLIA",
     "ethereum-sepolia": "ETH-SEPOLIA",
@@ -1983,17 +2009,105 @@ function updateKeeperhubChainHint() {
     "avalanche-fuji": "AVAX"
   };
   const destinationChain = chainMap[network] || String(network || "").toUpperCase();
+  const isLocalMode = executionMode === "local";
+  if (networkSelect) {
+    networkSelect.disabled = isLocalMode;
+  }
+  if (destinationGasButton) {
+    destinationGasButton.disabled = isLocalMode;
+  }
   if (target) {
-    target.textContent = `Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: ${destinationChain} (native gas token).`;
+    if (isLocalMode) {
+      target.textContent =
+        "Local execution path: source + destination are ARC-TESTNET. No CCTP bridge or destination-chain gas wallet is required.";
+    } else {
+      target.textContent = `Source wallet blockchain: ARC-TESTNET (USDC). Destination gas wallet blockchain: ${destinationChain} (native gas token).`;
+    }
   }
   const reminder = document.getElementById("keeperhub-funding-reminder");
   if (reminder) {
-    const sel = document.getElementById("keeperhub-execution-network");
+    const sel = networkSelect;
     const label =
       sel?.options?.[sel.selectedIndex]?.text?.trim() || destinationChain.replace(/-/g, " ");
     const native = nativeSymbolByNetwork[network] || "that chain's native token";
-    reminder.textContent = `Top up KeeperHub wallets used for online execution on ${label} with USDC and ${native} (native gas on the network you select below).`;
+    if (isLocalMode) {
+      reminder.textContent =
+        "KeeperHub local (Arc) mode: use ARC-TESTNET flow only. Fund ARC source USDC as needed; CCTP and destination-chain gas funding are online-mode only.";
+    } else {
+      reminder.textContent = `Top up KeeperHub wallets used for online execution on ${label} with USDC and ${native} (native gas on the network you select below).`;
+    }
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "post-fix",
+        hypothesisId: "K5",
+        location: "public/main.js:updateKeeperhubChainHint",
+        message: "keeperhub reminder rendered",
+        data: {
+          executionMode,
+          selectedNetwork: network,
+          isLocalMode,
+          destinationChain,
+          nativeSymbol: native,
+          reminderText: reminder.textContent || "",
+          chainHint: target?.textContent || "",
+          networkDisabled: Boolean(networkSelect?.disabled),
+          destinationGasButtonDisabled: Boolean(destinationGasButton?.disabled)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
   }
+}
+
+function renderKeeperhubLocalDebugHint(status = null) {
+  const target = document.getElementById("keeperhub-local-debug");
+  if (!target) return;
+  const configured = status && typeof status.configured === "boolean" ? status.configured : null;
+  const arcSupported = status && typeof status.arc_supported === "boolean" ? status.arc_supported : null;
+  const apiBase = status?.api_base || "unknown";
+  let text =
+    "KeeperHub Local + Arc Testnet quick start: use execution mode KeeperHub local (Arc). " +
+    "This local path stays on ARC-TESTNET and does not require CCTP or destination-chain gas funding. " +
+    "Start local dependencies first (for local KeeperHub repo, run Docker stack), then run Load KeeperHub Status.";
+  if (configured === false) {
+    text =
+      "KeeperHub Local + Arc Testnet debug: KeeperHub is not configured from this app. Set a valid KeeperHub org API key and API base, " +
+      "then re-run Load KeeperHub Status.";
+  } else if (configured === true && arcSupported === false) {
+    text =
+      `KeeperHub Local + Arc Testnet debug: KeeperHub responds (configured=true, api_base=${apiBase}) but Arc is not listed in chains. ` +
+      "This usually means instance/network mismatch, not a UI bug. Check local KeeperHub chain config and Docker-backed services.";
+  } else if (configured === true && arcSupported === true) {
+    text =
+      `KeeperHub Local + Arc Testnet debug: KeeperHub is ready (configured=true, api_base=${apiBase}, arc_supported=true). ` +
+      "You can continue with local transfer tests on ARC-TESTNET without CCTP.";
+  }
+  target.textContent = text;
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "post-fix",
+      hypothesisId: "K4",
+      location: "public/main.js:renderKeeperhubLocalDebugHint",
+      message: "keeperhub local debug guidance rendered",
+      data: {
+        configured,
+        arcSupported,
+        apiBase,
+        text
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
 }
 
 function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcBalance, destinationChain }) {
@@ -2145,6 +2259,14 @@ async function fundKeeperhubOnlineSourceFromUi({ openFaucet = true } = {}) {
 }
 
 async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
+  const executionMode = document.getElementById("keeperhub-execution-mode")?.value || "local";
+  if (executionMode === "local") {
+    print("keeperhub-output", {
+      info:
+        "KeeperHub local (Arc) mode selected: destination gas funding is skipped because CCTP/destination-chain execution is online-only."
+    });
+    return;
+  }
   const executionNetwork = document.getElementById("keeperhub-execution-network")?.value || "base-sepolia";
   const data = await request("/api/keeperhub/online-destination-gas/fund-hint", {
     method: "POST",
@@ -2202,7 +2324,15 @@ async function fundKeeperhubDestinationGasFromUi({ openFaucet = true } = {}) {
 async function refreshKeeperhubBalancesFromUi() {
   updateKeeperhubChainHint();
   await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
-  await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
+  const executionMode = document.getElementById("keeperhub-execution-mode")?.value || "local";
+  if (executionMode === "online") {
+    await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
+  } else {
+    print("keeperhub-output", {
+      info:
+        "KeeperHub local (Arc) mode selected: refreshed ARC source balance only. Destination gas checks are online-only."
+    });
+  }
 }
 
 async function keeperHubDemoTransferFromUi() {
@@ -2276,6 +2406,10 @@ document.getElementById("keeperhub-demo-transfer").addEventListener("click", asy
 document.getElementById("keeperhub-execution-network").addEventListener("change", () => {
   updateKeeperhubChainHint();
   fundKeeperhubDestinationGasFromUi({ openFaucet: false }).catch(() => {});
+});
+
+document.getElementById("keeperhub-execution-mode").addEventListener("change", () => {
+  updateKeeperhubChainHint();
 });
 
 // U3
@@ -2676,6 +2810,7 @@ async function bootstrap() {
     await fundKeeperhubDestinationGasFromUi({ openFaucet: false });
   } catch (_error) {}
   updateKeeperhubChainHint();
+  renderKeeperhubLocalDebugHint(null);
   hydrateSavedCircleWallet();
   print("balances-output", {
     info: "Connect MetaMask and click Refresh Balances to load MetaMask and Circle wallet USDC balances."
@@ -2696,6 +2831,23 @@ async function bootstrap() {
   print("keeperhub-output", {
     info: "Load status to see if Arc testnet is listed in KeeperHub; use demo transfer or U5 payout checkbox when your org key and wallet are configured."
   });
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "pre-fix",
+      hypothesisId: "K3",
+      location: "public/main.js:bootstrap",
+      message: "keeperhub bootstrap info shown",
+      data: {
+        infoMessage: "Load status to see if Arc testnet is listed in KeeperHub; use demo transfer or U5 payout checkbox when your org key and wallet are configured."
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   await refreshLeaderboard();
   await loadTutorials();
   await refreshBattle();
