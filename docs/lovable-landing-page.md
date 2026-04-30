@@ -96,6 +96,7 @@ We built a full loop:
   - `agentId` auto-helper (`agent.arun`)
   - submission timer with commit→register wait guidance
   - workshop lanes shown in chips: Trust (ENSIP-25 baseline + bidirectional high-risk checks), Privacy (payout mode), Versioning (compatibility)
+  - guided setup button: `Run ENSIP-25 setup (guided)` with step-by-step progress chips and trust badges
 
 ### 5b) Live proof flow used in demo rehearsal
 
@@ -104,6 +105,7 @@ We built a full loop:
 - Submit register/update in demo mode to show full text-record payload including `ensip25Key` / `ensip25Value` plus privacy/versioning keys.
 - Run high-risk session with ENS-only proof (blocked) and then with matching registry backlink (allowed).
 - Show `ens_policy` trace proving payout route + version metadata at runtime.
+- Registry proof anchor used in demos: `contract_address=0xd4978db542eec50e225ad8441662e96ed75612a8` (Sepolia).
 
 ## Architecture (high level)
 

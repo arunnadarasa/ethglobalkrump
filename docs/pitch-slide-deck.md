@@ -45,6 +45,7 @@ In one interface, users can:
 - ENS judge card: check name ownership + registration estimate, signer Sepolia ETH, mode selection (`demo/circle_wallet/metamask`), and resolve/gating proof in one place
 - ENS operator convenience: `.eth` auto-normalization, `agentId` auto-helper (`agent.<label>`), source-aware wallet balance checks, and in-flight setup timer
 - ENS workshop v2 proof points: ENSIP-25 baseline proof (non-empty parameterized key), bidirectional registry backlink trust for high-risk intents, privacy payout mode chip, and version compatibility chip
+- ENS judge UX: one-click `Run ENSIP-25 setup (guided)` plus progress chips and split trust badges (`Spec`, `Registry`, `Bidirectional`)
 - KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
 
 Speaker note: Every action is explainable and auditable in real time.
@@ -109,10 +110,11 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 11. **KeeperHub online proof second:** switch to `KeeperHub online (CCTP + target)` and run one online execution path (Arc → Bridge Kit CCTP → target testnet → KeeperHub transfer).
 12. Point at the **funding reminder** and **destination gas fund-hint** JSON (`instructions`, `keeperhub_executor_gas_hint`) so judges see the dual-wallet gas story.
 13. Show signer-source clarity in action (`destination wallet` vs fallback) and wallet-id match hints on at least two target chains.
-14. ENS proof step: `Check ENS name status` -> `Check wallet Sepolia ETH` (source-aware) -> `Register/Update` (writes `agent-registration[…][…]` + value) -> `Verify ENSIP-25 trust` (`registry` + `agentId` in body) and call out `ensip25_spec_verified` vs `ensip25_bidirectional_verified`.
+14. ENS proof step: click `Run ENSIP-25 setup (guided)` and show progress chips + trust badges (`Spec`, `Registry`, `Bidirectional`).
 15. Run `challenge_payout` once with ENS-only proof (show blocked), then once with matching registry backlink (show allowed).
 16. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
-17. Show Arc deployment proof in README.
+17. Show Sepolia registry `contract_address` proof: `0xd4978db542eec50e225ad8441662e96ed75612a8`.
+18. Show Arc deployment proof in README.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape). For x402, emphasize that challenge handling and replay architecture are live even when upstream settlement policy blocks specific funded wallets.
 

@@ -135,6 +135,10 @@ Additional judge UX refinements:
   - `agent_actor_address` is a normal `0x...` address
   - text values (`agentId`, `allowedIntents`, `arcAddress`) are readable
   - `is_allowed_for_intent` matches selected intent correctly in UI
+- ENSIP-25 guided UX:
+  - one-click `Run ENSIP-25 setup (guided)` action executes ENS write -> registry upsert -> trust verify -> resolve
+  - step chips show stage progress (`ENS write`, `Registry upsert`, `Trust verify`, `Resolve`)
+  - trust badges show `Spec`, `Registry`, and `Bidirectional` states explicitly
 
 Associated endpoints:
 
@@ -236,7 +240,15 @@ When configured, agent sessions include identity metadata and emit a dedicated i
 - Deployment artifact: `artifacts/agent-registry-sepolia.json`
 - Latest deployment in this workspace:
   - tx: `0xcc0256b5e374e098b5bb51da35bd42a7202e0c2803ab7c6ce341f5dc165b8b11`
-  - contract: `0xd4978db542eec50e225ad8441662e96ed75612a8`
+  - contract_address: `0xd4978db542eec50e225ad8441662e96ed75612a8`
+
+Live bidirectional verification proof:
+
+- registry upsert tx (`upsertAgent`): `0xffb5e38c698d16d050cdbe31b5f779eaa5e171534c3a2ef3ac2e4cc1c608a8f1`
+- `POST /api/ens/verify-attestation` returned:
+  - `ensip25_spec_verified: true`
+  - `registry_side_verified: true`
+  - `ensip25_bidirectional_verified: true`
 
 ### Optional deploy to Arc
 

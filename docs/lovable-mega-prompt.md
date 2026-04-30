@@ -535,11 +535,10 @@ Inputs/buttons as in reference:
   - `#ens-arc-address-source` (`metamask`, `circle_wallet`) + `#ens-fill-arc-actor`
   - `#ens-write-mode` (`demo`, `circle_wallet`, `metamask`)
 - Buttons:
+  - `#ens-run-guided-flow` (primary one-click ENSIP-25 flow)
   - `#ens-check-signer-balance`
   - `#ens-check-name-status`
-  - `#ens-verify-attestation`
-  - `#ens-resolve-identity`
-  - `#ens-register-update`
+  - (`#ens-verify-attestation`, `#ens-resolve-identity`, `#ens-register-update`) may exist as helper actions but guided flow should be primary UX
 - Chips:
   - `#ens-identity-status`
   - `#ens-gating-chip`
@@ -551,6 +550,8 @@ Inputs/buttons as in reference:
 - In-flight UX:
   - show elapsed timer while ENS setup request is running
   - include explicit copy that commit→register may take ~60-90s for unowned names
+  - show ENSIP-25 progress chips for write/upsert/verify/resolve stages
+  - show trust badges for `Spec`, `Registry`, and `Bidirectional`
 
 ### U1/U2/U5 sections
 
@@ -645,8 +646,10 @@ Shipped reference code should **not** POST to local ingest URLs. If you fork an 
     - `GET /api/keeperhub/status` shows `arc_supported: true` and `execute_network: "arc-testnet"`
     - `POST /api/keeperhub/execute-transfer` with `execution_mode: "local"` succeeds (completed execution + tx hash)
 11. ENS workshop sanity flow passes:
+    - guided UX path (`#ens-run-guided-flow`) completes ENS write + registry upsert + verify + resolve with visible progress chips and trust badges.
     - `GET /api/ens/resolve?...&registry=...&agentId=...` -> `POST /api/ens/verify-attestation` -> `POST /api/ens/setup-agent` demo preview (shows `ensip25Key` / `ensip25Value`) -> high-risk blocked before non-empty ENSIP-25 value -> high-risk allowed after write.
     - allowed run includes policy trace showing trust/privacy/versioning state.
+    - include registry `contract_address=0xd4978db542eec50e225ad8441662e96ed75612a8` in docs/proof output.
 
 ---
 

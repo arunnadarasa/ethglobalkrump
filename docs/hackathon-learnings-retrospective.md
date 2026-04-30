@@ -196,6 +196,16 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Root cause: online execution path still used shared/local defaults in one code path while status checks used hosted defaults, producing `Execution not found` and `execution_status: null`.
    - Fix direction: enforce mode-aware base and key selection consistently for transfer creation + status fetch (`online` -> hosted base/key, `local` -> local base/key).
 
+22. **Guided ENSIP-25 UX dramatically reduces operator error**
+   - A one-click `Run ENSIP-25 setup (guided)` flow now sequences ENS write -> registry upsert -> trust verify -> resolve with visible progress chips.
+   - Removing duplicate manual action buttons made the happy-path obvious during demos while preserving strict trust checks under the hood.
+   - Split trust badges (`Spec`, `Registry`, `Bidirectional`) made failure diagnosis immediate.
+
+23. **Bidirectional trust proof is now reproducible in-app**
+   - Registry contract address used for backlink checks: `0xd4978db542eec50e225ad8441662e96ed75612a8` (Sepolia).
+   - Upsert proof tx: `0xffb5e38c698d16d050cdbe31b5f779eaa5e171534c3a2ef3ac2e4cc1c608a8f1`.
+   - Verify endpoint returns `ensip25_spec_verified=true`, `registry_side_verified=true`, `ensip25_bidirectional_verified=true` for matched ENS + agentId.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
