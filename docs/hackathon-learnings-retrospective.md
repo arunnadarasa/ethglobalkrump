@@ -167,6 +167,10 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Teams need separate "challenge detected" vs "answer delivered" UX states to avoid confusion during live demos.
    - Facilitator/payment-client logic is only required for automatic paid retry after the challenge.
 
+16. **External-settle handoff closes the answer gap without wallet custody**
+   - Added `x402_external_settle` as a two-step route contract: challenge detection first, then replay with externally generated payment headers.
+   - This keeps wallet signing outside the app while still enabling final answer retrieval from `/apis/v2/*`.
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).

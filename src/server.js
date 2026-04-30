@@ -1264,7 +1264,151 @@ app.post("/api/aisa/llm/chat", async (req, res) => {
       });
     }
 
-    return sendError(res, 400, "aisa_mode_unsupported", "Unsupported mode. Use api_key_proxy or x402_probe.");
+    if (selectedMode === "x402_external_settle") {
+      const endpointPath = String(endpoint_path || "/apis/v2/perplexity/sonar").trim();
+      const normalizedEndpointPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+      if (!normalizedEndpointPath.startsWith("/apis/v2/")) {
+        return sendError(
+          res,
+          400,
+          "aisa_x402_external_endpoint_invalid",
+          "x402_external_settle mode requires an /apis/v2/* endpoint path."
+        );
+      }
+      const replayRequested = Boolean(req.body?.replay_requested);
+      const replayHeadersRaw = req.body?.replay_headers;
+      let replayHeaders = null;
+      if (typeof replayHeadersRaw === "string" && replayHeadersRaw.trim()) {
+        try {
+          replayHeaders = JSON.parse(replayHeadersRaw);
+        } catch (_error) {
+          return sendError(
+            res,
+            400,
+            "aisa_x402_replay_headers_invalid",
+            "replay_headers must be valid JSON when provided as a string."
+          );
+        }
+      } else if (replayHeadersRaw && typeof replayHeadersRaw === "object" && !Array.isArray(replayHeadersRaw)) {
+        replayHeaders = replayHeadersRaw;
+      }
+      if (replayRequested && (!replayHeaders || Object.keys(replayHeaders).length === 0)) {
+        return sendError(
+          res,
+          400,
+          "aisa_x402_replay_headers_required",
+          "Set replay_headers when replay_requested=true."
+        );
+      }
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedEndpointPath}`;
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "L5",
+          location: "src/server.js:/api/aisa/llm/chat",
+          message: "x402 external settle request",
+          data: {
+            url,
+            model: selectedModel,
+            endpointPath: normalizedEndpointPath,
+            replayRequested,
+            replayHeadersCount: replayHeaders ? Object.keys(replayHeaders).length : 0
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      const startedAt = Date.now();
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(replayHeaders || {})
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: normalizedMessages
+        })
+      });
+      const text = await upstream.text();
+      let body = null;
+      let parsedAsJson = true;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_error) {
+        parsedAsJson = false;
+        body = { raw: text };
+      }
+      if (replayRequested && !parsedAsJson) {
+        return sendError(
+          res,
+          502,
+          "aisa_x402_replay_non_json_response",
+          "Replay upstream response was not JSON. Check replay headers/artifacts and retry."
+        );
+      }
+      const challengeHeaders = {
+        "payment-required": upstream.headers.get("payment-required") || null,
+        "www-authenticate": upstream.headers.get("www-authenticate") || null
+      };
+      const answer =
+        body?.choices?.[0]?.message?.content ||
+        body?.choices?.[0]?.text ||
+        body?.answer ||
+        body?.output_text ||
+        null;
+      const responsePayload = {
+        ok: upstream.ok,
+        provider: "aisa",
+        mode: selectedMode,
+        model: selectedModel,
+        answer,
+        upstream_status: upstream.status,
+        challenge_required: upstream.status === 402,
+        challenge: upstream.status === 402 ? { headers: challengeHeaders, body } : null,
+        replay_requested: replayRequested,
+        replay_headers_supplied: Boolean(replayHeaders && Object.keys(replayHeaders).length > 0),
+        latency_ms: Date.now() - startedAt,
+        raw: body
+      };
+      // #region agent log
+      fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+        body: JSON.stringify({
+          sessionId: "995d4d",
+          runId: "pre-fix",
+          hypothesisId: "L6",
+          location: "src/server.js:/api/aisa/llm/chat",
+          message: "x402 external settle response",
+          data: {
+            upstreamStatus: upstream.status,
+            upstreamOk: upstream.ok,
+            challengeRequired: upstream.status === 402,
+            replayRequested,
+            answerPresent: Boolean(answer)
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion
+      if (!upstream.ok) {
+        const passthroughStatus = upstream.status >= 400 && upstream.status <= 599 ? upstream.status : 502;
+        return res.status(passthroughStatus).json(responsePayload);
+      }
+      return res.status(200).json(responsePayload);
+    }
+
+    return sendError(
+      res,
+      400,
+      "aisa_mode_unsupported",
+      "Unsupported mode. Use api_key_proxy, x402_probe, or x402_external_settle."
+    );
   } catch (error) {
     return sendError(res, 502, "aisa_llm_chat_failed", error.message || String(error));
   }

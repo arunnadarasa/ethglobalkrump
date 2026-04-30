@@ -138,11 +138,15 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - Modes:
   - `api_key_proxy` -> `/v1/chat/completions` style path.
   - `x402_probe` -> must target `/apis/v2/*` path.
+  - `x402_external_settle` -> `/apis/v2/*` with external replay headers.
 - For x402 probe demo parity, default/fallback endpoint should be `/apis/v2/perplexity/sonar`.
 - Probe response semantics:
   - return `upstream_status` and `expected_payment_challenge`.
   - `402` + `expected_payment_challenge: true` is considered successful challenge detection.
   - probe mode may return `answer: null` by design.
+- External-settle semantics:
+  - challenge step: no replay headers, return normalized challenge payload on `402`.
+  - replay step: require `replay_requested=true` and `replay_headers` (JSON object) to retry and return final answer.
 - Keep fixed model allowlist on server-side validation and reject unsupported models with typed errors.
 
 ### KeeperHub (sponsor execution layer)
@@ -495,8 +499,10 @@ Inputs/buttons as in reference:
   - action/output: `#aisa-llm-run`, `#aisa-llm-output`
 - Behavior:
   - in `x402_probe`, auto-fill endpoint to `/apis/v2/perplexity/sonar` when empty/invalid.
+  - in `x402_external_settle`, use the same `/apis/v2/perplexity/sonar` fallback when endpoint is empty/invalid.
   - show formatted response with `upstream_status`, `expected_payment_challenge`, and raw payload.
   - treat `402` in probe mode as a success indicator for challenge detection.
+  - include replay controls (`replay_requested`, `replay_headers`) for external settlement handoff.
 
 ### ENS Judge card (must match)
 

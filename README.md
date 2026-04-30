@@ -346,6 +346,23 @@ Runtime behavior:
 - `x402_probe` is challenge detection only; it does not complete paid settlement/retry to produce a final LLM answer.
 - You only need a facilitator/payment client when implementing full paid retry flow after the `402` challenge.
 
+### AIsa LLM x402 external-settle mode
+
+The app also supports `mode="x402_external_settle"` on `POST /api/aisa/llm/chat` for a two-step handoff:
+
+1. **Challenge step** (no replay headers): call `/apis/v2/*` and collect `challenge` payload when upstream returns `402`.
+2. **Replay step** (with external artifacts): set `replay_requested=true` plus `replay_headers` and resend to return the final answer.
+
+Request fields for external settle:
+
+- `mode`: `x402_external_settle`
+- `endpoint_path`: `/apis/v2/...` (required prefix)
+- `model`, `messages`
+- `replay_requested`: boolean
+- `replay_headers`: object (required when `replay_requested=true`)
+
+Use [AIsa nanopayment-x402](https://github.com/AIsa-team/nanopayment-x402) / [SKILL.md](https://raw.githubusercontent.com/AIsa-team/nanopayment-x402/main/SKILL.md) to generate paid replay headers via external wallet signing flow.
+
 ### MetaMask setup
 
 Set these in `.env` so the UI can switch/add chain and send tx:

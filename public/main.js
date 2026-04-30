@@ -1302,6 +1302,22 @@ async function runAisaLlmFromUi() {
   const model = document.getElementById("aisa-llm-model")?.value || "gpt-5.3-codex";
   const capability = document.getElementById("aisa-llm-capability")?.value || "text";
   const endpointPath = document.getElementById("aisa-llm-endpoint")?.value?.trim() || "/v1/chat/completions";
+  const replayRequested = Boolean(document.getElementById("aisa-llm-replay-requested")?.checked);
+  const replayHeadersText = document.getElementById("aisa-llm-replay-headers")?.value?.trim() || "";
+  let replayHeaders = null;
+  if (replayHeadersText) {
+    try {
+      replayHeaders = JSON.parse(replayHeadersText);
+    } catch (_error) {
+      print("aisa-llm-output", {
+        route: "/api/aisa/llm/chat",
+        ok: false,
+        status: 0,
+        error: "Replay headers must be valid JSON."
+      });
+      return;
+    }
+  }
   const temperature = Number(document.getElementById("aisa-llm-temperature")?.value || 0.2);
   const maxTokens = Number(document.getElementById("aisa-llm-max-tokens")?.value || 256);
   const systemPrompt = document.getElementById("aisa-llm-system")?.value?.trim() || "";
@@ -1322,6 +1338,8 @@ async function runAisaLlmFromUi() {
         capability,
         model,
         endpointPath,
+        replayRequested,
+        replayHeadersPresent: Boolean(replayHeaders),
         userPromptLength: userPrompt.length
       },
       timestamp: Date.now()
@@ -1336,6 +1354,8 @@ async function runAisaLlmFromUi() {
       model,
       capability,
       endpoint_path: endpointPath,
+      replay_requested: replayRequested,
+      replay_headers: replayHeaders,
       temperature,
       max_tokens: maxTokens,
       messages: [
@@ -1379,6 +1399,8 @@ async function runAisaLlmFromUi() {
       model,
       capability,
       endpoint_path: endpointPath,
+      replay_requested: replayRequested,
+      replay_headers_supplied: Boolean(replayHeaders),
       temperature,
       max_tokens: maxTokens,
       user_prompt: userPrompt
@@ -1419,6 +1441,12 @@ function syncAisaLlmEndpointToModel() {
     return;
   }
   if (mode === "x402_probe") {
+    if (!String(endpointInput.value || "").trim().startsWith("/apis/v2/")) {
+      endpointInput.value = "/apis/v2/perplexity/sonar";
+    }
+    return;
+  }
+  if (mode === "x402_external_settle") {
     if (!String(endpointInput.value || "").trim().startsWith("/apis/v2/")) {
       endpointInput.value = "/apis/v2/perplexity/sonar";
     }

@@ -94,6 +94,7 @@
           <select id="aisa-llm-mode">
             <option value="api_key_proxy">API key proxy (/v1/chat/completions)</option>
             <option value="x402_probe">x402 probe (/apis/v2/*)</option>
+            <option value="x402_external_settle">x402 external settle (/apis/v2/*)</option>
           </select>
           <select id="aisa-llm-capability">
             <option value="text">Text</option>
@@ -116,6 +117,17 @@
             placeholder="Resolved endpoint path"
             style="min-width: 320px"
           />
+          <label style="display: inline-flex; align-items: center; gap: 6px">
+            <input id="aisa-llm-replay-requested" type="checkbox" />
+            Replay with external x402 headers
+          </label>
+        </div>
+        <div class="row">
+          <textarea
+            id="aisa-llm-replay-headers"
+            placeholder='Replay headers JSON (e.g. {"X-PAYMENT":"...","X-SIGNATURE":"..."})'
+            style="min-width: 640px; min-height: 70px"
+          ></textarea>
         </div>
         <div class="row">
           <input

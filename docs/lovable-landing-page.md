@@ -129,6 +129,13 @@ We built a full loop:
 - This proves x402 challenge flow is reachable from the app.
 - Final model answers in x402 mode require a paid retry implementation (facilitator/payment client), not just probe mode.
 
+### 9) External x402 paid-answer handoff
+
+- `x402_external_settle` mode supports a two-phase UX:
+  1) detect challenge from `/apis/v2/*`,
+  2) replay with externally generated x402 payment headers.
+- This keeps wallet custody/signing out of the app while enabling final answer delivery in the same demo panel.
+
 ## Who this is for
 
 - Creator economy platforms
