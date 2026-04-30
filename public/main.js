@@ -1207,6 +1207,9 @@ async function authorizeAisaX402FromUi() {
   const amountMinor = Number(document.getElementById("aisa-x402-amount")?.value || 0);
   const intent = document.getElementById("aisa-x402-intent")?.value?.trim() || "";
   const memo = document.getElementById("aisa-x402-memo")?.value?.trim() || "aisa-x402-demo";
+  const mode = document.getElementById("aisa-x402-mode")?.value || "x402_probe";
+  const targetPath =
+    document.getElementById("aisa-x402-target-path")?.value?.trim() || "/apis/v2/twitter/user/info?userName=jack";
   const response = await request("/api/payments/x402/authorize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1214,6 +1217,8 @@ async function authorizeAisaX402FromUi() {
       amount_minor: amountMinor,
       intent,
       memo,
+      mode,
+      target_path: targetPath,
       session_hint: "hackathon-pitch-demo",
       metadata: {
         source: "aisa-demo-panel",
@@ -1228,7 +1233,45 @@ async function authorizeAisaX402FromUi() {
     request: {
       amount_minor: amountMinor,
       intent,
-      memo
+      memo,
+      mode,
+      target_path: targetPath
+    },
+    body: response.body
+  });
+}
+
+async function runAisaLlmFromUi() {
+  const mode = document.getElementById("aisa-llm-mode")?.value || "api_key_proxy";
+  const model = document.getElementById("aisa-llm-model")?.value || "gpt-5.3-codex";
+  const temperature = Number(document.getElementById("aisa-llm-temperature")?.value || 0.2);
+  const maxTokens = Number(document.getElementById("aisa-llm-max-tokens")?.value || 256);
+  const systemPrompt = document.getElementById("aisa-llm-system")?.value?.trim() || "";
+  const userPrompt = document.getElementById("aisa-llm-user")?.value?.trim() || "";
+  const response = await request("/api/aisa/llm/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode,
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      messages: [
+        ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+        { role: "user", content: userPrompt }
+      ]
+    })
+  });
+  print("aisa-llm-output", {
+    route: "/api/aisa/llm/chat",
+    ok: response.ok,
+    status: response.status,
+    request: {
+      mode,
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      user_prompt: userPrompt
     },
     body: response.body
   });
@@ -1523,6 +1566,14 @@ document.getElementById("aisa-x402-authorize")?.addEventListener("click", async 
     await authorizeAisaX402FromUi();
   } catch (error) {
     print("aisa-x402-output", { error: error.message });
+  }
+});
+
+document.getElementById("aisa-llm-run")?.addEventListener("click", async () => {
+  try {
+    await runAisaLlmFromUi();
+  } catch (error) {
+    print("aisa-llm-output", { error: error.message });
   }
 });
 
@@ -2444,6 +2495,9 @@ async function bootstrap() {
   });
   print("aisa-x402-output", {
     info: "Use this panel to verify x402 config and run a direct AIsa authorization demo call."
+  });
+  print("aisa-llm-output", {
+    info: "Use this panel to run model responses through AIsa in API-key or x402 probe mode."
   });
   print("agent-output", {
     info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."

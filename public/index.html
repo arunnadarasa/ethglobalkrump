@@ -70,12 +70,58 @@
         </p>
         <div class="row">
           <button id="aisa-x402-load-config" type="button">Check x402 Config</button>
+          <select id="aisa-x402-mode">
+            <option value="x402_probe">x402 probe (/apis/v2)</option>
+            <option value="api_key_proxy">API key proxy (/apis/v1)</option>
+          </select>
           <input id="aisa-x402-intent" value="judge_feedback_request" placeholder="Intent (pilot allowlist)" />
           <input id="aisa-x402-amount" type="number" min="1" value="600" />
           <input id="aisa-x402-memo" value="pitch-demo-aisa-x402" placeholder="Memo" style="min-width: 240px" />
+          <input
+            id="aisa-x402-target-path"
+            value="/apis/v2/twitter/user/info?userName=jack"
+            placeholder="Target path (e.g. /apis/v2/... or /apis/v1/...)"
+            style="min-width: 340px"
+          />
           <button id="aisa-x402-authorize" type="button">Authorize x402 Payment</button>
         </div>
         <pre id="aisa-x402-output"></pre>
+      </section>
+      <section>
+        <h2>AIsa LLM Chat Demo</h2>
+        <p class="subtitle">Run model responses through AIsa with selectable mode and fixed model choices.</p>
+        <div class="row">
+          <select id="aisa-llm-mode">
+            <option value="api_key_proxy">API key proxy (/v1/chat/completions)</option>
+            <option value="x402_probe">x402 probe (/apis/v2/perplexity/sonar)</option>
+          </select>
+          <select id="aisa-llm-model">
+            <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+            <option value="claude-opus-4.6">claude-opus-4.6</option>
+            <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+            <option value="sonar">sonar</option>
+          </select>
+          <input id="aisa-llm-temperature" type="number" min="0" max="2" step="0.1" value="0.2" />
+          <input id="aisa-llm-max-tokens" type="number" min="1" max="4000" step="1" value="256" />
+        </div>
+        <div class="row">
+          <input
+            id="aisa-llm-system"
+            value="You are an assistant for a Krump hackathon demo. Keep answers concise and practical."
+            placeholder="System prompt"
+            style="min-width: 520px"
+          />
+        </div>
+        <div class="row">
+          <input
+            id="aisa-llm-user"
+            value="Summarize why our ENS + UCP + AIsa architecture is credible in 3 bullets."
+            placeholder="User prompt"
+            style="min-width: 640px"
+          />
+          <button id="aisa-llm-run" type="button">Run AIsa LLM</button>
+        </div>
+        <pre id="aisa-llm-output"></pre>
       </section>
       <section>
         <h2>Agent Orchestration (H2A / A2H / A2A)</h2>

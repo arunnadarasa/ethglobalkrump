@@ -90,6 +90,7 @@ const AISA_X402_PILOT_INTENTS = String(process.env.AISA_X402_PILOT_INTENTS || "j
   .split(",")
   .map((entry) => entry.trim())
   .filter(Boolean);
+const AISA_LLM_ALLOWED_MODELS = ["gpt-5.3-codex", "claude-opus-4.6", "gemini-3.1-pro", "sonar"];
 let activeCircleWalletId = CIRCLE_WALLET_ID;
 let activeCircleWalletSetId = CIRCLE_WALLET_SET_ID;
 let activeOnlineSourceWalletId = CIRCLE_WALLET_ID_ONLINE || CIRCLE_WALLET_ID || "";
@@ -890,7 +891,18 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/payments/x402/authorize", async (req, res) => {
   try {
-    const { amount_minor, memo, intent, session_hint, metadata } = req.body || {};
+    const {
+      amount_minor,
+      memo,
+      intent,
+      session_hint,
+      metadata,
+      mode,
+      target_path,
+      http_method,
+      request_body
+    } = req.body || {};
+    const selectedMode = String(mode || "x402_probe").trim();
     const normalizedIntent = String(intent || "").trim();
     if (
       normalizedIntent &&
@@ -906,13 +918,77 @@ app.post("/api/payments/x402/authorize", async (req, res) => {
       );
     }
     enforceX402Budget(amount_minor);
-    const result = await x402Client.authorizePayment({
-      amountMinor: amount_minor,
-      memo,
-      intent: normalizedIntent,
-      sessionHint: session_hint,
-      metadata: metadata || {}
-    });
+    let result = null;
+    if (selectedMode === "api_key_proxy") {
+      if (!AISA_X402_API_BASE || !AISA_X402_API_KEY) {
+        return sendError(
+          res,
+          503,
+          "aisa_api_key_mode_not_configured",
+          "Set AISA_X402_API_BASE and AISA_X402_API_KEY for api_key_proxy mode."
+        );
+      }
+      const method = String(http_method || "GET").trim().toUpperCase();
+      const candidatePath = String(target_path || "/apis/v1/twitter/user/info?userName=jack").trim();
+      const normalizedPath = candidatePath.startsWith("/") ? candidatePath : `/${candidatePath}`;
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedPath}`;
+      const upstream = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${AISA_X402_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: method === "GET" ? undefined : JSON.stringify(request_body || {})
+      });
+      const text = await upstream.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_error) {
+        body = text;
+      }
+      result = {
+        payment_ref: `aisa-api-key-${helpers.makeId("ref")}`,
+        receipt: {
+          mode: selectedMode,
+          upstream_status: upstream.status,
+          upstream_ok: upstream.ok,
+          upstream_url: url,
+          upstream_method: method,
+          upstream_body: body
+        }
+      };
+    } else if (selectedMode === "x402_probe") {
+      const candidatePath = String(target_path || "/apis/v2/twitter/user/info?userName=jack").trim();
+      const normalizedPath = candidatePath.startsWith("/") ? candidatePath : `/${candidatePath}`;
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}${normalizedPath}`;
+      const upstream = await fetch(url, { method: "GET" });
+      const text = await upstream.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_error) {
+        body = text;
+      }
+      result = {
+        payment_ref: null,
+        receipt: {
+          mode: selectedMode,
+          upstream_status: upstream.status,
+          upstream_ok: upstream.ok,
+          upstream_url: url,
+          expected_challenge: upstream.status === 402,
+          upstream_body: body
+        }
+      };
+    } else {
+      return sendError(
+        res,
+        400,
+        "aisa_mode_unsupported",
+        "Unsupported mode. Use x402_probe or api_key_proxy."
+      );
+    }
     return res.status(201).json({
       ok: true,
       mode: "x402",
@@ -924,6 +1000,122 @@ app.post("/api/payments/x402/authorize", async (req, res) => {
   } catch (error) {
     const status = Number(error?.status || 502);
     return sendError(res, status, error?.code || "x402_authorize_failed", error?.message || "x402 authorize failed");
+  }
+});
+
+app.post("/api/aisa/llm/chat", async (req, res) => {
+  try {
+    const { mode, model, messages, temperature, max_tokens } = req.body || {};
+    const selectedMode = String(mode || "api_key_proxy").trim();
+    const selectedModel = String(model || "").trim();
+    if (!selectedModel) {
+      return sendError(res, 400, "aisa_model_required", "model is required.");
+    }
+    if (!AISA_LLM_ALLOWED_MODELS.includes(selectedModel)) {
+      return sendError(
+        res,
+        400,
+        "aisa_model_not_allowed",
+        `Unsupported model. Allowed: ${AISA_LLM_ALLOWED_MODELS.join(", ")}`
+      );
+    }
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return sendError(res, 400, "aisa_messages_required", "messages must be a non-empty array.");
+    }
+    const normalizedMessages = messages
+      .map((entry) => ({
+        role: String(entry?.role || "").trim(),
+        content: String(entry?.content || "").trim()
+      }))
+      .filter((entry) => entry.role && entry.content);
+    if (normalizedMessages.length === 0) {
+      return sendError(res, 400, "aisa_messages_invalid", "messages entries must include role and content.");
+    }
+
+    if (!AISA_X402_API_BASE || !AISA_X402_API_KEY) {
+      return sendError(
+        res,
+        503,
+        "aisa_api_not_configured",
+        "Set AISA_X402_API_BASE and AISA_X402_API_KEY for AIsa LLM chat."
+      );
+    }
+
+    if (selectedMode === "api_key_proxy") {
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/v1/chat/completions`;
+      const startedAt = Date.now();
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${AISA_X402_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: normalizedMessages,
+          temperature: Number(temperature ?? 0.2),
+          max_tokens: Number(max_tokens ?? 256)
+        })
+      });
+      const text = await upstream.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_error) {
+        body = { raw: text };
+      }
+      const answer =
+        body?.choices?.[0]?.message?.content ||
+        body?.choices?.[0]?.text ||
+        body?.answer ||
+        body?.output_text ||
+        null;
+      return res.status(upstream.ok ? 200 : 502).json({
+        ok: upstream.ok,
+        provider: "aisa",
+        mode: selectedMode,
+        model: selectedModel,
+        answer,
+        upstream_status: upstream.status,
+        latency_ms: Date.now() - startedAt,
+        raw: body
+      });
+    }
+
+    if (selectedMode === "x402_probe") {
+      const url = `${AISA_X402_API_BASE.replace(/\/+$/, "")}/apis/v2/perplexity/sonar`;
+      const startedAt = Date.now();
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: selectedModel === "sonar" ? "sonar" : "sonar",
+          messages: normalizedMessages
+        })
+      });
+      const text = await upstream.text();
+      let body = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch (_error) {
+        body = { raw: text };
+      }
+      return res.json({
+        ok: true,
+        provider: "aisa",
+        mode: selectedMode,
+        model: selectedModel,
+        answer: null,
+        upstream_status: upstream.status,
+        expected_payment_challenge: upstream.status === 402,
+        latency_ms: Date.now() - startedAt,
+        raw: body
+      });
+    }
+
+    return sendError(res, 400, "aisa_mode_unsupported", "Unsupported mode. Use api_key_proxy or x402_probe.");
+  } catch (error) {
+    return sendError(res, 502, "aisa_llm_chat_failed", error.message || String(error));
   }
 });
 
