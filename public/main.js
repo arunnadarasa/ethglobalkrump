@@ -457,6 +457,58 @@ function setEnsJudgeChip({ statusId, chipText, variant }) {
   target.textContent = chipText;
 }
 
+function setEnsStepStatus(stepId, status) {
+  const node = document.getElementById(stepId);
+  if (!node) {
+    return;
+  }
+  node.classList.remove("hidden", "active", "done", "failed");
+  if (!status) {
+    node.classList.add("hidden");
+    return;
+  }
+  if (status === "active") {
+    node.classList.add("active");
+    return;
+  }
+  if (status === "done") {
+    node.classList.add("done");
+    return;
+  }
+  if (status === "failed") {
+    node.classList.add("failed");
+  }
+}
+
+function setEnsTrustBadge({ badgeId, label, value }) {
+  const node = document.getElementById(badgeId);
+  if (!node) {
+    return;
+  }
+  node.classList.remove("hidden", "success", "warning");
+  node.textContent = `${label}: ${value ? "true" : "false"}`;
+  node.classList.add(value ? "success" : "warning");
+}
+
+function renderEnsTrustBadges(trust) {
+  const normalized = trust || {};
+  setEnsTrustBadge({
+    badgeId: "ens-badge-spec",
+    label: "Spec",
+    value: Boolean(normalized.ensip25_spec_verified)
+  });
+  setEnsTrustBadge({
+    badgeId: "ens-badge-registry",
+    label: "Registry",
+    value: Boolean(normalized.registry_side_verified)
+  });
+  setEnsTrustBadge({
+    badgeId: "ens-badge-bidirectional",
+    label: "Bidirectional",
+    value: Boolean(normalized.ensip25_bidirectional_verified)
+  });
+}
+
 function stopEnsSubmissionTimer() {
   if (ensSubmissionTimerHandle) {
     cancelAnimationFrame(ensSubmissionTimerHandle);
@@ -555,6 +607,7 @@ function renderEnsWorkshopChips(payload, selectedIntent) {
     chipText: trustText,
     variant: trust.is_trusted_for_intent === false ? "warning" : "success"
   });
+  renderEnsTrustBadges(trust);
 
   const privacyMode = privacy.payout_mode || "public";
   const privacyReceiver = privacy.privacy_receiver || "(none)";
@@ -603,7 +656,7 @@ async function resolveEnsJudgeIdentityForUi() {
       chipText: "Set Agent ENS name (top of Agent Orchestration) first.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "missing_ens_name" };
   }
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
   const registry = document.getElementById("ensip25-registry")?.value?.trim() || "";
@@ -617,7 +670,7 @@ async function resolveEnsJudgeIdentityForUi() {
       chipText: data.body?.error?.message || "ENS resolve failed.",
       variant: "warning"
     });
-    return;
+    return { ok: false, status: data.status, body: data.body };
   }
 
   lastEnsJudgeResolve = data.body || null;
@@ -649,6 +702,7 @@ async function resolveEnsJudgeIdentityForUi() {
   print("ens-identity-output", output);
 
   updateAgentRunDisabledByEnsGating();
+  return { ok: true, status: data.status, body: data.body };
 }
 
 async function registerUpdateEnsJudgeIdentityForUi() {
@@ -699,15 +753,15 @@ async function registerUpdateEnsJudgeIdentityForUi() {
       ensNameLength: ensName.length
     });
     setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set Agent ENS name first.", variant: "warning" });
-    return;
+    return { ok: false, reason: "missing_ens_name" };
   }
   if (!arcActorAddress) {
     setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set Arc actor address for the ENS addr record.", variant: "warning" });
-    return;
+    return { ok: false, reason: "missing_arc_actor_address" };
   }
   if (!agentId) {
     setEnsJudgeChip({ statusId: "ens-identity-status", chipText: "Set agentId text record value.", variant: "warning" });
-    return;
+    return { ok: false, reason: "missing_agent_id" };
   }
 
   setEnsJudgeChip({
@@ -777,7 +831,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
           variant: "warning"
         });
       stopEnsSubmissionTimer();
-        return;
+        return { ok: false, reason: "metamask_not_approved" };
       }
 
       const proofMessage = `Authorize ENS update intent for ${ensName} at ${new Date().toISOString()}`;
@@ -807,7 +861,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
         variant: "warning"
       });
       stopEnsSubmissionTimer();
-      return;
+      return { ok: false, reason: "metamask_failed" };
     }
   }
 
@@ -848,7 +902,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
       variant: "warning"
     });
     stopEnsSubmissionTimer();
-    return;
+    return { ok: false, status: data.status, body: data.body };
   }
 
   if (data.body?.demo_mode) {
@@ -859,12 +913,13 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     });
     stopEnsSubmissionTimer();
     print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
-    return;
+    return { ok: true, demo_mode: true, status: data.status, body: data.body };
   }
 
   stopEnsSubmissionTimer();
   print("ens-identity-output", { route: "/api/ens/setup-agent", request: payload, body: data.body });
   await resolveEnsJudgeIdentityForUi();
+  return { ok: true, status: data.status, body: data.body };
 }
 
 async function verifyEnsAttestationFromUi() {
@@ -880,7 +935,7 @@ async function verifyEnsAttestationFromUi() {
       chipText: "Set ENS name first.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "missing_ens_name" };
   }
   const response = await request("/api/ens/verify-attestation", {
     method: "POST",
@@ -893,7 +948,7 @@ async function verifyEnsAttestationFromUi() {
       chipText: response.body?.error?.message || "Attestation verification failed.",
       variant: "warning"
     });
-    return;
+    return { ok: false, status: response.status, body: response.body };
   }
   const trust = response.body?.trust || {};
   const ensip25 = response.body?.ensip25 || {};
@@ -902,7 +957,9 @@ async function verifyEnsAttestationFromUi() {
     chipText: `Trust verify: spec=${trust.ensip25_spec_verified}; registry=${trust.registry_side_verified}; bidirectional=${trust.ensip25_bidirectional_verified}; highRisk=${trust.is_high_risk_intent}; trustedForIntent=${trust.is_trusted_for_intent}; key=${ensip25.key || "unset"}`,
     variant: trust.is_trusted_for_intent ? "success" : "warning"
   });
+  renderEnsTrustBadges(trust);
   print("ens-identity-output", { route: "/api/ens/verify-attestation", body: response.body });
+  return { ok: true, status: response.status, body: response.body };
 }
 
 async function upsertRegistryLinkFromUi() {
@@ -921,7 +978,7 @@ async function upsertRegistryLinkFromUi() {
       chipText: "Set ENS name first.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "missing_ens_name" };
   }
   if (!agentId) {
     setEnsJudgeChip({
@@ -929,7 +986,7 @@ async function upsertRegistryLinkFromUi() {
       chipText: "Set ENSIP-25 agentId first.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "missing_agent_id" };
   }
   if (!registry) {
     setEnsJudgeChip({
@@ -937,7 +994,7 @@ async function upsertRegistryLinkFromUi() {
       chipText: "Set ENSIP-25 registry interop first.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "missing_registry" };
   }
 
   setEnsJudgeChip({
@@ -966,7 +1023,7 @@ async function upsertRegistryLinkFromUi() {
       variant: "warning"
     });
     print("ens-identity-output", { route: "/api/ens/registry/upsert-agent", request: { ensName, agentId, registry }, body: response.body });
-    return;
+    return { ok: false, status: response.status, body: response.body };
   }
 
   setEnsJudgeChip({
@@ -978,6 +1035,69 @@ async function upsertRegistryLinkFromUi() {
 
   await verifyEnsAttestationFromUi();
   await resolveEnsJudgeIdentityForUi();
+  return { ok: true, status: response.status, body: response.body };
+}
+
+async function runEnsip25GuidedFlowFromUi() {
+  const writeMode = document.getElementById("ens-write-mode")?.value || "demo";
+  setEnsStepStatus("ens-step-write", "active");
+  setEnsStepStatus("ens-step-upsert", null);
+  setEnsStepStatus("ens-step-verify", null);
+  setEnsStepStatus("ens-step-resolve", null);
+
+  const writeResult = await registerUpdateEnsJudgeIdentityForUi();
+  if (!writeResult?.ok) {
+    setEnsStepStatus("ens-step-write", "failed");
+    return;
+  }
+  setEnsStepStatus("ens-step-write", "done");
+  if (writeResult.demo_mode || writeMode === "demo") {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Demo mode completed preview only. Switch ENS write mode to Circle Wallet or MetaMask for live onchain setup.",
+      variant: "warning"
+    });
+    return;
+  }
+
+  setEnsStepStatus("ens-step-upsert", "active");
+  const upsertResult = await upsertRegistryLinkFromUi();
+  if (!upsertResult?.ok) {
+    setEnsStepStatus("ens-step-upsert", "failed");
+    return;
+  }
+  setEnsStepStatus("ens-step-upsert", "done");
+
+  setEnsStepStatus("ens-step-verify", "active");
+  const verifyResult = await verifyEnsAttestationFromUi();
+  if (!verifyResult?.ok) {
+    setEnsStepStatus("ens-step-verify", "failed");
+    return;
+  }
+  const trust = verifyResult.body?.trust || {};
+  if (!trust.ensip25_bidirectional_verified) {
+    setEnsStepStatus("ens-step-verify", "failed");
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
+      chipText: "Verification ran, but bidirectional trust is still false. Check ENS name, agentId, and registry interop match.",
+      variant: "warning"
+    });
+    return;
+  }
+  setEnsStepStatus("ens-step-verify", "done");
+
+  setEnsStepStatus("ens-step-resolve", "active");
+  const resolveResult = await resolveEnsJudgeIdentityForUi();
+  if (!resolveResult?.ok) {
+    setEnsStepStatus("ens-step-resolve", "failed");
+    return;
+  }
+  setEnsStepStatus("ens-step-resolve", "done");
+  setEnsJudgeChip({
+    statusId: "ens-identity-status",
+    chipText: "Guided ENSIP-25 flow completed. Bidirectional trust is verified.",
+    variant: "success"
+  });
 }
 
 async function checkEnsSignerBalanceFromUi() {
@@ -1901,6 +2021,18 @@ document.getElementById("ens-check-name-status")?.addEventListener("click", asyn
   } catch (error) {
     setEnsJudgeChip({
       statusId: "ens-name-status-chip",
+      chipText: error?.message || String(error),
+      variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ens-run-guided-flow")?.addEventListener("click", async () => {
+  try {
+    await runEnsip25GuidedFlowFromUi();
+  } catch (error) {
+    setEnsJudgeChip({
+      statusId: "ens-identity-status",
       chipText: error?.message || String(error),
       variant: "warning"
     });

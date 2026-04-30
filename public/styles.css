@@ -110,3 +110,53 @@ pre {
 .hidden {
   display: none;
 }
+
+.ens-step-chip {
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #46608d;
+  background: #13213a;
+  color: #cde0ff;
+  font-size: 12px;
+}
+
+.ens-step-chip.active {
+  border-color: #9f6b00;
+  background: #2a1f07;
+  color: #ffd78a;
+}
+
+.ens-step-chip.done {
+  border-color: #1f6f3e;
+  background: #0f2217;
+  color: #9ee5bb;
+}
+
+.ens-step-chip.failed {
+  border-color: #7f2a2a;
+  background: #2a1212;
+  color: #ffabab;
+}
+
+.ens-trust-badge {
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #4b5d7f;
+  background: #0f182a;
+  color: #d8e6ff;
+  font-size: 12px;
+}
+
+.ens-trust-badge.success {
+  border-color: #1f6f3e;
+  background: #0f2217;
+  color: #9ee5bb;
+}
+
+.ens-trust-badge.warning {
+  border-color: #9f6b00;
+  background: #2a1f07;
+  color: #ffd78a;
+}

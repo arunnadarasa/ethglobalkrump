@@ -240,6 +240,7 @@
             <option value="circle_wallet">ENS write mode: Circle Wallet</option>
             <option value="metamask">ENS write mode: MetaMask</option>
           </select>
+          <button id="ens-run-guided-flow" type="button">Run ENSIP-25 setup (guided)</button>
           <button id="ens-check-signer-balance" type="button">Check wallet Sepolia ETH</button>
           <button id="ens-check-name-status" type="button">Check ENS name status</button>
           <button id="ens-registry-upsert" type="button">Upsert registry link</button>
@@ -266,6 +267,17 @@
           <div id="ens-trust-chip" class="hint-chip hidden"></div>
           <div id="ens-privacy-chip" class="hint-chip hidden"></div>
           <div id="ens-versioning-chip" class="hint-chip hidden"></div>
+        </div>
+        <div class="row">
+          <div id="ens-step-write" class="ens-step-chip hidden">1) ENS write pending</div>
+          <div id="ens-step-upsert" class="ens-step-chip hidden">2) Registry upsert pending</div>
+          <div id="ens-step-verify" class="ens-step-chip hidden">3) Trust verify pending</div>
+          <div id="ens-step-resolve" class="ens-step-chip hidden">4) Resolve pending</div>
+        </div>
+        <div class="row">
+          <div id="ens-badge-spec" class="ens-trust-badge hidden">Spec: unknown</div>
+          <div id="ens-badge-registry" class="ens-trust-badge hidden">Registry: unknown</div>
+          <div id="ens-badge-bidirectional" class="ens-trust-badge hidden">Bidirectional: unknown</div>
         </div>
         <pre id="ens-identity-output"></pre>
       </section>
