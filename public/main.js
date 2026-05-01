@@ -1694,6 +1694,75 @@ function syncEthglobalHackathonPanels() {
   );
 }
 
+const WOW_U4_MEMBERS_FALLBACK = [
+  { name: "NOVA", wallet: "0x1111111111111111111111111111111111111111", share_bps: 5000 },
+  { name: "SHADOW", wallet: "0x2222222222222222222222222222222222222222", share_bps: 3000 },
+  { name: "RAWFIRE", wallet: "0x3333333333333333333333333333333333333333", share_bps: 2000 }
+];
+
+function syncEthglobalWowParamsVisibility() {
+  const cb = document.getElementById("ethglobal-demo-nine-circle-wow");
+  const panel = document.getElementById("ethglobal-wow-params-panel");
+  if (!panel) return;
+  const on = cb?.checked === true;
+  panel.classList.toggle("hidden", !on);
+  panel.setAttribute("aria-hidden", on ? "false" : "true");
+}
+
+/** Read WOW commerce fieldset; falls back to prior hardcoded demo literals. */
+function readWowCommerceParams(ensName) {
+  const gv = (id) => String(document.getElementById(id)?.value ?? "").trim();
+  const gn = (id, fallback) => {
+    const n = Number(document.getElementById(id)?.value);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  let members = WOW_U4_MEMBERS_FALLBACK;
+  const rawMembers = gv("wow-u4-members-json");
+  if (rawMembers) {
+    try {
+      const parsed = JSON.parse(rawMembers);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        members = parsed;
+      }
+    } catch (_e) {
+      /* keep fallback */
+    }
+  }
+  const sharedAmount = gn("wow-shared-amount-minor", DEMO_USDC_MINOR);
+  const u1Amount = gn("wow-u1-amount-minor", sharedAmount);
+  const scoreRaw = Math.floor(gn("wow-u8-score", 94));
+  const score = Math.min(100, Math.max(0, Number.isFinite(scoreRaw) ? scoreRaw : 94));
+  return {
+    u1_fan_name: gv("wow-u1-fan-name") || "ETHGlobal Judge",
+    u1_dancer_id: gv("wow-u1-dancer-id") || "dancer-1",
+    u1_amount_minor: u1Amount,
+    shared_amount_minor: sharedAmount,
+    u2_clip_id: gv("wow-u2-clip-id") || "clip-1",
+    u2_buyer_name: gv("wow-u2-buyer-name") || "ETHGlobal WOW",
+    u3_dancer_name: gv("wow-u3-dancer-name") || "WOW Demo",
+    u3_judge_name: gv("wow-u3-judge-name"),
+    u3_topic: gv("wow-u3-topic"),
+    u4_crew_name: gv("wow-u4-crew-name"),
+    u4_members: members,
+    u4_split_source: gv("wow-u4-split-source") || "ethglobal_wow",
+    u6_room_id: gv("wow-u6-room-id") || "room-1",
+    u6_dancer_name: gv("wow-u6-dancer-name") || "ETHGlobal WOW",
+    u6_planned_minutes: Math.max(1, Math.floor(gn("wow-u6-planned-minutes", 5))),
+    u7_pack_id: gv("wow-u7-pack-id") || "pack-1",
+    u7_tier_id: gv("wow-u7-tier-id") || "tier-personal",
+    u7_buyer_name: gv("wow-u7-buyer-name") || "ETHGlobal WOW",
+    u8_title_prefix: gv("wow-u8-title-prefix") || "ETHGlobal WOW U8",
+    u8_sponsor_name: gv("wow-u8-sponsor-name") || "WOW Demo",
+    u8_bounty_minor: sharedAmount,
+    u8_submit_dancer: gv("wow-u8-submit-dancer") || "ETHGlobal WOW",
+    u8_clip_url: gv("wow-u8-clip-url") || "https://example.com/ethglobal-wow-clip",
+    u8_score: score,
+    u10_item_id: gv("wow-u10-item-id") || "merch-1",
+    u10_quantity: Math.max(1, Math.floor(gn("wow-u10-quantity", 1))),
+    u10_buyer_name: gv("wow-u10-buyer-name") || "ETHGlobal WOW"
+  };
+}
+
 async function hackathonResolveWinnerEntryId() {
   const data = await request("/api/battle");
   const entrants = data.body?.entrants || [];
@@ -1749,8 +1818,9 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   const links = arcExplorerLinks || [];
   const circleMode = "circle_wallet";
   const beatSummaries = [];
-  const judgeName = judgeLabelFromEns(ensName);
-  const topicLabel = `ethglobal-wow-${Date.now()}`;
+  const p = readWowCommerceParams(ensName);
+  const judgeName = p.u3_judge_name || judgeLabelFromEns(ensName);
+  const topicLabel = p.u3_topic || `ethglobal-wow-${Date.now()}`;
 
   // #region agent log
   fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -1776,16 +1846,16 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     beatSummaries.push({ id, ok, status, ...extra });
   };
 
-  const amtDemo = DEMO_USDC_MINOR;
+  const amtShared = p.shared_amount_minor;
 
-  const payU1 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u1-tip", "");
+  const payU1 = await resolvePaymentReference(circleMode, p.u1_amount_minor, "ethglobal-wow-u1-tip", "");
   const u1 = await request("/api/tips", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      fan_name: "ETHGlobal Judge",
-      dancer_id: "dancer-1",
-      amount_minor: amtDemo,
+      fan_name: p.u1_fan_name,
+      dancer_id: p.u1_dancer_id,
+      amount_minor: p.u1_amount_minor,
       payment_mode: payU1.mode,
       payment_ref: payU1.ref,
       execution_mode: execution.execution_mode,
@@ -1793,7 +1863,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     })
   });
   bump("u1_tip", u1.ok, u1.status);
-  timeline.push({ step: "wow_circle_u1_tip", ok: u1.ok, status: u1.status, amount_minor: amtDemo });
+  timeline.push({ step: "wow_circle_u1_tip", ok: u1.ok, status: u1.status, amount_minor: p.u1_amount_minor });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u1.ok) {
     throw new Error(`WOW U1 tip failed (HTTP ${u1.status})`);
@@ -1802,17 +1872,17 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   flushEthglobalHackathonOutput(timeline, { running: true });
 
   const clipList = await request("/api/tutorials");
-  const clip = (clipList.body?.tutorials || []).find((row) => row.id === "clip-1");
+  const clip = (clipList.body?.tutorials || []).find((row) => row.id === p.u2_clip_id);
   if (!clip) {
-    throw new Error("WOW U2 clip-1 missing");
+    throw new Error(`WOW U2 clip ${p.u2_clip_id} missing`);
   }
   const amtU2 = Number(clip.priceMinor);
   const payU2 = await resolvePaymentReference(circleMode, amtU2, "ethglobal-wow-u2-pay", "");
-  const u2 = await request("/api/tutorials/clip-1/pay", {
+  const u2 = await request(`/api/tutorials/${encodeURIComponent(p.u2_clip_id)}/pay`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      buyer_name: "ETHGlobal WOW",
+      buyer_name: p.u2_buyer_name,
       payment_mode: payU2.mode,
       payment_ref: payU2.ref,
       execution_mode: execution.execution_mode,
@@ -1828,15 +1898,15 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   await appendArcExplorerStep(links, u2.body?.execution, { label: "U2 Pay-per-move tutorial unlock", track: "U2" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
-  const payU3 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u3-feedback", "");
+  const payU3 = await resolvePaymentReference(circleMode, amtShared, "ethglobal-wow-u3-feedback", "");
   const u3 = await request("/api/judge-feedback/requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      dancer_name: "WOW Demo",
+      dancer_name: p.u3_dancer_name,
       judge_name: judgeName,
       topic: topicLabel,
-      amount_minor: amtDemo,
+      amount_minor: amtShared,
       payment_mode: payU3.mode,
       payment_ref: payU3.ref,
       execution_mode: execution.execution_mode,
@@ -1857,17 +1927,13 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   await appendArcExplorerStep(links, u3.body?.execution, { label: "U3 Judge feedback marketplace", track: "U3" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
-  const crewName = `ETHGlobal WOW Crew ${Date.now().toString(36)}`;
+  const crewName = p.u4_crew_name || `ETHGlobal WOW Crew ${Date.now().toString(36)}`;
   const crewRes = await request("/api/crews", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: crewName,
-      members: [
-        { name: "NOVA", wallet: "0x1111111111111111111111111111111111111111", share_bps: 5000 },
-        { name: "SHADOW", wallet: "0x2222222222222222222222222222222222222222", share_bps: 3000 },
-        { name: "RAWFIRE", wallet: "0x3333333333333333333333333333333333333333", share_bps: 2000 }
-      ]
+      members: p.u4_members
     })
   });
   if (!crewRes.ok || !crewRes.body?.crew?.id) {
@@ -1876,13 +1942,13 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   }
   bump("u4_create", true, crewRes.status);
   const crewId = crewRes.body.crew.id;
-  const payU4 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u4-split", "");
+  const payU4 = await resolvePaymentReference(circleMode, amtShared, "ethglobal-wow-u4-split", "");
   const u4 = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      amount_minor: amtDemo,
-      source: "ethglobal_wow",
+      amount_minor: amtShared,
+      source: p.u4_split_source,
       payment_mode: payU4.mode,
       payment_ref: payU4.ref,
       execution_mode: execution.execution_mode,
@@ -1916,11 +1982,12 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
 
   const roomsData = await request("/api/practice-rooms");
   const room =
-    (roomsData.body?.rooms || []).find((r) => r.id === "room-1") || (roomsData.body?.rooms || [])[0];
+    (roomsData.body?.rooms || []).find((r) => r.id === p.u6_room_id) ||
+    (roomsData.body?.rooms || [])[0];
   if (!room) {
-    throw new Error("WOW U6 no practice room");
+    throw new Error(`WOW U6 no practice room (looked for ${p.u6_room_id})`);
   }
-  const plannedMinutes = 5;
+  const plannedMinutes = p.u6_planned_minutes;
   const u6Estimate = Number(room.rate_minor_per_min || 1) * plannedMinutes;
   const payU6 = await resolvePaymentReference(circleMode, u6Estimate, "ethglobal-wow-u6-reserve", "");
   const u6 = await request("/api/practice-bookings/reserve", {
@@ -1928,7 +1995,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       room_id: room.id,
-      dancer_name: "ETHGlobal WOW",
+      dancer_name: p.u6_dancer_name,
       planned_minutes: plannedMinutes,
       payment_mode: payU6.mode,
       payment_ref: payU6.ref,
@@ -1952,19 +2019,19 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   flushEthglobalHackathonOutput(timeline, { running: true });
 
   const packsRes = await request("/api/sample-packs");
-  const pack = (packsRes.body?.packs || []).find((p) => p.id === "pack-1");
-  const tier = pack?.tiers?.find((t) => t.id === "tier-personal");
+  const pack = (packsRes.body?.packs || []).find((row) => row.id === p.u7_pack_id);
+  const tier = pack?.tiers?.find((t) => t.id === p.u7_tier_id);
   if (!pack || !tier) {
-    throw new Error("WOW U7 pack-1 / tier-personal missing");
+    throw new Error(`WOW U7 ${p.u7_pack_id} / ${p.u7_tier_id} missing`);
   }
   const amtU7 = Number(tier.price_minor || DEMO_USDC_MINOR);
   const payU7 = await resolvePaymentReference(circleMode, amtU7, "ethglobal-wow-u7-pack", "");
-  const u7 = await request("/api/sample-packs/pack-1/purchase", {
+  const u7 = await request(`/api/sample-packs/${encodeURIComponent(p.u7_pack_id)}/purchase`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      tier_id: "tier-personal",
-      buyer_name: "ETHGlobal WOW",
+      tier_id: p.u7_tier_id,
+      buyer_name: p.u7_buyer_name,
       payment_mode: payU7.mode,
       payment_ref: payU7.ref,
       execution_mode: execution.execution_mode,
@@ -1984,9 +2051,9 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      title: `ETHGlobal WOW U8 ${Date.now().toString(36)}`,
-      sponsor_name: "WOW Demo",
-      bounty_minor: amtDemo
+      title: `${p.u8_title_prefix} ${Date.now().toString(36)}`,
+      sponsor_name: p.u8_sponsor_name,
+      bounty_minor: p.u8_bounty_minor
     })
   });
   if (!chCreate.ok || !chCreate.body?.challenge?.id) {
@@ -1999,7 +2066,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     step: "wow_u8_challenge_create",
     ok: true,
     challenge_id: challengeId,
-    bounty_minor: amtDemo
+    bounty_minor: p.u8_bounty_minor
   });
   flushEthglobalHackathonOutput(timeline, { running: true });
 
@@ -2007,8 +2074,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      dancer_name: "ETHGlobal WOW",
-      clip_url: "https://example.com/ethglobal-wow-clip"
+      dancer_name: p.u8_submit_dancer,
+      clip_url: p.u8_clip_url
     })
   });
   if (!subRes.ok || !subRes.body?.submission?.id) {
@@ -2023,7 +2090,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   const scoreRes = await request(`/api/challenges/${encodeURIComponent(challengeId)}/score`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ submission_id: submissionId, score: 94 })
+    body: JSON.stringify({ submission_id: submissionId, score: p.u8_score })
   });
   bump("u8_score", scoreRes.ok, scoreRes.status);
   timeline.push({ step: "wow_u8_score", ok: scoreRes.ok, status: scoreRes.status });
@@ -2032,7 +2099,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     throw new Error(`WOW U8 score failed (HTTP ${scoreRes.status})`);
   }
 
-  const bountyMinor = Number(chCreate.body?.challenge?.bounty_minor || amtDemo);
+  const bountyMinor = Number(chCreate.body?.challenge?.bounty_minor || p.u8_bounty_minor);
   const payU8 = await resolvePaymentReference(circleMode, bountyMinor, "ethglobal-wow-u8-payout", "");
   const u8p = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
     method: "POST",
@@ -2060,12 +2127,12 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   await appendArcExplorerStep(links, u8p.body?.execution, { label: "U8 Skill challenges + bounties", track: "U8" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
-  const itemId = "merch-1";
-  const quantity = 1;
+  const itemId = p.u10_item_id;
+  const quantity = p.u10_quantity;
   const cat = await request("/api/merch/catalog");
   const merchItem = (cat.body?.items || []).find((row) => row.id === itemId);
   if (!merchItem) {
-    throw new Error("WOW U10 merch-1 missing");
+    throw new Error(`WOW U10 merch ${itemId} missing`);
   }
   const amtU10 = Number(merchItem.price_minor || DEMO_USDC_MINOR) * quantity;
   const payU10 = await resolvePaymentReference(circleMode, amtU10, "ethglobal-wow-u10-checkout", "");
@@ -2075,7 +2142,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     body: JSON.stringify({
       item_id: itemId,
       quantity,
-      buyer_name: "ETHGlobal WOW",
+      buyer_name: p.u10_buyer_name,
       payment_mode: payU10.mode,
       payment_ref: payU10.ref,
       execution_mode: execution.execution_mode,
@@ -4164,6 +4231,7 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
 async function bootstrap() {
   applyDefaultExecutionMode();
   applyEthglobalHackathonExecutionModeUi();
+  syncEthglobalWowParamsVisibility();
   await loadConfig();
   try {
     await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
@@ -4200,5 +4268,7 @@ async function bootstrap() {
 }
 
 document.getElementById("ethglobal-demo-execution-mode")?.addEventListener("change", () => applyEthglobalHackathonExecutionModeUi());
+
+document.getElementById("ethglobal-demo-nine-circle-wow")?.addEventListener("change", syncEthglobalWowParamsVisibility);
 
 bootstrap();

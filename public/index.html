@@ -164,6 +164,68 @@
             <option value="avalanche-fuji">Avalanche Fuji</option>
           </select>
         </div>
+        <div id="ethglobal-wow-params-panel" class="ethglobal-wow-params hidden" aria-hidden="true" aria-labelledby="ethglobal-wow-params-heading">
+          <h3 id="ethglobal-wow-params-heading">9× Circle WOW — commerce inputs</h3>
+          <p class="caption ethglobal-wow-params-intro">
+            Shown when <strong>9× Circle WOW</strong> is checked. Values are sent on <strong>Run ETHGlobal hackathon demo</strong> (editable anytime).
+          </p>
+          <div class="ethglobal-wow-params-grid">
+            <div class="ethglobal-wow-param-card">
+              <h4>U1 — Tip</h4>
+              <label>Fan name <input id="wow-u1-fan-name" type="text" value="ETHGlobal Judge" /></label>
+              <label>Dancer id <input id="wow-u1-dancer-id" type="text" value="dancer-1" /></label>
+              <label>Amount (minor) <input id="wow-u1-amount-minor" type="number" min="1" value="10" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>Shared minor amount</h4>
+              <p class="caption">Used for U3 feedback, U4 split, and U8 challenge bounty.</p>
+              <label><input id="wow-shared-amount-minor" type="number" min="1" value="10" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>U2 — Tutorial unlock</h4>
+              <label>Clip id <input id="wow-u2-clip-id" type="text" value="clip-1" /></label>
+              <label>Buyer name <input id="wow-u2-buyer-name" type="text" value="ETHGlobal WOW" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>U3 — Judge feedback</h4>
+              <label>Dancer name <input id="wow-u3-dancer-name" type="text" value="WOW Demo" /></label>
+              <label>Judge name override <input id="wow-u3-judge-name" type="text" placeholder="empty = from ENS above" /></label>
+              <label>Topic <input id="wow-u3-topic" type="text" placeholder="empty = auto ethglobal-wow-…" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card ethglobal-wow-param-card-wide">
+              <h4>U4 — Crew split</h4>
+              <label>Crew name (optional) <input id="wow-u4-crew-name" type="text" placeholder="auto if empty" /></label>
+              <label>Split source <input id="wow-u4-split-source" type="text" value="ethglobal_wow" /></label>
+              <label>Members JSON <textarea id="wow-u4-members-json" rows="4" spellcheck="false">[{"name":"NOVA","wallet":"0x1111111111111111111111111111111111111111","share_bps":5000},{"name":"SHADOW","wallet":"0x2222222222222222222222222222222222222222","share_bps":3000},{"name":"RAWFIRE","wallet":"0x3333333333333333333333333333333333333333","share_bps":2000}]</textarea></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>U6 — Practice booking</h4>
+              <label>Room id <input id="wow-u6-room-id" type="text" value="room-1" /></label>
+              <label>Dancer name <input id="wow-u6-dancer-name" type="text" value="ETHGlobal WOW" /></label>
+              <label>Planned minutes <input id="wow-u6-planned-minutes" type="number" min="1" value="5" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>U7 — Sample pack</h4>
+              <label>Pack id <input id="wow-u7-pack-id" type="text" value="pack-1" /></label>
+              <label>Tier id <input id="wow-u7-tier-id" type="text" value="tier-personal" /></label>
+              <label>Buyer name <input id="wow-u7-buyer-name" type="text" value="ETHGlobal WOW" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card ethglobal-wow-param-card-wide">
+              <h4>U8 — Challenge</h4>
+              <label>Title prefix <input id="wow-u8-title-prefix" type="text" value="ETHGlobal WOW U8" /></label>
+              <label>Sponsor name <input id="wow-u8-sponsor-name" type="text" value="WOW Demo" /></label>
+              <label>Submit dancer <input id="wow-u8-submit-dancer" type="text" value="ETHGlobal WOW" /></label>
+              <label>Clip URL <input id="wow-u8-clip-url" type="text" value="https://example.com/ethglobal-wow-clip" /></label>
+              <label>Score <input id="wow-u8-score" type="number" min="0" max="100" value="94" /></label>
+            </div>
+            <div class="ethglobal-wow-param-card">
+              <h4>U10 — Merch</h4>
+              <label>Item id <input id="wow-u10-item-id" type="text" value="merch-1" /></label>
+              <label>Quantity <input id="wow-u10-quantity" type="number" min="1" value="1" /></label>
+              <label>Buyer name <input id="wow-u10-buyer-name" type="text" value="ETHGlobal WOW" /></label>
+            </div>
+          </div>
+        </div>
         <p class="ethglobal-demo-hint caption">
           Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; refresh <strong>Wallet Balances</strong> under it to confirm USDC, and save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).

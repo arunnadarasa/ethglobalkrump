@@ -149,6 +149,69 @@ pre {
   word-break: break-all;
 }
 
+.ethglobal-wow-params {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #355178;
+  background: #0f1828;
+}
+
+.ethglobal-wow-params h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+
+.ethglobal-wow-params-intro {
+  margin: 0 0 12px;
+  color: #9eb0c9;
+  font-size: 0.88rem;
+}
+
+.ethglobal-wow-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.ethglobal-wow-param-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2c3d5c;
+  background: #0c121c;
+}
+
+.ethglobal-wow-param-card-wide {
+  grid-column: 1 / -1;
+}
+
+.ethglobal-wow-param-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: #9ec5ff;
+  font-weight: 600;
+}
+
+.ethglobal-wow-param-card label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  color: #b3bfd1;
+}
+
+.ethglobal-wow-param-card input,
+.ethglobal-wow-param-card textarea {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 0.88rem;
+}
+
+.ethglobal-wow-param-card textarea {
+  font-family: ui-monospace, monospace;
+  resize: vertical;
+  min-height: 72px;
+}
+
 .hidden {
   display: none;
 }
