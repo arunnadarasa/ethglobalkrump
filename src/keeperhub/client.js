@@ -32,6 +32,23 @@ function logKeeperhubDebug(hypothesisId, message, data) {
   }).catch(() => {});
 }
 
+// #region agent log
+/** Debug-mode NDJSON ingest; keep until timeout root-cause verified. */
+function agentSessionLog(extra) {
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      timestamp: Date.now(),
+      location: extra.location || "src/keeperhub/client.js",
+      runId: "timeout-debug-pre",
+      ...extra
+    })
+  }).catch(() => {});
+}
+// #endregion
+
 /**
  * KeeperHub docs use host `app.keeperhub.com` with API root `/api`.
  * If KEEPERHUB_API_BASE is set to `https://app.keeperhub.com` (no `/api`),
@@ -135,16 +152,74 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   const timeoutMs = Number(process.env.KEEPERHUB_REQUEST_TIMEOUT_MS || defaultTimeoutMs);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const wall0 = Date.now();
+  let hostHint = "?";
+  try {
+    hostHint = new URL(url).host;
+  } catch (_u) {
+    hostHint = "invalid-url";
+  }
   let response;
   try {
+    if (executeRoute) {
+      // #region agent log
+      agentSessionLog({
+        hypothesisId: "H1-H5",
+        location: "keeperhubFetch:before_fetch",
+        message: "execute_route_fetch_start",
+        data: {
+          path,
+          method,
+          timeoutMs,
+          host: hostHint,
+          bodyChars: body !== undefined ? JSON.stringify(body).length : 0
+        }
+      });
+      // #endregion
+    }
     response = await fetch(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal
     });
+    if (executeRoute) {
+      // #region agent log
+      agentSessionLog({
+        hypothesisId: "H1,H3,H4",
+        location: "keeperhubFetch:after_fetch",
+        message: "execute_route_response_headers",
+        data: { path, ms: Date.now() - wall0, status: response.status, ok: response.ok }
+      });
+      // #endregion
+    }
   } catch (error) {
+    if (executeRoute && error?.name !== "AbortError") {
+      // #region agent log
+      agentSessionLog({
+        hypothesisId: "H2,H5",
+        location: "keeperhubFetch:fetch_throw",
+        message: "execute_route_fetch_throw",
+        data: { path, ms: Date.now() - wall0, errorName: error?.name, errorMessage: String(error?.message || "").slice(0, 220) }
+      });
+      // #endregion
+    }
     if (error?.name === "AbortError") {
+      if (executeRoute) {
+        // #region agent log
+        agentSessionLog({
+          hypothesisId: "H1,H2,H3,H4",
+          location: "keeperhubFetch:abort",
+          message: "execute_route_aborted",
+          data: {
+            path,
+            elapsedMs: Date.now() - wall0,
+            deadlineMs: timeoutMs,
+            nearDeadline: Math.abs(Date.now() - wall0 - timeoutMs) < 750
+          }
+        });
+        // #endregion
+      }
       const err = new Error(`KeeperHub request timed out after ${timeoutMs}ms for ${method} ${path}`);
       err.status = 504;
       err.code = "keeperhub_timeout";
@@ -154,7 +229,27 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   } finally {
     clearTimeout(timeout);
   }
+  if (executeRoute) {
+    // #region agent log
+    agentSessionLog({
+      hypothesisId: "H3",
+      location: "keeperhubFetch:before_body_text",
+      message: "execute_route_body_read_begin",
+      data: { path, ms: Date.now() - wall0 }
+    });
+    // #endregion
+  }
   const text = await response.text();
+  if (executeRoute) {
+    // #region agent log
+    agentSessionLog({
+      hypothesisId: "H3,H1,H4",
+      location: "keeperhubFetch:after_body_text",
+      message: "execute_route_body_complete",
+      data: { path, ms: Date.now() - wall0, textChars: String(text || "").length, httpOk: response.ok }
+    });
+    // #endregion
+  }
   let parsed = {};
   try {
     parsed = text ? JSON.parse(text) : {};
@@ -292,6 +387,21 @@ async function executeTransferPayout({ recipientAddress, amountMinor, network, i
       payload.tokenConfig = JSON.stringify(tokenConfigPayload);
     }
   }
+
+  // #region agent log
+  agentSessionLog({
+    hypothesisId: "H1,H4,H5",
+    location: "executeTransferPayout:payload_ready",
+    message: "transfer_payload_shape",
+    data: {
+      networkField: payload.network,
+      amount,
+      tokenAddrPresent: Boolean(payload.tokenAddress),
+      mode,
+      recipientLen: String(recipientAddress || "").length
+    }
+  });
+  // #endregion
 
   return keeperhubFetch("/execute/transfer", {
     method: "POST",

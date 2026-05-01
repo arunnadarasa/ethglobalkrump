@@ -32,6 +32,22 @@ const { makeAgentOrchestrator } = require("./agents/orchestrator");
 const { createVyperSettlementPolicy } = require("./settlement/vyperPolicy");
 const { createExecutionRouter } = require("./settlement/executionRouter");
 const keeperhub = require("./keeperhub/client");
+
+// #region agent log
+function declareWinnerAgentLog(extra) {
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      runId: "timeout-debug-pre",
+      timestamp: Date.now(),
+      location: "src/server.js:declare-winner",
+      ...extra
+    })
+  }).catch(() => {});
+}
+// #endregion
 const { createX402Client } = require("./x402/client");
 const { resolveAgentEns } = require("./ens/resolveAgentEns");
 const { setupAgentEns } = require("./ens/setupAgentEns");
@@ -2872,6 +2888,18 @@ app.post("/api/battle/declare-winner", async (req, res) => {
           };
           stored.settlement_status = "keeperhub_error";
         } else {
+          // #region agent log
+          declareWinnerAgentLog({
+            hypothesisId: "H1,H4",
+            message: "pre_execute_transfer",
+            data: {
+              khMode,
+              execute_network: summary.execute_network,
+              pool_minor: totalPoolMinor,
+              recipientSuffix: String(winner.wallet || "").slice(-10)
+            }
+          });
+          // #endregion
           const transfer = await keeperhub.executeTransferPayout({
             recipientAddress: String(winner.wallet).trim(),
             amountMinor: totalPoolMinor,
@@ -2892,6 +2920,17 @@ app.post("/api/battle/declare-winner", async (req, res) => {
           }
         }
       } catch (error) {
+        // #region agent log
+        declareWinnerAgentLog({
+          hypothesisId: "H1-H5",
+          message: "declare_winner_transfer_caught",
+          data: {
+            code: error?.code,
+            http_status: error?.status,
+            msgSlice: String(error?.message || "").slice(0, 380)
+          }
+        });
+        // #endregion
         stored.keeperhub = { ok: false, error: error.message, http_status: error.status };
         stored.settlement_status = "keeperhub_error";
       }

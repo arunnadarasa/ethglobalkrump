@@ -85,6 +85,7 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
 
 5. **Environment and shell friction during setup**
    - Port collisions (`EADDRINUSE`) and shell syntax differences (`zsh` vs `bash`) slowed iteration.
+   - **`node --watch`** makes this worse: a failed bind leaves the watcher alive “waiting for file changes” instead of exiting, which hides that **3000** is still owned by another process.
    - Endpoint naming mismatches (expected vs actual) caused temporary dead ends.
 
 6. **State split between UI and backend caused payment drift**
@@ -205,6 +206,14 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Registry contract address used for backlink checks: `0xd4978db542eec50e225ad8441662e96ed75612a8` (Sepolia).
    - Upsert proof tx: `0xffb5e38c698d16d050cdbe31b5f779eaa5e171534c3a2ef3ac2e4cc1c608a8f1`.
    - Verify endpoint returns `ensip25_spec_verified=true`, `registry_side_verified=true`, `ensip25_bidirectional_verified=true` for matched ENS + agentId.
+
+24. **Local dev server restarts must release the listen port first**
+   - A second `node --watch src/server.js` while port **3000** is still held returns **`EADDRINUSE`**; the watcher then waits on “file changes” and looks broken even though the real issue is the socket.
+   - Fix: stop the prior process (or free **3000**) before starting again; default URL stays **`http://localhost:3000`** when **`PORT`** is unset.
+
+25. **KeeperHub `/execute/*` timeouts need staged evidence, not a single timer bit**
+   - Logging **before fetch**, **after response headers**, **after body read**, and on **`AbortError`** distinguishes slow TLS/connect vs slow body vs true **`KEEPERHUB_REQUEST_TIMEOUT_MS`** deadline.
+   - Battle **`declare-winner`** → **`executeTransferPayout`** benefits from the same lifecycle signals plus non-secret payload-shape hints when diagnosing **`keeperhub_timeout`** vs upstream errors.
 
 ## Practical Recommendations for Next Iteration
 
