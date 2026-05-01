@@ -61,7 +61,7 @@
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
           Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (intent you pick below must appear in ENS <code>allowedIntents</code>) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout on
-          <strong>Arc Testnet</strong>. Judge default <code>gaanakrump.eth</code> (pre-configured; use <strong>Trust verify only</strong> unless you are re-running a live ENS write). Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
+          <strong>Arc Testnet</strong>. Judge default <code>princeyarjack.eth</code> (pre-configured; use <strong>Trust verify only</strong> unless you are re-running a live ENS write). Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
           — pair with self-hosted KeeperHub at <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> (+ <code>KEEPERHUB_API_KEY_LOCAL</code>). Long waits are OK to trim in edit.
         </p>
         <div class="ethglobal-demo-story" role="list">
@@ -70,7 +70,7 @@
             <li>Battle pool (U5 entrants)</li>
             <li>ENS resolves judge agent + ENSIP-25 bidirectional trust for high-risk payout intent</li>
             <li>Vyper settlement policy cue (Arc proof)</li>
-            <li>UCP checkout + orchestrator trace (<code>tip_dancer</code> or <code>challenge_payout</code>)</li>
+            <li>UCP checkout + orchestrator trace (<code>tip_dancer</code> or <code>challenge_payout</code>); optional <strong>9× Circle WOW</strong> runs eight paid commerce APIs with Circle + the same agent intent as beat 9</li>
             <li>Battle closes — winner selected</li>
             <li>Local KeeperHub executes Arc Testnet payout to winner (no CCTP in this preset)</li>
           </ol>
@@ -90,8 +90,8 @@
         <div class="row ethglobal-demo-fields">
           <input
             id="ethglobal-demo-ens-name"
-            placeholder="Judge ENS (default gaanakrump.eth)"
-            value="gaanakrump.eth"
+            placeholder="Judge ENS (default princeyarjack.eth)"
+            value="princeyarjack.eth"
             style="min-width: 260px"
           />
           <input
@@ -138,6 +138,10 @@
             <input id="ethglobal-demo-execute-keeperhub" type="checkbox" checked />
             Execute payout via KeeperHub
           </label>
+          <label title="Runs eight paid commerce calls with Circle (U1/U2/U3/U4/U6/U7/U8 payout/U10) after Vyper, then beat 9 = selected agent/UCP intent. Requires Circle wallet mode and funded ARC-TESTNET USDC.">
+            <input id="ethglobal-demo-nine-circle-wow" type="checkbox" />
+            9× Circle WOW (commerce loop + agent)
+          </label>
           <label>
             Battle entry fee (minor)
             <input id="ethglobal-demo-entry-fee" type="number" min="10" value="10" title="10 minors ≈ US$0.10 (see server MIN_COMMERCIAL_MINOR)" style="width: 90px" />
@@ -163,7 +167,7 @@
         <p class="ethglobal-demo-hint caption">
           Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; refresh <strong>Wallet Balances</strong> under it to confirm USDC, and save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
-          Default judge <code>gaanakrump.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask);           demo preview alone cannot satisfy bidirectional trust for high-risk intents. To use <strong>challenge_payout</strong>, pick it above and ensure the ENS <code>allowedIntents</code> CSV includes both intents you need — set <strong>allowedIntents CSV</strong> in the ENS Agent Identity panel (guided write) or on-chain manually.
+          Default judge <code>princeyarjack.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask);           demo preview alone cannot satisfy bidirectional trust for high-risk intents. To use <strong>challenge_payout</strong>, pick it above and ensure the ENS <code>allowedIntents</code> CSV includes both intents you need — set <strong>allowedIntents CSV</strong> in the ENS Agent Identity panel (guided write) or on-chain manually. Uncheck <strong>9× Circle WOW</strong> for the original single-agent UCP step only (~one Circle txn for the intent).
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
       </section>

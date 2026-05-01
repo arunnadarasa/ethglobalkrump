@@ -39,6 +39,11 @@ function deriveAgentIdFromEnsName(ensNameRaw) {
   return `agent.${safe}`;
 }
 
+function judgeLabelFromEns(ensFull) {
+  const n = normalizeEnsNameInput(ensFull);
+  return n || "Judge";
+}
+
 function debugEnsLog() {}
 
 let unlockToken = "";
@@ -1530,6 +1535,364 @@ async function registerHackathonBattleSeedEntrant({ dancer_name, wallet, timelin
   return response;
 }
 
+/**
+ * Eight Circle-funded commerce beats (after Vyper, before hackathon agent session).
+ * Each beat performs a POST that triggers maybeExecuteOnlineTransfer with client payment_ref.
+ */
+async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName }) {
+  const execution = getExecutionSelection("battle-execution-mode", "battle-execution-network");
+  const circleMode = "circle_wallet";
+  const beatSummaries = [];
+  const judgeName = judgeLabelFromEns(ensName);
+  const topicLabel = `ethglobal-wow-${Date.now()}`;
+
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      location: "public/main.js:runEthglobalHackathonEightCircleCommercialBeats",
+      message: "wow_eight_enter",
+      data: {
+        execution_mode: execution.execution_mode,
+        execution_network: execution.execution_network,
+        judgeNameLen: judgeName.length
+      },
+      timestamp: Date.now(),
+      hypothesisId: "H1",
+      runId: "pre-fix"
+    })
+  }).catch(() => {});
+  // #endregion
+
+  const bump = (id, ok, status, extra = {}) => {
+    beatSummaries.push({ id, ok, status, ...extra });
+  };
+
+  const amtDemo = DEMO_USDC_MINOR;
+
+  const payU1 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u1-tip", "");
+  const u1 = await request("/api/tips", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fan_name: "ETHGlobal Judge",
+      dancer_id: "dancer-1",
+      amount_minor: amtDemo,
+      payment_mode: payU1.mode,
+      payment_ref: payU1.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u1_tip", u1.ok, u1.status);
+  timeline.push({ step: "wow_circle_u1_tip", ok: u1.ok, status: u1.status, amount_minor: amtDemo });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u1.ok) {
+    throw new Error(`WOW U1 tip failed (HTTP ${u1.status})`);
+  }
+
+  const clipList = await request("/api/tutorials");
+  const clip = (clipList.body?.tutorials || []).find((row) => row.id === "clip-1");
+  if (!clip) {
+    throw new Error("WOW U2 clip-1 missing");
+  }
+  const amtU2 = Number(clip.priceMinor);
+  const payU2 = await resolvePaymentReference(circleMode, amtU2, "ethglobal-wow-u2-pay", "");
+  const u2 = await request("/api/tutorials/clip-1/pay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      buyer_name: "ETHGlobal WOW",
+      payment_mode: payU2.mode,
+      payment_ref: payU2.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u2_pay", u2.ok, u2.status, { amount_minor: amtU2 });
+  timeline.push({ step: "wow_circle_u2_tutorial", ok: u2.ok, status: u2.status, amount_minor: amtU2 });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u2.ok) {
+    throw new Error(`WOW U2 tutorial pay failed (HTTP ${u2.status})`);
+  }
+
+  const payU3 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u3-feedback", "");
+  const u3 = await request("/api/judge-feedback/requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dancer_name: "WOW Demo",
+      judge_name: judgeName,
+      topic: topicLabel,
+      amount_minor: amtDemo,
+      payment_mode: payU3.mode,
+      payment_ref: payU3.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u3_feedback", u3.ok, u3.status);
+  timeline.push({
+    step: "wow_circle_u3_judge_feedback",
+    ok: u3.ok,
+    status: u3.status,
+    request_id: u3.body?.request?.id || null
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u3.ok) {
+    throw new Error(`WOW U3 judge feedback failed (HTTP ${u3.status})`);
+  }
+
+  const crewName = `ETHGlobal WOW Crew ${Date.now().toString(36)}`;
+  const crewRes = await request("/api/crews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: crewName,
+      members: [
+        { name: "NOVA", wallet: "0x1111111111111111111111111111111111111111", share_bps: 5000 },
+        { name: "SHADOW", wallet: "0x2222222222222222222222222222222222222222", share_bps: 3000 },
+        { name: "RAWFIRE", wallet: "0x3333333333333333333333333333333333333333", share_bps: 2000 }
+      ]
+    })
+  });
+  if (!crewRes.ok || !crewRes.body?.crew?.id) {
+    bump("u4_create", crewRes.ok, crewRes.status);
+    throw new Error(`WOW U4 crew create failed (HTTP ${crewRes.status})`);
+  }
+  bump("u4_create", true, crewRes.status);
+  const crewId = crewRes.body.crew.id;
+  const payU4 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u4-split", "");
+  const u4 = await request(`/api/crews/${encodeURIComponent(crewId)}/split-settlement`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount_minor: amtDemo,
+      source: "ethglobal_wow",
+      payment_mode: payU4.mode,
+      payment_ref: payU4.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u4_split", u4.ok, u4.status);
+  timeline.push({ step: "wow_circle_u4_crew_split", ok: u4.ok, status: u4.status, crew_id: crewId });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u4.ok) {
+    throw new Error(`WOW U4 split failed (HTTP ${u4.status})`);
+  }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      location: "public/main.js:runEthglobalHackathonEightCircleCommercialBeats:mid",
+      message: "wow_eight_mid_after_u4",
+      data: { beatSummaries: beatSummaries.slice() },
+      timestamp: Date.now(),
+      hypothesisId: "H2",
+      runId: "pre-fix"
+    })
+  }).catch(() => {});
+  // #endregion
+
+  const roomsData = await request("/api/practice-rooms");
+  const room =
+    (roomsData.body?.rooms || []).find((r) => r.id === "room-1") || (roomsData.body?.rooms || [])[0];
+  if (!room) {
+    throw new Error("WOW U6 no practice room");
+  }
+  const plannedMinutes = 5;
+  const u6Estimate = Number(room.rate_minor_per_min || 1) * plannedMinutes;
+  const payU6 = await resolvePaymentReference(circleMode, u6Estimate, "ethglobal-wow-u6-reserve", "");
+  const u6 = await request("/api/practice-bookings/reserve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      room_id: room.id,
+      dancer_name: "ETHGlobal WOW",
+      planned_minutes: plannedMinutes,
+      payment_mode: payU6.mode,
+      payment_ref: payU6.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u6_reserve", u6.ok, u6.status, { estimated_minor: u6Estimate });
+  timeline.push({
+    step: "wow_circle_u6_practice",
+    ok: u6.ok,
+    status: u6.status,
+    estimated_minor: u6Estimate,
+    booking_id: u6.body?.booking?.id || null
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u6.ok) {
+    throw new Error(`WOW U6 practice reserve failed (HTTP ${u6.status})`);
+  }
+
+  const packsRes = await request("/api/sample-packs");
+  const pack = (packsRes.body?.packs || []).find((p) => p.id === "pack-1");
+  const tier = pack?.tiers?.find((t) => t.id === "tier-personal");
+  if (!pack || !tier) {
+    throw new Error("WOW U7 pack-1 / tier-personal missing");
+  }
+  const amtU7 = Number(tier.price_minor || DEMO_USDC_MINOR);
+  const payU7 = await resolvePaymentReference(circleMode, amtU7, "ethglobal-wow-u7-pack", "");
+  const u7 = await request("/api/sample-packs/pack-1/purchase", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tier_id: "tier-personal",
+      buyer_name: "ETHGlobal WOW",
+      payment_mode: payU7.mode,
+      payment_ref: payU7.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u7_pack", u7.ok, u7.status, { amount_minor: amtU7 });
+  timeline.push({ step: "wow_circle_u7_sample_pack", ok: u7.ok, status: u7.status, amount_minor: amtU7 });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u7.ok) {
+    throw new Error(`WOW U7 sample pack failed (HTTP ${u7.status})`);
+  }
+
+  const chCreate = await request("/api/challenges", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: `ETHGlobal WOW U8 ${Date.now().toString(36)}`,
+      sponsor_name: "WOW Demo",
+      bounty_minor: amtDemo
+    })
+  });
+  if (!chCreate.ok || !chCreate.body?.challenge?.id) {
+    bump("u8_create", chCreate.ok, chCreate.status);
+    throw new Error(`WOW U8 create failed (HTTP ${chCreate.status})`);
+  }
+  const challengeId = chCreate.body.challenge.id;
+  bump("u8_create", true, chCreate.status);
+  timeline.push({
+    step: "wow_u8_challenge_create",
+    ok: true,
+    challenge_id: challengeId,
+    bounty_minor: amtDemo
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+
+  const subRes = await request(`/api/challenges/${encodeURIComponent(challengeId)}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dancer_name: "ETHGlobal WOW",
+      clip_url: "https://example.com/ethglobal-wow-clip"
+    })
+  });
+  if (!subRes.ok || !subRes.body?.submission?.id) {
+    bump("u8_submit", subRes.ok, subRes.status);
+    throw new Error(`WOW U8 submit failed (HTTP ${subRes.status})`);
+  }
+  const submissionId = subRes.body.submission.id;
+  bump("u8_submit", true, subRes.status);
+  timeline.push({ step: "wow_u8_submit", submission_id: submissionId });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+
+  const scoreRes = await request(`/api/challenges/${encodeURIComponent(challengeId)}/score`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ submission_id: submissionId, score: 94 })
+  });
+  bump("u8_score", scoreRes.ok, scoreRes.status);
+  timeline.push({ step: "wow_u8_score", ok: scoreRes.ok, status: scoreRes.status });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!scoreRes.ok) {
+    throw new Error(`WOW U8 score failed (HTTP ${scoreRes.status})`);
+  }
+
+  const bountyMinor = Number(chCreate.body?.challenge?.bounty_minor || amtDemo);
+  const payU8 = await resolvePaymentReference(circleMode, bountyMinor, "ethglobal-wow-u8-payout", "");
+  const u8p = await request(`/api/challenges/${encodeURIComponent(challengeId)}/payout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      winner_submission_id: submissionId,
+      payment_mode: payU8.mode,
+      payment_ref: payU8.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u8_payout", u8p.ok, u8p.status, { amount_minor: bountyMinor });
+  timeline.push({
+    step: "wow_circle_u8_challenge_payout",
+    ok: u8p.ok,
+    status: u8p.status,
+    amount_minor: bountyMinor,
+    challenge_id: challengeId
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u8p.ok) {
+    throw new Error(`WOW U8 payout failed (HTTP ${u8p.status})`);
+  }
+
+  const itemId = "merch-1";
+  const quantity = 1;
+  const cat = await request("/api/merch/catalog");
+  const merchItem = (cat.body?.items || []).find((row) => row.id === itemId);
+  if (!merchItem) {
+    throw new Error("WOW U10 merch-1 missing");
+  }
+  const amtU10 = Number(merchItem.price_minor || DEMO_USDC_MINOR) * quantity;
+  const payU10 = await resolvePaymentReference(circleMode, amtU10, "ethglobal-wow-u10-checkout", "");
+  const u10 = await request("/api/merch/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      item_id: itemId,
+      quantity,
+      buyer_name: "ETHGlobal WOW",
+      payment_mode: payU10.mode,
+      payment_ref: payU10.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  bump("u10_checkout", u10.ok, u10.status, { amount_minor: amtU10 });
+  timeline.push({ step: "wow_circle_u10_merch", ok: u10.ok, status: u10.status, amount_minor: amtU10 });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  if (!u10.ok) {
+    throw new Error(`WOW U10 merch checkout failed (HTTP ${u10.status})`);
+  }
+
+  timeline.push({
+    step: "wow_circle_commerce_complete",
+    beats: beatSummaries.length,
+    summary: beatSummaries
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+
+  // #region agent log
+  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+    body: JSON.stringify({
+      sessionId: "995d4d",
+      location: "public/main.js:runEthglobalHackathonEightCircleCommercialBeats:end",
+      message: "wow_eight_complete",
+      data: { beatSummaries },
+      timestamp: Date.now(),
+      hypothesisId: "H3",
+      runId: "pre-fix"
+    })
+  }).catch(() => {});
+  // #endregion
+}
+
 async function runEthglobalHackathonDemoFromUi() {
   const timeline = [];
   const btn = document.getElementById("ethglobal-hackathon-run-demo");
@@ -1592,6 +1955,7 @@ async function runEthglobalHackathonDemoFromUi() {
       document.getElementById("ethglobal-demo-hackathon-intent")?.value || "tip_dancer";
     document.getElementById("agent-intent").value = hackathonAgentIntent;
     const payRail = document.getElementById("ethglobal-demo-battle-payment-mode").value;
+    const nineCircleWow = document.getElementById("ethglobal-demo-nine-circle-wow")?.checked === true;
     if (payRail === "circle_wallet") {
       const circleBc = document.getElementById("circle-blockchain");
       if (circleBc) {
@@ -1602,6 +1966,7 @@ async function runEthglobalHackathonDemoFromUi() {
       step: "demo_rails",
       at: new Date().toISOString(),
       battle_payment_mode: payRail,
+      nine_circle_wow: nineCircleWow,
       execution_mode: document.getElementById("ethglobal-demo-execution-mode").value,
       hackathon_agent_intent: hackathonAgentIntent,
       circle_blockchain: document.getElementById("circle-blockchain")?.value || null,
@@ -1726,8 +2091,43 @@ async function runEthglobalHackathonDemoFromUi() {
     flushEthglobalHackathonOutput(timeline, { running: true });
     setEnsStepStatus("ethglobal-demo-step-vyper", "done");
 
-    /* 4 Agent session UCP trace — intent from ethglobal-demo-hackathon-intent (must be listed on judge ENS allowedIntents) */
+    /* 4 UCP trace: optional 8× Circle commerce (WOW), then agent session (beat 9) — intent must be listed on judge ENS allowedIntents */
+    if (nineCircleWow && payRail !== "circle_wallet") {
+      timeline.push({
+        step: "error",
+        message:
+          "9× Circle WOW requires Circle wallet as battle payment mode (save wallet + ARC-TESTNET USDC). Uncheck WOW or switch payment mode."
+      });
+      setEnsStepStatus("ethglobal-demo-step-ucp", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+
     setEnsStepStatus("ethglobal-demo-step-ucp", "active");
+    if (nineCircleWow && payRail === "circle_wallet") {
+      await runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName });
+    }
+
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        location: "public/main.js:runEthglobalHackathonDemoFromUi:beforeAgent",
+        message: "wow_agent_beat_precheck",
+        data: {
+          nineCircleWow,
+          payRail,
+          intent: hackathonAgentIntent
+        },
+        timestamp: Date.now(),
+        hypothesisId: "H1",
+        runId: "pre-fix"
+      })
+    }).catch(() => {});
+    // #endregion
+
     const agentCtxSave = document.getElementById("agent-context-json")?.value || "";
     document.getElementById("agent-payment-mode").value = document.getElementById(
       "ethglobal-demo-battle-payment-mode"

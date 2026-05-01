@@ -2860,7 +2860,13 @@ app.post("/api/battle/declare-winner", async (req, res) => {
           stored.keeperhub = {
             ok: false,
             error:
-              "Arc testnet not found in KeeperHub chain list, or slug unknown. Set KEEPERHUB_EXECUTE_NETWORK (see README)."
+              "Arc testnet not found in KeeperHub chain list, or slug unknown. Set KEEPERHUB_EXECUTE_NETWORK or KEEPERHUB_API_BASE=http://localhost:3001/api (+ key). See payout.api_base_seen / summary_error.",
+            api_base_seen: summary.api_base || null,
+            summary_error: summary.error || null,
+            chains_hint:
+              summary.api_base && !String(summary.api_base).includes("localhost") && !String(summary.api_base).includes("127.0.0.1")
+                ? "Krump is calling KeeperHub at the URL above — if self-hosted KeeperHub runs on localhost, set KEEPERHUB_API_BASE or KEEPERHUB_API_BASE_LOCAL so /chains sees your chains."
+                : null
           };
           stored.settlement_status = "keeperhub_error";
         } else {

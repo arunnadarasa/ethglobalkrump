@@ -43,12 +43,15 @@ function getBaseUrl(mode = "auto") {
   const localBase = (process.env.KEEPERHUB_API_BASE_LOCAL || "").trim();
   const onlineBase = (process.env.KEEPERHUB_API_BASE_ONLINE || "").trim();
   const sharedLooksLocal = /localhost|127\.0\.0\.1/i.test(sharedBase);
+  // If shared base omitted but KEEPERHUB_API_BASE_LOCAL is local, REST should hit localhost
+  // (fixes declare-winner /chains going to prod and missing Arc despite local KeeperHub).
+  const inferredSharedWhenUnset = sharedBase.trim() ? sharedBase : localBase || "";
   let base =
     normalizedMode === "local"
       ? localBase || sharedBase || DEFAULT_BASE
       : normalizedMode === "online"
         ? onlineBase || (sharedLooksLocal ? DEFAULT_BASE : sharedBase) || DEFAULT_BASE
-        : sharedBase || DEFAULT_BASE;
+        : inferredSharedWhenUnset.trim() ? inferredSharedWhenUnset.replace(/\/$/, "") : DEFAULT_BASE;
   base = base.replace(/\/$/, "");
   if (/^https?:\/\/app\.keeperhub\.com$/i.test(base)) {
     return DEFAULT_BASE;
@@ -298,6 +301,22 @@ async function getExecutionStatus(executionId, { mode = "auto" } = {}) {
   return keeperhubFetch(`/execute/${id}/status`, { method: "GET", executeRoute: true, mode });
 }
 
+/**
+ * Prefer arc-testnet fallback when KeeperHub clearly targets localhost, even if
+ * KEEPERHUB_API_BASE is unset (getBaseUrl("auto") would otherwise default to prod).
+ */
+function shouldUseArcTestnetSlugFallback(baseForSummary) {
+  const localEnv = String(process.env.KEEPERHUB_API_BASE_LOCAL || "").trim();
+  return (
+    /localhost|127\.0\.0\.1/i.test(String(baseForSummary || "")) ||
+    /localhost|127\.0\.0\.1/i.test(localEnv)
+  );
+}
+
+function resolveLocalArcFallbackExecuteNetworkSlug() {
+  return String(process.env.KEEPERHUB_EXECUTE_NETWORK || "").trim() || "arc-testnet";
+}
+
 async function getStatusSummary(arcChainId) {
   const baseForSummary = getBaseUrl("auto");
   const configured = isConfigured();
@@ -315,7 +334,33 @@ async function getStatusSummary(arcChainId) {
   try {
     const chains = await listChains({ includeDisabled: true });
     const chain = pickArcChain(chains, arcChainId);
-    const executeNetwork = resolveExecuteNetworkSlug(chain);
+    const executeNetworkFromSlug = resolveExecuteNetworkSlug(chain);
+    /**
+     * Self-hosted KeeperHub often omits Arc from GET /chains even though direct execution
+     * accepts a known slug. When API base looks local OR KEEPERHUB_API_BASE_LOCAL is local,
+     * fall back so hackathon payouts still run even if KEEPERHUB_API_BASE was left unset.
+     * Hosted cloud: Still require Arc in chains or KEEPERHUB_EXECUTE_NETWORK explicitly.
+     */
+    const localhostBase = shouldUseArcTestnetSlugFallback(baseForSummary);
+    let executeNetwork = executeNetworkFromSlug;
+    if (!executeNetwork && localhostBase) {
+      executeNetwork = resolveLocalArcFallbackExecuteNetworkSlug();
+    }
+
+    // #region agent log
+    logKeeperhubDebug("KH-H1", "getStatusSummary execute slug resolution", {
+      chainCount: Array.isArray(chains) ? chains.length : null,
+      arcChainIdRequested: Number(arcChainId),
+      arcRowMatched: Boolean(chain),
+      slugFromChainsOrOverride: executeNetworkFromSlug,
+      localhostBase,
+      localSlugFallbackApplied: Boolean(!executeNetworkFromSlug && executeNetwork),
+      resolvedExecuteNetwork: executeNetwork || null,
+      keeperhub_api_base_local_set: Boolean(String(process.env.KEEPERHUB_API_BASE_LOCAL || "").trim()),
+      hypothesisIdTags: ["H-Arc-not-in-list", "H-env-override"]
+    });
+    // #endregion
+
     return {
       configured: true,
       api_base: baseForSummary,
@@ -335,12 +380,22 @@ async function getStatusSummary(arcChainId) {
       token_address_configured: Boolean(resolveTokenAddress())
     };
   } catch (error) {
+    const localhostBase = shouldUseArcTestnetSlugFallback(baseForSummary);
+    const executeNetworkFallback = localhostBase ? resolveLocalArcFallbackExecuteNetworkSlug() : null;
+    // #region agent log
+    logKeeperhubDebug("KH-H1-catch", "getStatusSummary listChains failed", {
+      errorMessage: String(error.message || ""),
+      localhostBase,
+      resolvedExecuteNetwork: executeNetworkFallback,
+      hypothesisIdTags: ["H-listChains-throw"]
+    });
+    // #endregion
     return {
       configured: true,
       api_base: baseForSummary,
       arc_chain_id: Number(arcChainId),
       arc_supported: false,
-      execute_network: null,
+      execute_network: executeNetworkFallback,
       chain: null,
       error: error.message
     };
