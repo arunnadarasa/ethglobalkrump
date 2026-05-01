@@ -355,10 +355,32 @@ function getExecutionSelection(modeElementId, networkElementId) {
 
 function applyDefaultExecutionMode() {
   document.querySelectorAll('select[id$="execution-mode"]').forEach((select) => {
+    if (select.id === "ethglobal-demo-execution-mode") {
+      return;
+    }
     if (Array.from(select.options).some((option) => option.value === "online")) {
       select.value = "online";
     }
   });
+}
+
+function applyEthglobalHackathonExecutionModeUi() {
+  const modeSel = document.getElementById("ethglobal-demo-execution-mode");
+  const netSel = document.getElementById("ethglobal-demo-execution-network");
+  if (!modeSel || !netSel) return;
+  const mode = modeSel.value;
+  const hasArc = Array.from(netSel.options).some((o) => o.value === "arc-testnet");
+  if (mode === "local") {
+    if (hasArc) netSel.value = "arc-testnet";
+    netSel.disabled = true;
+    netSel.title = "Execution local stays on Arc Testnet (KeeperHub slug arc-testnet; no bridge destination).";
+  } else {
+    netSel.disabled = false;
+    netSel.title = "";
+    if (netSel.value === "arc-testnet") {
+      netSel.value = "base-sepolia";
+    }
+  }
 }
 
 async function loadAgentCapabilitiesFromUi() {
@@ -1441,6 +1463,7 @@ async function runEthglobalHackathonDemoFromUi() {
 
   try {
     syncEthglobalHackathonPanels();
+    applyEthglobalHackathonExecutionModeUi();
     const payRail = document.getElementById("ethglobal-demo-battle-payment-mode").value;
     if (payRail === "circle_wallet") {
       const circleBc = document.getElementById("circle-blockchain");
@@ -3457,6 +3480,7 @@ document.getElementById("u10-checkout").addEventListener("click", async () => {
 
 async function bootstrap() {
   applyDefaultExecutionMode();
+  applyEthglobalHackathonExecutionModeUi();
   await loadConfig();
   try {
     await fundKeeperhubOnlineSourceFromUi({ openFaucet: false });
@@ -3507,5 +3531,7 @@ async function bootstrap() {
   await loadTutorials();
   await refreshBattle();
 }
+
+document.getElementById("ethglobal-demo-execution-mode")?.addEventListener("change", () => applyEthglobalHackathonExecutionModeUi());
 
 bootstrap();
