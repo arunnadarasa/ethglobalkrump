@@ -1334,9 +1334,122 @@ async function evaluateSettlementFromUi() {
 
 function resetEthglobalHackathonStepChips() {
   clearEthglobalHackathonExplorerLinks();
+  resetHackathonBeatStrip();
   ["ethglobal-demo-step-seed", "ethglobal-demo-step-ens", "ethglobal-demo-step-vyper", "ethglobal-demo-step-ucp", "ethglobal-demo-step-close", "ethglobal-demo-step-keeperhub"].forEach((id) => {
     setEnsStepStatus(id, null);
   });
+}
+
+/** Ordered Arc beat rows: optional U5 entry, WOW commerce U1–U10 (no U9 in spine), U5 prize payout. */
+const HACKATHON_BEAT_DEFS = [
+  { track: "U5-entry", badge: "U5", title: "Battle entry", wowOnly: false },
+  { track: "U1", badge: "U1", title: "Live tipping", wowOnly: true },
+  { track: "U2", badge: "U2", title: "Tutorial unlock", wowOnly: true },
+  { track: "U3", badge: "U3", title: "Judge feedback", wowOnly: true },
+  { track: "U4", badge: "U4", title: "Crew split", wowOnly: true },
+  { track: "U6", badge: "U6", title: "Practice booking", wowOnly: true },
+  { track: "U7", badge: "U7", title: "Sample pack", wowOnly: true },
+  { track: "U8", badge: "U8", title: "Challenge payout", wowOnly: true },
+  { track: "U10", badge: "U10", title: "Merch", wowOnly: true },
+  { track: "U5-payout", badge: "U5", title: "Prize payout", wowOnly: false }
+];
+
+function resetHackathonBeatStrip() {
+  const wrap = document.getElementById("ethglobal-hackathon-beat-strip");
+  const rowsRoot = document.getElementById("ethglobal-hackathon-beat-rows");
+  if (wrap) wrap.classList.add("hidden");
+  if (rowsRoot) rowsRoot.innerHTML = "";
+}
+
+function initHackathonBeatStrip({ nineCircleWow, u5EntryWillRun }) {
+  const wrap = document.getElementById("ethglobal-hackathon-beat-strip");
+  const rowsRoot = document.getElementById("ethglobal-hackathon-beat-rows");
+  if (!wrap || !rowsRoot) return;
+  rowsRoot.innerHTML = "";
+  for (const def of HACKATHON_BEAT_DEFS) {
+    const row = document.createElement("div");
+    row.className = "ethglobal-beat-row ethglobal-beat-row--waiting";
+    row.dataset.hackathonBeat = def.track;
+    if (def.wowOnly && !nineCircleWow) {
+      row.classList.add("hidden");
+    }
+    row.innerHTML = `<span class="ethglobal-beat-badge"></span><span class="ethglobal-beat-title"></span><span class="ethglobal-beat-status">Waiting</span><a class="ethglobal-beat-link hidden" target="_blank" rel="noopener noreferrer"></a>`;
+    row.querySelector(".ethglobal-beat-badge").textContent = def.badge;
+    row.querySelector(".ethglobal-beat-title").textContent = def.title;
+    rowsRoot.appendChild(row);
+  }
+  wrap.classList.remove("hidden");
+  if (!u5EntryWillRun) {
+    paintHackathonBeatRow("U5-entry", { kind: "skipped", detail: "Not seeded this run" });
+  }
+}
+
+function hackathonTxShortFromHref(href) {
+  const m = String(href || "").match(/0x[0-9a-fA-F]{64}/);
+  return m ? m[0] : String(href || "").replace(/^https:\/\//, "");
+}
+
+/**
+ * @param {string} track
+ * @param {{ kind: string, href?: string, detail?: string }} payload
+ */
+function paintHackathonBeatRow(track, payload) {
+  const row = document.querySelector(`[data-hackathon-beat="${track}"]`);
+  if (!row) return;
+  const statusEl = row.querySelector(".ethglobal-beat-status");
+  const linkEl = row.querySelector(".ethglobal-beat-link");
+  if (!statusEl || !linkEl) return;
+  row.classList.remove(
+    "ethglobal-beat-row--waiting",
+    "ethglobal-beat-row--active",
+    "ethglobal-beat-row--done",
+    "ethglobal-beat-row--noop",
+    "ethglobal-beat-row--fail",
+    "ethglobal-beat-row--skipped"
+  );
+  linkEl.classList.add("hidden");
+  linkEl.removeAttribute("href");
+
+  const k = payload.kind;
+  if (k === "active") {
+    row.classList.add("ethglobal-beat-row--active");
+    statusEl.textContent = "Running…";
+    return;
+  }
+  if (k === "waiting") {
+    row.classList.add("ethglobal-beat-row--waiting");
+    statusEl.textContent = "Waiting";
+    return;
+  }
+  if (k === "arc" && payload.href) {
+    row.classList.add("ethglobal-beat-row--done");
+    statusEl.textContent = "On-chain";
+    linkEl.href = payload.href;
+    linkEl.textContent = hackathonTxShortFromHref(payload.href);
+    linkEl.classList.remove("hidden");
+    return;
+  }
+  if (k === "noop") {
+    row.classList.add("ethglobal-beat-row--noop");
+    statusEl.textContent = payload.detail || "OK (no on-chain)";
+    return;
+  }
+  if (k === "skipped") {
+    row.classList.add("ethglobal-beat-row--skipped");
+    statusEl.textContent = payload.detail || "—";
+    return;
+  }
+  if (k === "fail") {
+    row.classList.add("ethglobal-beat-row--fail");
+    statusEl.textContent = payload.detail || "Failed";
+    return;
+  }
+  row.classList.add("ethglobal-beat-row--noop");
+  statusEl.textContent = payload.detail || "—";
+}
+
+function setHackathonBeatRowActive(track) {
+  paintHackathonBeatRow(track, { kind: "active" });
 }
 
 const ARCSCAN_TESTNET_TX = "https://testnet.arcscan.app/tx/";
@@ -1422,29 +1535,44 @@ async function waitForArcExplorerLink(executionId, khMode, opts = {}) {
   return { ok: false, reason: "timeout" };
 }
 
-/** Wait for an Arc tx link when possible; push one row into arcExplorerLinks. */
+/** Wait for an Arc tx link when possible; push one row into arcExplorerLinks. Updates live beat strip when `track` is set. */
 async function appendArcExplorerStep(arcExplorerLinks, execution, { label, track }, khMode) {
   if (!Array.isArray(arcExplorerLinks)) return { ok: false, reason: "no_array" };
   const immediate = arcExplorerEntriesFromExecution(execution, { label, track });
   if (immediate.length) {
-    arcExplorerLinks.push(immediate[0]);
-    return { ok: true, waited: false };
+    const row = immediate[0];
+    arcExplorerLinks.push(row);
+    if (track) paintHackathonBeatRow(track, { kind: "arc", href: row.href });
+    return { ok: true, waited: false, href: row.href };
   }
   if (!execution || typeof execution !== "object") {
+    if (track) paintHackathonBeatRow(track, { kind: "noop", detail: "OK (no settlement payload)" });
     return { ok: false, reason: "no_execution" };
   }
   if (execution.mode === "local" && !execution.keeperhub && !execution.bridge) {
+    if (track)
+      paintHackathonBeatRow(track, {
+        kind: "noop",
+        detail: "OK (local · enable LOCAL_COMMERCE_ARC_TRANSFERS for Arc rows)"
+      });
     return { ok: false, reason: "local_noop" };
   }
   const execId = execution.keeperhub?.executionId || execution.keeperhub?.id;
   if (!execId) {
+    if (track) paintHackathonBeatRow(track, { kind: "noop", detail: "OK (no KeeperHub execution id)" });
     return { ok: false, reason: "no_execution_id" };
   }
   const w = await waitForArcExplorerLink(execId, khMode);
   if (w.ok && w.href) {
     arcExplorerLinks.push({ label, track, href: w.href });
-    return { ok: true, waited: true };
+    if (track) paintHackathonBeatRow(track, { kind: "arc", href: w.href });
+    return { ok: true, waited: true, href: w.href };
   }
+  if (track)
+    paintHackathonBeatRow(track, {
+      kind: "fail",
+      detail: w.reason === "timeout" ? "Arc scan timeout" : "No Arc tx hash"
+    });
   return { ok: false, reason: w.reason || "poll_failed", waited: true };
 }
 
@@ -1848,6 +1976,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
 
   const amtShared = p.shared_amount_minor;
 
+  setHackathonBeatRowActive("U1");
   const payU1 = await resolvePaymentReference(circleMode, p.u1_amount_minor, "ethglobal-wow-u1-tip", "");
   const u1 = await request("/api/tips", {
     method: "POST",
@@ -1866,6 +1995,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_circle_u1_tip", ok: u1.ok, status: u1.status, amount_minor: p.u1_amount_minor });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u1.ok) {
+    paintHackathonBeatRow("U1", { kind: "fail", detail: `HTTP ${u1.status}` });
     throw new Error(`WOW U1 tip failed (HTTP ${u1.status})`);
   }
   await appendArcExplorerStep(links, u1.body?.execution, { label: "U1 Live battle micro-tipping", track: "U1" }, kh);
@@ -1877,6 +2007,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     throw new Error(`WOW U2 clip ${p.u2_clip_id} missing`);
   }
   const amtU2 = Number(clip.priceMinor);
+  setHackathonBeatRowActive("U2");
   const payU2 = await resolvePaymentReference(circleMode, amtU2, "ethglobal-wow-u2-pay", "");
   const u2 = await request(`/api/tutorials/${encodeURIComponent(p.u2_clip_id)}/pay`, {
     method: "POST",
@@ -1893,11 +2024,13 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_circle_u2_tutorial", ok: u2.ok, status: u2.status, amount_minor: amtU2 });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u2.ok) {
+    paintHackathonBeatRow("U2", { kind: "fail", detail: `HTTP ${u2.status}` });
     throw new Error(`WOW U2 tutorial pay failed (HTTP ${u2.status})`);
   }
   await appendArcExplorerStep(links, u2.body?.execution, { label: "U2 Pay-per-move tutorial unlock", track: "U2" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
+  setHackathonBeatRowActive("U3");
   const payU3 = await resolvePaymentReference(circleMode, amtShared, "ethglobal-wow-u3-feedback", "");
   const u3 = await request("/api/judge-feedback/requests", {
     method: "POST",
@@ -1922,12 +2055,14 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u3.ok) {
+    paintHackathonBeatRow("U3", { kind: "fail", detail: `HTTP ${u3.status}` });
     throw new Error(`WOW U3 judge feedback failed (HTTP ${u3.status})`);
   }
   await appendArcExplorerStep(links, u3.body?.execution, { label: "U3 Judge feedback marketplace", track: "U3" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
   const crewName = p.u4_crew_name || `ETHGlobal WOW Crew ${Date.now().toString(36)}`;
+  setHackathonBeatRowActive("U4");
   const crewRes = await request("/api/crews", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1938,6 +2073,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   if (!crewRes.ok || !crewRes.body?.crew?.id) {
     bump("u4_create", crewRes.ok, crewRes.status);
+    paintHackathonBeatRow("U4", { kind: "fail", detail: `Crew create HTTP ${crewRes.status}` });
     throw new Error(`WOW U4 crew create failed (HTTP ${crewRes.status})`);
   }
   bump("u4_create", true, crewRes.status);
@@ -1959,6 +2095,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_circle_u4_crew_split", ok: u4.ok, status: u4.status, crew_id: crewId });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u4.ok) {
+    paintHackathonBeatRow("U4", { kind: "fail", detail: `Split HTTP ${u4.status}` });
     throw new Error(`WOW U4 split failed (HTTP ${u4.status})`);
   }
   await appendArcExplorerStep(links, u4.body?.execution, { label: "U4 Crew revenue split wallet", track: "U4" }, kh);
@@ -1989,6 +2126,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   }
   const plannedMinutes = p.u6_planned_minutes;
   const u6Estimate = Number(room.rate_minor_per_min || 1) * plannedMinutes;
+  setHackathonBeatRowActive("U6");
   const payU6 = await resolvePaymentReference(circleMode, u6Estimate, "ethglobal-wow-u6-reserve", "");
   const u6 = await request("/api/practice-bookings/reserve", {
     method: "POST",
@@ -2013,6 +2151,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u6.ok) {
+    paintHackathonBeatRow("U6", { kind: "fail", detail: `HTTP ${u6.status}` });
     throw new Error(`WOW U6 practice reserve failed (HTTP ${u6.status})`);
   }
   await appendArcExplorerStep(links, u6.body?.execution, { label: "U6 Practice room booking", track: "U6" }, kh);
@@ -2025,6 +2164,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     throw new Error(`WOW U7 ${p.u7_pack_id} / ${p.u7_tier_id} missing`);
   }
   const amtU7 = Number(tier.price_minor || DEMO_USDC_MINOR);
+  setHackathonBeatRowActive("U7");
   const payU7 = await resolvePaymentReference(circleMode, amtU7, "ethglobal-wow-u7-pack", "");
   const u7 = await request(`/api/sample-packs/${encodeURIComponent(p.u7_pack_id)}/purchase`, {
     method: "POST",
@@ -2042,11 +2182,13 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_circle_u7_sample_pack", ok: u7.ok, status: u7.status, amount_minor: amtU7 });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u7.ok) {
+    paintHackathonBeatRow("U7", { kind: "fail", detail: `HTTP ${u7.status}` });
     throw new Error(`WOW U7 sample pack failed (HTTP ${u7.status})`);
   }
   await appendArcExplorerStep(links, u7.body?.execution, { label: "U7 Sample pack licensing", track: "U7" }, kh);
   flushEthglobalHackathonOutput(timeline, { running: true });
 
+  setHackathonBeatRowActive("U8");
   const chCreate = await request("/api/challenges", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2058,6 +2200,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   if (!chCreate.ok || !chCreate.body?.challenge?.id) {
     bump("u8_create", chCreate.ok, chCreate.status);
+    paintHackathonBeatRow("U8", { kind: "fail", detail: `Create HTTP ${chCreate.status}` });
     throw new Error(`WOW U8 create failed (HTTP ${chCreate.status})`);
   }
   const challengeId = chCreate.body.challenge.id;
@@ -2080,6 +2223,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   if (!subRes.ok || !subRes.body?.submission?.id) {
     bump("u8_submit", subRes.ok, subRes.status);
+    paintHackathonBeatRow("U8", { kind: "fail", detail: `Submit HTTP ${subRes.status}` });
     throw new Error(`WOW U8 submit failed (HTTP ${subRes.status})`);
   }
   const submissionId = subRes.body.submission.id;
@@ -2096,6 +2240,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_u8_score", ok: scoreRes.ok, status: scoreRes.status });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!scoreRes.ok) {
+    paintHackathonBeatRow("U8", { kind: "fail", detail: `Score HTTP ${scoreRes.status}` });
     throw new Error(`WOW U8 score failed (HTTP ${scoreRes.status})`);
   }
 
@@ -2122,6 +2267,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u8p.ok) {
+    paintHackathonBeatRow("U8", { kind: "fail", detail: `Payout HTTP ${u8p.status}` });
     throw new Error(`WOW U8 payout failed (HTTP ${u8p.status})`);
   }
   await appendArcExplorerStep(links, u8p.body?.execution, { label: "U8 Skill challenges + bounties", track: "U8" }, kh);
@@ -2135,6 +2281,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
     throw new Error(`WOW U10 merch ${itemId} missing`);
   }
   const amtU10 = Number(merchItem.price_minor || DEMO_USDC_MINOR) * quantity;
+  setHackathonBeatRowActive("U10");
   const payU10 = await resolvePaymentReference(circleMode, amtU10, "ethglobal-wow-u10-checkout", "");
   const u10 = await request("/api/merch/checkout", {
     method: "POST",
@@ -2153,6 +2300,7 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   timeline.push({ step: "wow_circle_u10_merch", ok: u10.ok, status: u10.status, amount_minor: amtU10 });
   flushEthglobalHackathonOutput(timeline, { running: true });
   if (!u10.ok) {
+    paintHackathonBeatRow("U10", { kind: "fail", detail: `HTTP ${u10.status}` });
     throw new Error(`WOW U10 merch checkout failed (HTTP ${u10.status})`);
   }
   await appendArcExplorerStep(links, u10.body?.execution, { label: "U10 Agent merch concierge", track: "U10" }, kh);
@@ -2302,13 +2450,20 @@ async function runEthglobalHackathonDemoFromUi() {
     let challengerWallet = String(challengerInputEl?.value || "").trim() || "0x1111111111111111111111111111111111111111";
     challengerInputEl.value = challengerWallet;
 
+    initHackathonBeatStrip({
+      nineCircleWow,
+      u5EntryWillRun: Boolean(doSeed && needChallenger)
+    });
+
     if (doSeed && needChallenger) {
+      setHackathonBeatRowActive("U5-entry");
       const r1 = await registerHackathonBattleSeedEntrant({
         dancer_name: ETHGLOBAL_HACK_CHALLENGER_LABEL,
         wallet: challengerWallet,
         timeline
       });
       if (!r1.ok) {
+        paintHackathonBeatRow("U5-entry", { kind: "fail", detail: `HTTP ${r1.status}` });
         setEnsStepStatus("ethglobal-demo-step-seed", "failed");
         flushEthglobalHackathonOutput(timeline, { running: false, ok: false, battle_error: r1.body });
         return;
@@ -2496,6 +2651,11 @@ async function runEthglobalHackathonDemoFromUi() {
     document.getElementById("winner-id").value = winnerEntryId;
     document.getElementById("keeperhub-on-payout").checked = Boolean(document.getElementById("ethglobal-demo-execute-keeperhub").checked);
     const executeVia = Boolean(document.getElementById("ethglobal-demo-execute-keeperhub").checked);
+    if (!executeVia) {
+      paintHackathonBeatRow("U5-payout", { kind: "skipped", detail: "KeeperHub payout off (record only)" });
+    } else {
+      setHackathonBeatRowActive("U5-payout");
+    }
     const payoutRes = await request("/api/battle/declare-winner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2520,19 +2680,27 @@ async function runEthglobalHackathonDemoFromUi() {
       (executeVia === false || (payout?.keeperhub && !payout.keeperhub.skipped && payout.keeperhub.ok !== false));
     setEnsStepStatus("ethglobal-demo-step-keeperhub", payoutRes.ok && keeperhubOk ? "done" : "failed");
 
-    if (executeVia && payoutRes.ok) {
-      let prizeHref = arcExplorerHrefFromKeeperhubExecution(payout?.keeperhub?.execution_status);
-      const prizeExecId = payout?.keeperhub?.transfer?.executionId;
-      if (!prizeHref && prizeExecId) {
-        const w = await waitForArcExplorerLink(prizeExecId, khMode);
-        if (w.ok) prizeHref = w.href;
-      }
-      if (prizeHref) {
-        arcExplorerLinks.push({
-          label: "U5 Prize payout (KeeperHub)",
-          track: "U5-payout",
-          href: prizeHref
-        });
+    if (executeVia) {
+      if (payoutRes.ok && keeperhubOk) {
+        let prizeHref = arcExplorerHrefFromKeeperhubExecution(payout?.keeperhub?.execution_status);
+        const prizeExecId = payout?.keeperhub?.transfer?.executionId;
+        if (!prizeHref && prizeExecId) {
+          const w = await waitForArcExplorerLink(prizeExecId, khMode);
+          if (w.ok) prizeHref = w.href;
+        }
+        if (prizeHref) {
+          arcExplorerLinks.push({
+            label: "U5 Prize payout (KeeperHub)",
+            track: "U5-payout",
+            href: prizeHref
+          });
+          paintHackathonBeatRow("U5-payout", { kind: "arc", href: prizeHref });
+        } else {
+          paintHackathonBeatRow("U5-payout", { kind: "noop", detail: "OK (no Arc tx link yet)" });
+        }
+      } else {
+        const detail = !payoutRes.ok ? `HTTP ${payoutRes.status}` : "KeeperHub skipped or failed";
+        paintHackathonBeatRow("U5-payout", { kind: "fail", detail });
       }
     }
 

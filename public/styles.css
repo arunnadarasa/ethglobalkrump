@@ -277,6 +277,131 @@ pre {
   align-items: center;
 }
 
+.ethglobal-beat-strip {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #32456b;
+  background: #0e1524;
+}
+
+.ethglobal-beat-strip-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9eb8e8;
+  margin-bottom: 8px;
+}
+
+.ethglobal-beat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ethglobal-beat-row {
+  display: grid;
+  grid-template-columns: 44px minmax(120px, 1fr) minmax(100px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #283248;
+  background: #0c111c;
+  font-size: 12px;
+}
+
+.ethglobal-beat-badge {
+  font-weight: 700;
+  color: #8eb7ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.ethglobal-beat-title {
+  color: #c5d4e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ethglobal-beat-status {
+  color: #8fa0b8;
+  text-align: right;
+}
+
+.ethglobal-beat-link {
+  color: #7ab8ff;
+  text-decoration: none;
+  word-break: break-all;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.ethglobal-beat-link:hover {
+  text-decoration: underline;
+}
+
+.ethglobal-beat-row--waiting .ethglobal-beat-status {
+  color: #6a7a92;
+}
+
+.ethglobal-beat-row--active {
+  border-color: #9f6b00;
+  background: #1a1408;
+}
+
+.ethglobal-beat-row--active .ethglobal-beat-status {
+  color: #ffd78a;
+}
+
+.ethglobal-beat-row--done {
+  border-color: #1f6f3e;
+  background: #0d1812;
+}
+
+.ethglobal-beat-row--done .ethglobal-beat-status {
+  color: #9ee5bb;
+}
+
+.ethglobal-beat-row--noop {
+  border-color: #3d4d66;
+  background: #101722;
+}
+
+.ethglobal-beat-row--noop .ethglobal-beat-status {
+  color: #a8b8d0;
+}
+
+.ethglobal-beat-row--fail {
+  border-color: #7f2a2a;
+  background: #1e0f0f;
+}
+
+.ethglobal-beat-row--fail .ethglobal-beat-status {
+  color: #ffabab;
+}
+
+.ethglobal-beat-row--skipped {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.ethglobal-beat-row--skipped .ethglobal-beat-status {
+  color: #7a879c;
+}
+
+@media (max-width: 720px) {
+  .ethglobal-beat-row {
+    grid-template-columns: 40px 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .ethglobal-beat-status,
+  .ethglobal-beat-link {
+    grid-column: 2 / -1;
+    text-align: left;
+  }
+}
+
 .ethglobal-demo-fields {
   margin-top: 6px;
   align-items: flex-end;
