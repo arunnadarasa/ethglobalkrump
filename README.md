@@ -395,6 +395,7 @@ Current live status (important for demos):
 - The app-side flow is implemented and verified (`challenge` -> `replay` contract works).
 - We validated funded wallets, Base gas, and on-chain `approve`/`deposit` calls to gateway contracts.
 - Upstream still returned `402` with settlement errors (`insufficient_balance` / `authorization_validity_too_short`) during live paid replay attempts.
+- Important timing note from Circle Gateway behavior: on ETH-family chains (Base/Ethereum/OP/Arbitrum/Unichain), unified USDC balance updates can take roughly `13-19 minutes` after deposit confirmations, so retries can still return `insufficient_balance` during that window ([supported blockchains](https://developers.circle.com/gateway/references/supported-blockchains)).
 - For judge demos, present `x402_probe` + `x402_external_settle` as production-ready handoff architecture, with full paid settlement currently dependent on upstream acceptance/accounting conditions.
 
 Practical demo guidance:
