@@ -57,7 +57,7 @@
       <section id="ethglobal-hackathon-demo" class="ethglobal-demo-section">
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
-          Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`challenge_payout`) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout on
+          Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`tip_dancer` intent) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout on
           <strong>Arc Testnet</strong>. Judge default <code>gaanakrump.eth</code> (pre-configured; use <strong>Trust verify only</strong> unless you are re-running a live ENS write). Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
           — pair with self-hosted KeeperHub at <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> (+ <code>KEEPERHUB_API_KEY_LOCAL</code>). Long waits are OK to trim in edit.
         </p>
@@ -67,7 +67,7 @@
             <li>Battle pool (U5 entrants)</li>
             <li>ENS resolves judge agent + ENSIP-25 bidirectional trust for high-risk payout intent</li>
             <li>Vyper settlement policy cue (Arc proof)</li>
-            <li>UCP checkout + orchestrator trace (<code>challenge_payout</code>)</li>
+            <li>UCP checkout + orchestrator trace (<code>tip_dancer</code>)</li>
             <li>Battle closes — winner selected</li>
             <li>Local KeeperHub executes Arc Testnet payout to winner (no CCTP in this preset)</li>
           </ol>
@@ -150,8 +150,7 @@
         <p class="ethglobal-demo-hint caption">
           Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; refresh <strong>Wallet Balances</strong> under it to confirm USDC, and save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
-          Default judge <code>gaanakrump.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask); demo preview alone cannot satisfy bidirectional trust for
-          <code>challenge_payout</code>.
+          Default judge <code>gaanakrump.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask);           demo preview alone cannot satisfy bidirectional trust for high-risk intents; this demo spine uses low-risk <code>tip_dancer</code> to align with restrictive <code>allowedIntents</code> on judges like <code>gaanakrump.eth</code>.
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
       </section>

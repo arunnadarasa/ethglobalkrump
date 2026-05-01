@@ -1530,7 +1530,7 @@ async function runEthglobalHackathonDemoFromUi() {
       document.getElementById("ens-agent-id")?.value?.trim() ||
       deriveAgentIdFromEnsName(ensName);
 
-    document.getElementById("agent-intent").value = "challenge_payout";
+    document.getElementById("agent-intent").value = "tip_dancer";
     flushEthglobalHackathonOutput(timeline, { running: true });
 
     /* 1 Battle seed */
@@ -1640,7 +1640,7 @@ async function runEthglobalHackathonDemoFromUi() {
     flushEthglobalHackathonOutput(timeline, { running: true });
     setEnsStepStatus("ethglobal-demo-step-vyper", "done");
 
-    /* 4 Agent session challenge_payout (UCP trace) — pass ENS + registry hints in context */
+    /* 4 Agent session tip_dancer (UCP trace) — intent matches ENS allowedIntents (gaanakrump.eth is tip_dancer-gated) */
     setEnsStepStatus("ethglobal-demo-step-ucp", "active");
     const agentCtxSave = document.getElementById("agent-context-json")?.value || "";
     document.getElementById("agent-payment-mode").value = document.getElementById(
@@ -1670,7 +1670,7 @@ async function runEthglobalHackathonDemoFromUi() {
     const sess = fetched.body?.session;
     const sessOk = sess?.status === "completed";
     timeline.push({
-      step: "agent_session_challenge_payout",
+      step: "agent_session_tip_dancer",
       session_id: sessionIdAfter,
       status: sess?.status || null,
       completed: sessOk,
