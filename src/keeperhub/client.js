@@ -175,7 +175,7 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
       const err = new Error(
         `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
           (isLocalExecute
-            ? `Local Next dev (Turbopack) sometimes drops App Router handlers under /api/execute/*. If GET ${url.split("/execute/")[0]}/chains returns JSON but this URL is HTML 404, stop the running KeeperHub dev server and retry with webpack: \`pnpm dev:webpack -- -p <port>\`, or smoke test production (\`pnpm build && pnpm start\`). `
+            ? `Local Next dev (Turbopack) sometimes drops App Router handlers under /api/execute/*. If GET ${url.split("/execute/")[0]}/chains returns JSON but this URL is HTML 404, stop the running KeeperHub dev server and retry with webpack: \`PORT=<port> pnpm dev:webpack\` (not \`pnpm dev -- -p\`, which Next treats as a directory), or smoke test production (\`pnpm build && pnpm start\`). `
             : "") +
           `If you set KEEPERHUB_API_BASE, it must include /api (e.g. ${DEFAULT_BASE}).`
       );
