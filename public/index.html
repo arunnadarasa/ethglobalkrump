@@ -47,6 +47,13 @@
         <pre id="circle-wallet-output"></pre>
         <div id="circle-funding-cue"></div>
       </section>
+      <section>
+        <h2>Wallet Balances</h2>
+        <div class="row">
+          <button id="refresh-balances" type="button">Refresh Balances</button>
+        </div>
+        <pre id="balances-output"></pre>
+      </section>
       <section id="ethglobal-hackathon-demo" class="ethglobal-demo-section">
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
@@ -141,19 +148,12 @@
           </select>
         </div>
         <p class="ethglobal-demo-hint caption">
-          Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; save wallet details so battle entry + agent session payments succeed. Configure the server with
+          Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; refresh <strong>Wallet Balances</strong> under it to confirm USDC, and save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
           Default judge <code>gaanakrump.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask); demo preview alone cannot satisfy bidirectional trust for
           <code>challenge_payout</code>.
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
-      </section>
-      <section>
-        <h2>Wallet Balances</h2>
-        <div class="row">
-          <button id="refresh-balances" type="button">Refresh Balances</button>
-        </div>
-        <pre id="balances-output"></pre>
       </section>
       <section>
         <h2>UCP Conformance</h2>
