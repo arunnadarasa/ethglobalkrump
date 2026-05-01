@@ -459,6 +459,7 @@ Implementation details that unblocked this:
 
 - `GET /api/keeperhub/status` — whether a key is set, whether Arc appears in KeeperHub’s chain list, and the resolved execute `network` slug when possible
 - `GET /api/keeperhub/chains` — proxied chain list (auth: Bearer `kh_…`, per [Authentication](https://docs.keeperhub.com/api/authentication))
+- `GET /api/keeperhub/executions/:executionId?mode=local|online` — execution status for polling (transaction hash / ArcScan link when completed); used by the hackathon WOW loop between commerce steps
 - `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; local mode uses Arc execution directly, online mode runs **Circle Bridge Kit** CCTP from Arc then [KeeperHub transfer](https://docs.keeperhub.com/api/direct-execution) on the selected target network
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — resolves/creates the Arc online source wallet and returns wallet address + faucet hint to fund bridge source USDC
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns destination signer address, **native + USDC** balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` (short and long variants), `instructions` (fund Circle **bridge signer** for CCTP mint gas **and** KeeperHub **organization executor** for the USDC payout leg), and chain faucet URL when applicable
@@ -492,6 +493,17 @@ Per-chain **recommended minimum native gas** for the Circle signer (before CCTP 
 ### Submission and feedback
 
 KeeperHub’s prize page asks for a demo, public repo with README, and a short write-up of how KeeperHub is used. Optionally compete for the **Builder Feedback Bounty** on the same page by documenting concrete UX, docs, bugs, or feature requests from your integration.
+
+## ETHGlobal hackathon demo (full spine)
+
+The UI includes **Demo for ETHGlobal Hackathon**: one button runs the deck spine (battle seed → ENS/ENSIP-25 → Vyper → UCP/agent → battle close → KeeperHub payout). Optional **9× Circle WOW** runs eight paid commerce APIs on Circle (`U1`, `U2`, `U3`, `U4`, `U6`, `U7`, `U8` payout, `U10`) before the selected agent intent; editable **WOW commerce inputs** appear when the checkbox is enabled.
+
+**Arc auditability (local execution):**
+
+- Set **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** in `.env` so that with **`execution_mode: local`**, commerce routes can trigger **KeeperHub Arc treasury transfers** (not just the off-chain simulation path). Restart the server after changing env.
+- Self-hosted KeeperHub: `KEEPERHUB_API_BASE=http://localhost:3001/api` plus `KEEPERHUB_API_KEY_LOCAL` (see KeeperHub section).
+- The client polls **`GET /api/keeperhub/executions/:executionId?mode=local|online`** between WOW steps until a tx hash exists (or timeout), accumulates **`arc_explorer_links`** in the hackathon JSON output, and renders **Arc transactions (explorer)** below the timeline.
+- **Arc beats (live)** — a second progress strip with one row per track (**U5 battle entry**, **U1–U10** commerce beats, **U5 prize payout**): status updates in real time, with **ArcScan** links when on-chain settlement exists.
 
 ## Demo highlights
 

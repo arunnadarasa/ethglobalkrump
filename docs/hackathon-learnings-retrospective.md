@@ -215,6 +215,17 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
    - Logging **before fetch**, **after response headers**, **after body read**, and on **`AbortError`** distinguishes slow TLS/connect vs slow body vs true **`KEEPERHUB_REQUEST_TIMEOUT_MS`** deadline.
    - Battle **`declare-winner`** → **`executeTransferPayout`** benefits from the same lifecycle signals plus non-secret payload-shape hints when diagnosing **`keeperhub_timeout`** vs upstream errors.
 
+26. **Local commerce Arc density is opt-in via env**
+   - With **`execution_mode: local`**, Krump’s commerce routes default to **no** KeeperHub execution unless **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** (and KeeperHub is configured). Without it, WOW beats still return **HTTP success** but **`arc_explorer_links`** only grows on paths that always hit KeeperHub (e.g. **U5 declare-winner**).
+   - Turning the flag on plus restarting the server reproduces **nine commerce ArcScan rows + one prize payout row** when polling **`GET /api/keeperhub/executions/:executionId`** succeeds.
+
+27. **Judge-visible progress needs two layers**
+   - **Spine chips** (Battle seed → KeeperHub payout) stay coarse-grained for the deck story.
+   - **Arc beats (live)** rows map **U5 entry**, **U1/U2/U3/U4/U6/U7/U8/U10**, and **U5 prize payout** with **Running… / On-chain / OK (no on-chain) / Failed** so operators see per-beat status without reading JSON.
+
+28. **WOW commerce inputs belong in the UI, not only in code**
+   - Prefilled, editable fields for each WOW beat avoid demo-only hardcoded literals and match what the runner POSTs (`clip_id`, crew JSON, challenge strings, etc.).
+
 ## Practical Recommendations for Next Iteration
 
 1. Add a dedicated onboarding state card (created, funded, ready-to-pay).
@@ -302,3 +313,4 @@ This project implemented **Krump Protocol Agents**, a hackathon demo for Krump d
   - `GET /api/ens/resolve` (include `registry` + `agentId` query params when not using server defaults) -> `POST /api/ens/verify-attestation` `{ ensName, intent, registry, agentId }` (check `ensip25_spec_verified` vs `ensip25_bidirectional_verified`) -> `POST /api/ens/setup-agent` demo preview (`ensip25Registry`, `ensip25AgentId`, `ensip25Value`) -> blocked high-risk on ENS-only proof -> allowed high-risk after registry backlink match
   - blocked path returns explicit trust-gate failure text
   - allowed path emits `ens_policy` trace with payout route + receiver in session events
+- ETHGlobal hackathon UX: **9× Circle WOW** optional commerce loop with **editable WOW params**, **`arc_explorer_links`** + explorer list under JSON, **`LOCAL_COMMERCE_ARC_TRANSFERS`** for local Arc rows, and **Arc beats (live)** strip for per-track status + ArcScan hashes (confirmed working end-to-end with self-hosted KeeperHub on Arc testnet).

@@ -47,6 +47,7 @@ In one interface, users can:
 - ENS workshop v2 proof points: ENSIP-25 baseline proof (non-empty parameterized key), bidirectional registry backlink trust for high-risk intents, privacy payout mode chip, and version compatibility chip
 - ENS judge UX: one-click `Run ENSIP-25 setup (guided)` plus progress chips and split trust badges (`Spec`, `Registry`, `Bidirectional`)
 - KeeperHub operator panel: one-click `Refresh balances`, destination signer source + wallet-id hints, **POL**-accurate gas copy on Polygon Amoy, a **USDC + native** funding reminder tied to the selected network, and API hints that separate **Circle bridge signer gas** from **KeeperHub org executor gas**
+- ETHGlobal hackathon panel: one run through battle seed → ENS/ENSIP-25 → Vyper → UCP/agent → battle close → KeeperHub payout; optional **9× Circle WOW** (eight commerce APIs + same agent intent) with **editable commerce inputs**; **Arc beats (live)** shows one row per track (**U5 entry**, **U1–U10** beats, **U5 prize**) with real-time status and ArcScan links when **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** for local Arc treasury transfers
 
 Speaker note: Every action is explainable and auditable in real time.
 
@@ -115,6 +116,7 @@ Speaker note: We optimized for both innovation and reliability under hackathon c
 16. Point out decoded resolve payload and judge chips: intent gate, trust gate, privacy route, version compatibility.
 17. Show Sepolia registry `contract_address` proof: `0xd4978db542eec50e225ad8441662e96ed75612a8`.
 18. Show Arc deployment proof in README.
+19. **ETHGlobal spine:** open **Demo for ETHGlobal Hackathon**, enable **9× Circle WOW**, confirm **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** + restarted server + Circle ARC-TESTNET + local KeeperHub; run **full spine** — point at **Arc beats (live)** filling **ten** rows (nine commerce + prize) and **`arc_explorer_links`** under the JSON.
 
 Speaker note: Keep pace fast. Focus on trust signals, standards, and one crisp sponsor story (CCTP lands liquidity; KeeperHub executes payout; UCP decides commerce shape). For x402, emphasize that challenge handling and replay architecture are live even when upstream settlement policy blocks specific funded wallets.
 
@@ -154,3 +156,4 @@ Speaker note: We already have the core stack. Next is distribution and integrati
 - Tests in `tests/titanoboa/test_agent_settlement_policy.py`
 - Deployment helper in `scripts/deploy_vyper_policy.py`
 - Marketing one-pager: `docs/lovable-landing-page.md`; Lovable rebuild spec: `docs/lovable-mega-prompt.md`
+- ETHGlobal hackathon UI: `public/index.html` (`#ethglobal-hackathon-demo`), `#ethglobal-hackathon-beat-strip`, WOW panel `#ethglobal-wow-params-panel`; client `public/main.js` (`runEthglobalHackathonDemoFromUi`, `appendArcExplorerStep`, `waitForArcExplorerLink`); server `GET /api/keeperhub/executions/:executionId`; env `LOCAL_COMMERCE_ARC_TRANSFERS` in `.env.example`

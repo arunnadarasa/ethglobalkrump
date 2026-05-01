@@ -41,7 +41,7 @@ Create and maintain:
 
 - `README.md` with problem, solution, stack, setup, demo instructions (including **sponsor** flows: KeeperHub, Bridge Kit online mode, env tuning).
 - `docs/krump-ucp-usecases.md` with rationale and scope boundaries.
-- `docs/lovable-mega-prompt.md`, `docs/lovable-landing-page.md`, `docs/pitch-slide-deck.md`, and `docs/hackathon-learnings-retrospective.md` updated when UX or integration contracts change (judges often read these alongside the repo).
+- `docs/lovable-mega-prompt.md`, `docs/lovable-landing-page.md`, `docs/pitch-slide-deck.md`, and `docs/hackathon-learnings-retrospective.md` updated when UX or integration contracts change (judges often read these alongside the repo). Include ETHGlobal hackathon flow changes: **9× Circle WOW**, **Arc beats (live)** strip, **`LOCAL_COMMERCE_ARC_TRANSFERS`**, **`GET /api/keeperhub/executions/:executionId`**, and **`arc_explorer_links`** in printed JSON.
 - `docs/architecture.md` with sequence flow and component responsibilities.
 - `docs/demo-script.md` for 2-4 minute walkthrough.
 - `docs/partner-prize-mapping.md` mapping features to prize criteria.

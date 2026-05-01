@@ -107,6 +107,7 @@ docs/*                        # optional marketing/pitch md
 - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for ERC-20 transfers; omit for native
 - `KEEPERHUB_TOKEN_DECIMALS`, `KEEPERHUB_TOKEN_SYMBOL`, `KEEPERHUB_GAS_LIMIT_MULTIPLIER` — optional
 - `KEEPERHUB_ONLINE_DEFAULT_NETWORK` — default online destination (`base-sepolia` recommended)
+- **`LOCAL_COMMERCE_ARC_TRANSFERS`** — when `true`, `execution_mode: local` commerce/battle payment paths may still invoke **KeeperHub Arc treasury transfers** via `maybeExecuteOnlineTransfer` so WOW beats produce **execution IDs** and ArcScan links (requires KeeperHub configured + recipient). Default `false`: local commerce stays noop for on-chain until this is enabled.
 
 ### Online CCTP bridge (Circle Bridge Kit; optional)
 
@@ -161,6 +162,7 @@ Recommended **minimum native gas** per destination (Circle signer, pre-mint) is 
 - `POST /api/keeperhub/execute-transfer` — body `{ recipient_address, amount_minor, execution_mode, execution_network }`; `local` mode keeps Arc transfer path, `online` mode runs **Bridge Kit** CCTP Arc→target then KeeperHub execute transfer on target network.
 - `POST /api/keeperhub/online-source-wallet/fund-hint` — Arc online bridge source wallet + USDC balance + Circle faucet cue.
 - `POST /api/keeperhub/online-destination-gas/fund-hint` — body `{ execution_network }`; returns signer address, native + USDC balances, `signer_native_min_recommended`, `keeperhub_executor_gas_hint` / `_short`, `instructions` (Circle signer vs KeeperHub org executor).
+- `GET /api/keeperhub/executions/:executionId?mode=local|online` — proxies KeeperHub execution status (tx hash, `transactionLink`, etc.) for client polling between WOW commerce steps until Arc settlement appears or timeout.
 - **Client module behavior:** `GET /chains` with Bearer; reject `wfb_` keys for REST with clear error; on non-JSON HTML responses, surface hint about missing `/api` in base URL; map some online destinations to **numeric** `network` chain IDs for `/execute/transfer` when string slugs are rejected.
 - **Local Arc behavior (important):**
   - when Arc chain id `5042002` is detected, resolve execute network to `arc-testnet` (do not use opaque chain row ids like `u93e...` as execute network).
@@ -553,6 +555,16 @@ Inputs/buttons as in reference:
   - show ENSIP-25 progress chips for write/upsert/verify/resolve stages
   - show trust badges for `Spec`, `Registry`, and `Bidirectional`
 
+### ETHGlobal Hackathon demo section (must match reference)
+
+- Section `#ethglobal-hackathon-demo` with:
+  - Spine progress: `#ethglobal-demo-step-seed`, `#ethglobal-demo-step-ens`, `#ethglobal-demo-step-vyper`, `#ethglobal-demo-step-ucp`, `#ethglobal-demo-step-close`, `#ethglobal-demo-step-keeperhub` (chips; classes `ens-step-chip`, states `active` / `done` / `failed`).
+  - **Arc beats (live):** `#ethglobal-hackathon-beat-strip`, `#ethglobal-hackathon-beat-rows` — one row per track: **U5 entry**, **U1, U2, U3, U4, U6, U7, U8, U10**, **U5 prize payout**; update status + optional ArcScan link as each step completes (`ethglobal-beat-row--waiting|active|done|noop|fail|skipped`).
+  - Controls: `#ethglobal-hackathon-run-demo`, `#ethglobal-hackathon-fill-winner-mm`, `#ethglobal-demo-ens-name`, `#ethglobal-demo-registry-interop`, `#ethglobal-demo-winner-wallet`, `#ethglobal-demo-challenger-wallet`, `#ethglobal-demo-ens-strategy`, `#ethglobal-demo-hackathon-intent`, `#ethglobal-demo-seed-battle`, `#ethglobal-demo-execute-keeperhub`, `#ethglobal-demo-nine-circle-wow`, `#ethglobal-demo-entry-fee`, `#ethglobal-demo-battle-payment-mode`, `#ethglobal-demo-execution-mode`, `#ethglobal-demo-execution-network`.
+  - Optional **9× Circle WOW** commerce inputs panel: `#ethglobal-wow-params-panel` (shown when `#ethglobal-demo-nine-circle-wow` checked); inputs `wow-u1-*`, `wow-shared-amount-minor`, `wow-u2-*`, … `wow-u10-*` as in reference.
+  - Output: `#ethglobal-hackathon-output` — JSON including `timeline_steps`, `arc_explorer_links` when populated; `#ethglobal-hackathon-explorer-links` — labeled ArcScan rows below JSON.
+- Behavior: running the demo pushes battle seed entrants, ENS verify/guided path, Vyper evaluate, optional WOW eight commerce beats (Circle + same execution settings), agent session with selected intent, battle close, declare-winner with optional KeeperHub. WOW loop must call **`appendArcExplorerStep`-equivalent** logic: poll **`GET /api/keeperhub/executions/:id`** when execution id present until hash or timeout; accumulate explorer links. Respect **`LOCAL_COMMERCE_ARC_TRANSFERS`**: without it, local WOW beats may complete HTTP 201 but omit on-chain rows until env enables KeeperHub commerce transfers.
+
 ### U1/U2/U5 sections
 
 Match forms and IDs from reference (`tip-form`, `register-form`, etc.) and print JSON to `<pre>` targets. U5 includes checkbox `#keeperhub-on-payout` — when checked, `declare-winner` POST includes `execute_via_keeperhub: true`.
@@ -650,6 +662,8 @@ Shipped reference code should **not** POST to local ingest URLs. If you fork an 
     - `GET /api/ens/resolve?...&registry=...&agentId=...` -> `POST /api/ens/verify-attestation` -> `POST /api/ens/setup-agent` demo preview (shows `ensip25Key` / `ensip25Value`) -> high-risk blocked before non-empty ENSIP-25 value -> high-risk allowed after write.
     - allowed run includes policy trace showing trust/privacy/versioning state.
     - include registry `contract_address=0xd4978db542eec50e225ad8441662e96ed75612a8` in docs/proof output.
+12. ETHGlobal hackathon panel: `#ethglobal-hackathon-beat-strip` exists and can show per-track status; hackathon JSON output includes `arc_explorer_links` when KeeperHub settlements exist; `GET /api/keeperhub/executions/:executionId` returns execution payload for polling parity.
+13. With **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** + configured KeeperHub + **Execution local**, optional **9× Circle WOW** run can produce up to **nine** commerce explorer rows plus **U5 prize** (ten Arc-linked rows total) when txs complete — matches reference behavior.
 
 ---
 

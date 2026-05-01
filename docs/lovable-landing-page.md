@@ -77,6 +77,15 @@ We built a full loop:
 - `KeeperHub local (Arc)` mode focuses on Arc-only transfer execution (no CCTP prerequisite).
 - The frontend now includes dedicated local guidance copy so judges can reproduce local Arc transfer quickly before optional online cross-chain demonstrations.
 
+### 4c) ETHGlobal hackathon — full deck spine + WOW + Arc auditability
+
+- **One-button spine:** seeded battle → ENS/ENSIP-25 trust → Vyper cue → UCP + agent session → battle close → optional KeeperHub Arc payout to winner (matches the pitch deck story).
+- **9× Circle WOW (optional):** after Vyper, runs eight paid commerce APIs on Circle covering **U1, U2, U3, U4, U6, U7, U8 (challenge payout), U10**; then the selected agent/UCP intent runs as beat nine. Requires **Circle wallet** battle mode and funded **ARC-TESTNET** USDC.
+- **Editable WOW inputs:** when WOW is checked, a panel exposes prefilled fields (IDs, names, amounts, crew JSON, challenge copy) — what you see is what the demo POSTs.
+- **Arc beats (live):** a dedicated strip lists **U5 battle entry**, each WOW track, and **U5 prize payout** with live status; **On-chain** rows link to ArcScan when settlement exists.
+- **Ten ArcScan rows (local):** set server env **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** so local execution still triggers KeeperHub treasury transfers on commerce routes (pair with self-hosted KeeperHub + API key). Restart the Node server after changing `.env`.
+- **JSON audit trail:** hackathon output includes **`arc_explorer_links`** (and **`timeline_steps`**) plus multi-row **Arc transactions** under the `<pre>` when txs resolve; client polls **`GET /api/keeperhub/executions/:executionId`** between WOW steps when needed.
+
 ### 5) ENS Judge Identity UX (Sepolia writes, Universal Resolver reads)
 
 - Dedicated ENS card in UI to make identity/gating visible for judges.
@@ -163,6 +172,13 @@ We built a full loop:
 5. Show UCP checkout/order responses.
 6. Show Arc deployment proof and Vyper fallback toggle.
 7. Optionally: KeeperHub status + funding reminder + **Refresh balances** / fund-hint output + one demo transfer or U5 payout with “Execute via KeeperHub” checked.
+
+## Demo flow (ETHGlobal judges — 2–3 min)
+
+1. Circle onboarding + saved wallet; **ARC-TESTNET** USDC funded.
+2. Open **Demo for ETHGlobal Hackathon**; set judge ENS, wallets, intent; enable **Execute payout via KeeperHub**; set **Execution local** + self-hosted **`KEEPERHUB_API_BASE`** if applicable.
+3. Enable **9× Circle WOW**; adjust WOW inputs if you want a custom story; ensure **`LOCAL_COMMERCE_ARC_TRANSFERS=true`** on the server for full Arc row density.
+4. Run **Run ETHGlobal hackathon demo (full spine)** — narrate spine chips, then **Arc beats (live)** filling green **On-chain** rows, and **`arc_explorer_links`** in the printed JSON.
 
 ## Credibility Proof
 
