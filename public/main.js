@@ -52,6 +52,11 @@ let lastU8SubmissionId = "";
 let ensSubmissionTimerHandle = null;
 let ensSubmissionStartedAtMs = 0;
 let lastAutoAgentId = "";
+
+const ETHGLOBAL_HACK_WINNER_LABEL = "ETHGlobal Demo — Winner";
+const ETHGLOBAL_HACK_CHALLENGER_LABEL = "ETHGlobal Demo — Challenger";
+const ETHGLOBAL_CHALLENGE_AMOUNT_MINOR = 1500;
+
 const AISA_LLM_MODEL_CATALOG = [
   { id: "claude-3-7-sonnet-20250219", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
   { id: "claude-3-7-sonnet-20250219-thinking", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
@@ -1048,7 +1053,7 @@ async function runEnsip25GuidedFlowFromUi() {
   const writeResult = await registerUpdateEnsJudgeIdentityForUi();
   if (!writeResult?.ok) {
     setEnsStepStatus("ens-step-write", "failed");
-    return;
+    return { ok: false, stage: "write", detail: writeResult };
   }
   setEnsStepStatus("ens-step-write", "done");
   if (writeResult.demo_mode || writeMode === "demo") {
@@ -1057,14 +1062,14 @@ async function runEnsip25GuidedFlowFromUi() {
       chipText: "Demo mode completed preview only. Switch ENS write mode to Circle Wallet or MetaMask for live onchain setup.",
       variant: "warning"
     });
-    return;
+    return { ok: false, reason: "demo_write_mode" };
   }
 
   setEnsStepStatus("ens-step-upsert", "active");
   const upsertResult = await upsertRegistryLinkFromUi();
   if (!upsertResult?.ok) {
     setEnsStepStatus("ens-step-upsert", "failed");
-    return;
+    return { ok: false, stage: "upsert", detail: upsertResult };
   }
   setEnsStepStatus("ens-step-upsert", "done");
 
@@ -1072,7 +1077,7 @@ async function runEnsip25GuidedFlowFromUi() {
   const verifyResult = await verifyEnsAttestationFromUi();
   if (!verifyResult?.ok) {
     setEnsStepStatus("ens-step-verify", "failed");
-    return;
+    return { ok: false, stage: "verify", detail: verifyResult };
   }
   const trust = verifyResult.body?.trust || {};
   if (!trust.ensip25_bidirectional_verified) {
@@ -1082,7 +1087,7 @@ async function runEnsip25GuidedFlowFromUi() {
       chipText: "Verification ran, but bidirectional trust is still false. Check ENS name, agentId, and registry interop match.",
       variant: "warning"
     });
-    return;
+    return { ok: false, stage: "verify_not_bidirectional", trust };
   }
   setEnsStepStatus("ens-step-verify", "done");
 
@@ -1090,7 +1095,7 @@ async function runEnsip25GuidedFlowFromUi() {
   const resolveResult = await resolveEnsJudgeIdentityForUi();
   if (!resolveResult?.ok) {
     setEnsStepStatus("ens-step-resolve", "failed");
-    return;
+    return { ok: false, stage: "resolve", detail: resolveResult };
   }
   setEnsStepStatus("ens-step-resolve", "done");
   setEnsJudgeChip({
@@ -1098,6 +1103,7 @@ async function runEnsip25GuidedFlowFromUi() {
     chipText: "Guided ENSIP-25 flow completed. Bidirectional trust is verified.",
     variant: "success"
   });
+  return { ok: true };
 }
 
 async function checkEnsSignerBalanceFromUi() {
@@ -1294,6 +1300,375 @@ async function evaluateSettlementFromUi() {
     status: response.status,
     body: response.body
   });
+}
+
+function resetEthglobalHackathonStepChips() {
+  ["ethglobal-demo-step-seed", "ethglobal-demo-step-ens", "ethglobal-demo-step-vyper", "ethglobal-demo-step-ucp", "ethglobal-demo-step-close", "ethglobal-demo-step-keeperhub"].forEach((id) => {
+    setEnsStepStatus(id, null);
+  });
+}
+
+function flushEthglobalHackathonOutput(timeline, meta = {}) {
+  print("ethglobal-hackathon-output", {
+    hackathon_demo: true,
+    ...meta,
+    timeline_steps: timeline
+  });
+}
+
+function syncEthglobalHackathonPanels() {
+  const ensName = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
+  const ensInput = document.getElementById("ens-name-input");
+  const agentEns = document.getElementById("agent-ens-name");
+  if (ensInput) ensInput.value = ensName;
+  if (agentEns) agentEns.value = ensName;
+  const agentId = deriveAgentIdFromEnsName(ensName);
+  const ensAgentIdEl = document.getElementById("ens-agent-id");
+  const ensip25AgentEl = document.getElementById("ensip25-agent-id");
+  if (agentId && ensAgentIdEl) ensAgentIdEl.value = agentId;
+  if (agentId && ensip25AgentEl) ensip25AgentEl.value = agentId;
+  const reg = document.getElementById("ethglobal-demo-registry-interop")?.value?.trim() || "";
+  const ensip25Reg = document.getElementById("ensip25-registry");
+  if (ensip25Reg) ensip25Reg.value = reg;
+
+  const fee = Number(document.getElementById("ethglobal-demo-entry-fee")?.value || 500);
+  document.getElementById("entry-fee").value = String(fee > 99 ? fee : 500);
+
+  document.getElementById("battle-mode").value = document.getElementById("ethglobal-demo-battle-payment-mode").value;
+  document.getElementById("battle-execution-mode").value = document.getElementById("ethglobal-demo-execution-mode").value;
+  document.getElementById("battle-execution-network").value = document.getElementById("ethglobal-demo-execution-network").value;
+
+  document.getElementById("agent-execution-mode").value = document.getElementById("ethglobal-demo-execution-mode").value;
+  document.getElementById("agent-execution-network").value = document.getElementById("ethglobal-demo-execution-network").value;
+
+  document.getElementById("keeperhub-execution-mode").value = document.getElementById("ethglobal-demo-execution-mode").value;
+  document.getElementById("keeperhub-execution-network").value = document.getElementById("ethglobal-demo-execution-network").value;
+
+  document.getElementById("keeperhub-on-payout").checked = Boolean(
+    document.getElementById("ethglobal-demo-execute-keeperhub").checked
+  );
+}
+
+async function hackathonResolveWinnerEntryId() {
+  const data = await request("/api/battle");
+  const entrants = data.body?.entrants || [];
+  const matches = entrants.filter((e) => e.dancer_name === ETHGLOBAL_HACK_WINNER_LABEL);
+  if (!matches.length) return null;
+  return matches[matches.length - 1].id;
+}
+
+async function registerHackathonBattleSeedEntrant({ dancer_name, wallet, timeline }) {
+  const amountMinor = Number(document.getElementById("entry-fee").value || 500);
+  const mode = document.getElementById("battle-mode").value || "offchain_demo";
+  const execution = getExecutionSelection("battle-execution-mode", "battle-execution-network");
+  const payment = await resolvePaymentReference(mode, amountMinor, "ethglobal-demo-battle-seed");
+  const response = await request("/api/battle/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dancer_name,
+      wallet,
+      entry_fee_minor: amountMinor,
+      payment_mode: payment.mode,
+      payment_ref: payment.ref,
+      execution_mode: execution.execution_mode,
+      execution_network: execution.execution_network
+    })
+  });
+  timeline.push({
+    step: "battle_register",
+    at: new Date().toISOString(),
+    dancer_name,
+    ok: response.ok,
+    status: response.status
+  });
+  flushEthglobalHackathonOutput(timeline, { running: true });
+  return response;
+}
+
+async function runEthglobalHackathonDemoFromUi() {
+  const timeline = [];
+  const btn = document.getElementById("ethglobal-hackathon-run-demo");
+
+  resetEthglobalHackathonStepChips();
+
+  const ensNameEarly = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
+  if (!ensNameEarly) {
+    flushEthglobalHackathonOutput([{ step: "error", at: new Date().toISOString(), message: "Set judge ENS name (e.g. your agent .eth)." }], {
+      running: false,
+      ok: false
+    });
+    return;
+  }
+
+  try {
+    if (window.ethereum && !connectedAccount) {
+      try {
+        await connectMetaMask();
+      } catch (_e) {
+        /* wallet optional until winner fill / MetaMask rails */
+      }
+    }
+    const winnerInputEl = document.getElementById("ethglobal-demo-winner-wallet");
+    const challengerInputEl = document.getElementById("ethglobal-demo-challenger-wallet");
+    let winnerWallet = String(winnerInputEl?.value || "").trim();
+    if (!winnerWallet && connectedAccount) {
+      winnerWallet = connectedAccount;
+    }
+    if (!winnerWallet) {
+      timeline.push({
+        step: "error",
+        at: new Date().toISOString(),
+        message: "Set winner payout wallet or connect MetaMask and use Fill winner wallet."
+      });
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    winnerInputEl.value = winnerWallet;
+  } catch (error) {
+    timeline.push({ step: "error", at: new Date().toISOString(), message: error?.message || String(error) });
+    flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+    return;
+  }
+
+  if (btn?.dataset.running === "1") {
+    return;
+  }
+  if (btn) {
+    btn.dataset.running = "1";
+    btn.disabled = true;
+  }
+
+  try {
+    syncEthglobalHackathonPanels();
+    const ensName = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
+    const registryInterop = document.getElementById("ethglobal-demo-registry-interop")?.value?.trim() || "";
+    const agentIdEnsip25 =
+      document.getElementById("ensip25-agent-id")?.value?.trim() ||
+      document.getElementById("ens-agent-id")?.value?.trim() ||
+      deriveAgentIdFromEnsName(ensName);
+
+    document.getElementById("agent-intent").value = "challenge_payout";
+    flushEthglobalHackathonOutput(timeline, { running: true });
+
+    /* 1 Battle seed */
+    setEnsStepStatus("ethglobal-demo-step-seed", "active");
+    const battlePeek = await request("/api/battle");
+    if (!battlePeek.ok) {
+      timeline.push({ step: "battle_peek_failed", status: battlePeek.status });
+      setEnsStepStatus("ethglobal-demo-step-seed", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    if (battlePeek.body?.battle_closed) {
+      timeline.push({
+        step: "error",
+        message: "Battle is already closed. Restart the app server for a fresh U5 state."
+      });
+      setEnsStepStatus("ethglobal-demo-step-seed", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    const entrants = battlePeek.body?.entrants || [];
+    let needChallenger = !entrants.some((e) => e.dancer_name === ETHGLOBAL_HACK_CHALLENGER_LABEL);
+    let needWinner = !entrants.some((e) => e.dancer_name === ETHGLOBAL_HACK_WINNER_LABEL);
+    const doSeed = document.getElementById("ethglobal-demo-seed-battle")?.checked !== false;
+
+    let challengerWallet = String(challengerInputEl?.value || "").trim() || "0x1111111111111111111111111111111111111111";
+    challengerInputEl.value = challengerWallet;
+
+    if (doSeed && needChallenger) {
+      const r1 = await registerHackathonBattleSeedEntrant({
+        dancer_name: ETHGLOBAL_HACK_CHALLENGER_LABEL,
+        wallet: challengerWallet,
+        timeline
+      });
+      if (!r1.ok) {
+        setEnsStepStatus("ethglobal-demo-step-seed", "failed");
+        flushEthglobalHackathonOutput(timeline, { running: false, ok: false, battle_error: r1.body });
+        return;
+      }
+    }
+    if (doSeed && needWinner) {
+      const r2 = await registerHackathonBattleSeedEntrant({
+        dancer_name: ETHGLOBAL_HACK_WINNER_LABEL,
+        wallet: winnerWallet,
+        timeline
+      });
+      if (!r2.ok) {
+        setEnsStepStatus("ethglobal-demo-step-seed", "failed");
+        flushEthglobalHackathonOutput(timeline, { running: false, ok: false, battle_error: r2.body });
+        return;
+      }
+    }
+
+    timeline.push({
+      step: "battle_seed_summary",
+      at: new Date().toISOString(),
+      seeded_challenger: doSeed && needChallenger,
+      seeded_winner: doSeed && needWinner,
+      entrants_before: entrants.length
+    });
+    flushEthglobalHackathonOutput(timeline, { running: true });
+    await refreshBattle();
+    const winnerEntryProbe = await hackathonResolveWinnerEntryId();
+    if (!winnerEntryProbe) {
+      timeline.push({
+        step: "error",
+        message: "Winner entrant missing after seed. Enable seed checkbox or register ETHGlobal Winner manually."
+      });
+      setEnsStepStatus("ethglobal-demo-step-seed", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    setEnsStepStatus("ethglobal-demo-step-seed", "done");
+
+    /* 2 ENS + ENSIP-25 */
+    setEnsStepStatus("ethglobal-demo-step-ens", "active");
+    const ensStrategy = document.getElementById("ethglobal-demo-ens-strategy")?.value || "guided_live";
+    if (ensStrategy === "guided_live") {
+      const guided = await runEnsip25GuidedFlowFromUi();
+      if (!guided?.ok) {
+        timeline.push({ step: "ens_guided", ok: false, detail: guided || null });
+        setEnsStepStatus("ethglobal-demo-step-ens", "failed");
+        flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+        return;
+      }
+    } else {
+      const verifyOnly = await verifyEnsAttestationFromUi();
+      const trust = verifyOnly.body?.trust || {};
+      const trusted = Boolean(verifyOnly.ok && trust.ensip25_bidirectional_verified && trust.is_trusted_for_intent);
+      if (!trusted) {
+        timeline.push({ step: "ens_verify_only", ok: false, trust });
+        setEnsStepStatus("ethglobal-demo-step-ens", "failed");
+        flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+        return;
+      }
+      await resolveEnsJudgeIdentityForUi();
+      timeline.push({ step: "ens_verify_only", ok: true });
+    }
+    flushEthglobalHackathonOutput(timeline, { running: true });
+    setEnsStepStatus("ethglobal-demo-step-ens", "done");
+
+    /* 3 Vyper cue */
+    setEnsStepStatus("ethglobal-demo-step-vyper", "active");
+    document.getElementById("settlement-amount-minor").value = String(ETHGLOBAL_CHALLENGE_AMOUNT_MINOR);
+    await evaluateSettlementFromUi();
+    timeline.push({ step: "vyper_evaluate", amount_minor: ETHGLOBAL_CHALLENGE_AMOUNT_MINOR });
+    flushEthglobalHackathonOutput(timeline, { running: true });
+    setEnsStepStatus("ethglobal-demo-step-vyper", "done");
+
+    /* 4 Agent session challenge_payout (UCP trace) — pass ENS + registry hints in context */
+    setEnsStepStatus("ethglobal-demo-step-ucp", "active");
+    const agentCtxSave = document.getElementById("agent-context-json")?.value || "";
+    document.getElementById("agent-payment-mode").value = "offchain_demo";
+    const ctxPayload = {
+      agent_ens_name: ensName,
+      ensip25_registry: registryInterop,
+      amount_minor: ETHGLOBAL_CHALLENGE_AMOUNT_MINOR
+    };
+    if (agentIdEnsip25) {
+      ctxPayload.ensip25_agent_id = agentIdEnsip25;
+    }
+    document.getElementById("agent-context-json").value = JSON.stringify(ctxPayload);
+    await runAgentSessionFromUi();
+
+    document.getElementById("agent-context-json").value = agentCtxSave;
+
+    const sessionIdAfter = lastAgentSessionId || "";
+    if (!sessionIdAfter) {
+      timeline.push({ step: "agent_session_error", message: "No session id returned." });
+      setEnsStepStatus("ethglobal-demo-step-ucp", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    const fetched = await request(`/api/agents/sessions/${encodeURIComponent(sessionIdAfter)}`);
+    const sessOk = fetched.body?.session?.status === "completed";
+    timeline.push({
+      step: "agent_session_challenge_payout",
+      session_id: sessionIdAfter,
+      status: fetched.body?.session?.status || null,
+      completed: sessOk
+    });
+    flushEthglobalHackathonOutput(timeline, { running: true });
+    if (!sessOk) {
+      setEnsStepStatus("ethglobal-demo-step-ucp", "failed");
+      flushEthglobalHackathonOutput(timeline, {
+        running: false,
+        ok: false,
+        agent_session_preview: fetched.body?.session?.trace?.length || null
+      });
+      return;
+    }
+    setEnsStepStatus("ethglobal-demo-step-ucp", "done");
+
+    /* 5 Battle close */
+    setEnsStepStatus("ethglobal-demo-step-close", "active");
+    const closeRes = await request("/api/battle/close", { method: "POST" });
+    timeline.push({
+      step: "battle_close",
+      ok: closeRes.ok,
+      status: closeRes.status
+    });
+    flushEthglobalHackathonOutput(timeline, { running: true });
+    setEnsStepStatus("ethglobal-demo-step-close", closeRes.ok ? "done" : "failed");
+    if (!closeRes.ok) {
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+
+    /* 6 KeeperHub payout */
+    setEnsStepStatus("ethglobal-demo-step-keeperhub", "active");
+    const winnerEntryId = await hackathonResolveWinnerEntryId();
+    if (!winnerEntryId) {
+      timeline.push({ step: "error", message: "Could not resolve winner entry after close." });
+      setEnsStepStatus("ethglobal-demo-step-keeperhub", "failed");
+      flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+      return;
+    }
+    document.getElementById("winner-id").value = winnerEntryId;
+    document.getElementById("keeperhub-on-payout").checked = Boolean(document.getElementById("ethglobal-demo-execute-keeperhub").checked);
+    const executeVia = Boolean(document.getElementById("ethglobal-demo-execute-keeperhub").checked);
+    const payoutRes = await request("/api/battle/declare-winner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ winner_entry_id: winnerEntryId, execute_via_keeperhub: executeVia })
+    });
+    const payout = payoutRes.body?.payout || null;
+    timeline.push({
+      step: "declare_winner",
+      winner_entry_id: winnerEntryId,
+      execute_via_keeperhub: executeVia,
+      settlement_status: payout?.settlement_status || null,
+      keeperhub_transfer: payout?.keeperhub?.transfer || null,
+      ok: payoutRes.ok
+    });
+    await refreshBattle();
+    const keeperhubOk =
+      payoutRes.ok &&
+      (executeVia === false || (payout?.keeperhub && !payout.keeperhub.skipped && payout.keeperhub.ok !== false));
+    setEnsStepStatus("ethglobal-demo-step-keeperhub", payoutRes.ok && keeperhubOk ? "done" : "failed");
+
+    flushEthglobalHackathonOutput(timeline, {
+      running: false,
+      ok: payoutRes.ok,
+      payout_body: payout,
+      keeperhub_skipped_reason: payout?.keeperhub?.message || null,
+      hints: executeVia ? "Explorer: payout.keeperhub.transfer for on-chain hashes (Arc testnet)." : "KeeperHub unset or checkbox off — payout record only."
+    });
+  } catch (error) {
+    timeline.push({
+      step: "error",
+      at: new Date().toISOString(),
+      message: error?.message || String(error)
+    });
+    flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
+  } finally {
+    if (btn) {
+      btn.dataset.running = "0";
+      btn.disabled = false;
+    }
+  }
 }
 
 async function ensureMetaMaskChain() {
@@ -2035,6 +2410,34 @@ document.getElementById("ens-run-guided-flow")?.addEventListener("click", async 
       statusId: "ens-identity-status",
       chipText: error?.message || String(error),
       variant: "warning"
+    });
+  }
+});
+
+document.getElementById("ethglobal-hackathon-run-demo")?.addEventListener("click", async () => {
+  try {
+    await runEthglobalHackathonDemoFromUi();
+  } catch (error) {
+    print("ethglobal-hackathon-output", {
+      hackathon_demo: true,
+      ok: false,
+      error: error?.message || String(error)
+    });
+  }
+});
+
+document.getElementById("ethglobal-hackathon-fill-winner-mm")?.addEventListener("click", async () => {
+  try {
+    await connectMetaMask();
+    const input = document.getElementById("ethglobal-demo-winner-wallet");
+    if (input && connectedAccount) {
+      input.value = connectedAccount;
+    }
+  } catch (error) {
+    print("ethglobal-hackathon-output", {
+      hackathon_demo: true,
+      ok: false,
+      fill_winner_error: error?.message || String(error)
     });
   }
 });

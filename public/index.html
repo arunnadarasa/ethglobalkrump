@@ -15,6 +15,102 @@
         <span id="wallet-status">Wallet: not connected</span>
       </div>
       <pre id="rail-config"></pre>
+      <section id="ethglobal-hackathon-demo" class="ethglobal-demo-section">
+        <h2>Demo for ETHGlobal Hackathon</h2>
+        <p class="subtitle">
+          Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`challenge_payout`) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout to the winner wallet.
+          Long on-chain waits are safe to trim in edit; this button runs the spine end-to-end.
+        </p>
+        <div class="ethglobal-demo-story" role="list">
+          <p class="ethglobal-demo-story-title">Brief deck spine (parallel to Story slide)</p>
+          <ol>
+            <li>Battle pool (U5 entrants)</li>
+            <li>ENS resolves judge agent + ENSIP-25 bidirectional trust for high-risk payout intent</li>
+            <li>Vyper settlement policy cue (Arc proof)</li>
+            <li>UCP checkout + orchestrator trace (<code>challenge_payout</code>)</li>
+            <li>Battle closes — winner selected</li>
+            <li>KeeperHub executes USDC transfer to winner Arc address</li>
+          </ol>
+        </div>
+        <div class="row hackathon-chip-row" aria-label="Hackathon demo progress">
+          <span id="ethglobal-demo-step-seed" class="ens-step-chip ethglobal-demo-step hidden">Battle seed</span>
+          <span id="ethglobal-demo-step-ens" class="ens-step-chip ethglobal-demo-step hidden">ENS + ENSIP-25</span>
+          <span id="ethglobal-demo-step-vyper" class="ens-step-chip ethglobal-demo-step hidden">Vyper cue</span>
+          <span id="ethglobal-demo-step-ucp" class="ens-step-chip ethglobal-demo-step hidden">UCP trace</span>
+          <span id="ethglobal-demo-step-close" class="ens-step-chip ethglobal-demo-step hidden">Battle close</span>
+          <span id="ethglobal-demo-step-keeperhub" class="ens-step-chip ethglobal-demo-step hidden">KeeperHub payout</span>
+        </div>
+        <div class="row">
+          <button id="ethglobal-hackathon-run-demo" type="button">Run ETHGlobal hackathon demo (full spine)</button>
+          <button id="ethglobal-hackathon-fill-winner-mm" type="button">Fill winner wallet from MetaMask</button>
+        </div>
+        <div class="row ethglobal-demo-fields">
+          <input
+            id="ethglobal-demo-ens-name"
+            placeholder="Judge ENS name (e.g. winner.krump.eth)"
+            style="min-width: 260px"
+          />
+          <input
+            id="ethglobal-demo-registry-interop"
+            placeholder="Registry interop (ERC-7930 hex)"
+            value="0x000100000103aa36a714d4978db542eec50e225ad8441662e96ed75612a8"
+            style="min-width: 420px"
+          />
+          <input
+            id="ethglobal-demo-winner-wallet"
+            placeholder="Winner Arc payout wallet (0x…)"
+            style="min-width: 340px"
+          />
+          <input
+            id="ethglobal-demo-challenger-wallet"
+            placeholder="Challenger wallet (0x…)"
+            value="0x1111111111111111111111111111111111111111"
+            style="min-width: 340px"
+          />
+        </div>
+        <div class="row ethglobal-demo-fields">
+          <label>
+            ENS path
+            <select id="ethglobal-demo-ens-strategy">
+              <option value="guided_live">Guided ENSIP-25 (live write + registry upsert)</option>
+              <option value="verify_only">Trust verify only (already configured ENS + registry)</option>
+            </select>
+          </label>
+          <label>
+            <input id="ethglobal-demo-seed-battle" type="checkbox" checked />
+            Seed battle entrants if missing
+          </label>
+          <label>
+            <input id="ethglobal-demo-execute-keeperhub" type="checkbox" checked />
+            Execute payout via KeeperHub
+          </label>
+          <label>
+            Battle entry fee (minor)
+            <input id="ethglobal-demo-entry-fee" type="number" min="100" value="500" style="width: 90px" />
+          </label>
+          <select id="ethglobal-demo-battle-payment-mode">
+            <option value="offchain_demo">Offchain demo (fast)</option>
+            <option value="metamask">MetaMask</option>
+            <option value="circle_wallet">Circle wallet</option>
+          </select>
+          <select id="ethglobal-demo-execution-mode">
+            <option value="local">Execution local (Arc)</option>
+            <option value="online">Execution online (CCTP + target)</option>
+          </select>
+          <select id="ethglobal-demo-execution-network">
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="ethereum-sepolia">Ethereum Sepolia</option>
+            <option value="polygon-amoy">Polygon Amoy</option>
+            <option value="arbitrum-sepolia">Arbitrum Sepolia</option>
+            <option value="avalanche-fuji">Avalanche Fuji</option>
+          </select>
+        </div>
+        <p class="ethglobal-demo-hint caption">
+          Use the ENS Agent Identity panel below for <code>ens-write-mode</code> (Circle/MetaMask) when Guided ENSIP-25 is selected — demo preview alone cannot satisfy bidirectional trust for
+          <code>challenge_payout</code>.
+        </p>
+        <pre id="ethglobal-hackathon-output"></pre>
+      </section>
       <section>
         <h2>Circle Wallet Onboarding</h2>
         <div class="row">

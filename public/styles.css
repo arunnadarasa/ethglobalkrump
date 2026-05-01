@@ -160,3 +160,52 @@ pre {
   background: #2a1f07;
   color: #ffd78a;
 }
+
+.ethglobal-demo-section {
+  border-color: #3d4f6f;
+  background: linear-gradient(180deg, #141b2e 0%, #141822 100%);
+}
+
+.hackathon-chip-row {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+
+.ethglobal-demo-fields {
+  margin-top: 6px;
+  align-items: flex-end;
+}
+
+.ethglobal-demo-story {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2c3d55;
+  background: #111622;
+}
+
+.ethglobal-demo-story-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cfd9ea;
+}
+
+.ethglobal-demo-story ol {
+  margin: 0;
+  padding-left: 22px;
+  color: #b3bfd1;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ethglobal-demo-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #8fa0b8;
+  line-height: 1.45;
+}
+
+.caption code {
+  font-size: 12px;
+}
