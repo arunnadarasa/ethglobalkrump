@@ -15,6 +15,38 @@
         <span id="wallet-status">Wallet: not connected</span>
       </div>
       <pre id="rail-config"></pre>
+      <section>
+        <h2>Circle Wallet Onboarding</h2>
+        <div class="row">
+          <input id="circle-wallet-name" placeholder="Wallet name (optional)" />
+          <select id="circle-blockchain">
+            <option value="ARC-TESTNET">ARC-TESTNET</option>
+            <option value="BASE-SEPOLIA">BASE-SEPOLIA</option>
+            <option value="ETH-SEPOLIA">ETH-SEPOLIA</option>
+            <option value="ARB-SEPOLIA">ARB-SEPOLIA</option>
+            <option value="MATIC-AMOY">MATIC-AMOY</option>
+            <option value="AVAX-FUJI">AVAX-FUJI</option>
+          </select>
+          <input id="circle-wallet-set-id" placeholder="Existing walletSetId (optional)" />
+          <button id="create-circle-wallet" type="button">Create Circle Wallet</button>
+        </div>
+        <div class="row">
+          <input id="circle-entity-secret-raw" placeholder="Entity secret raw (optional if set in .env)" />
+          <button id="generate-ciphertext" type="button">Generate Fresh Ciphertext</button>
+        </div>
+        <div class="row">
+          <input
+            id="circle-entity-ciphertext"
+            placeholder="Fresh entitySecretCiphertext (required for wallet create)"
+          />
+        </div>
+        <div class="row">
+          <button id="save-circle-wallet" type="button">Save Wallet Details</button>
+          <span id="circle-wallet-save-status">No wallet details saved yet.</span>
+        </div>
+        <pre id="circle-wallet-output"></pre>
+        <div id="circle-funding-cue"></div>
+      </section>
       <section id="ethglobal-hackathon-demo" class="ethglobal-demo-section">
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
@@ -107,44 +139,12 @@
           </select>
         </div>
         <p class="ethglobal-demo-hint caption">
-          Use <strong>Circle Wallet Onboarding</strong> below with blockchain <code>ARC-TESTNET</code>; save wallet details so battle entry + agent session payments succeed. Configure the server with
+          Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
           For ENS Guided flow, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask) — demo preview alone cannot satisfy bidirectional trust for
           <code>challenge_payout</code>.
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
-      </section>
-      <section>
-        <h2>Circle Wallet Onboarding</h2>
-        <div class="row">
-          <input id="circle-wallet-name" placeholder="Wallet name (optional)" />
-          <select id="circle-blockchain">
-            <option value="ARC-TESTNET">ARC-TESTNET</option>
-            <option value="BASE-SEPOLIA">BASE-SEPOLIA</option>
-            <option value="ETH-SEPOLIA">ETH-SEPOLIA</option>
-            <option value="ARB-SEPOLIA">ARB-SEPOLIA</option>
-            <option value="MATIC-AMOY">MATIC-AMOY</option>
-            <option value="AVAX-FUJI">AVAX-FUJI</option>
-          </select>
-          <input id="circle-wallet-set-id" placeholder="Existing walletSetId (optional)" />
-          <button id="create-circle-wallet" type="button">Create Circle Wallet</button>
-        </div>
-        <div class="row">
-          <input id="circle-entity-secret-raw" placeholder="Entity secret raw (optional if set in .env)" />
-          <button id="generate-ciphertext" type="button">Generate Fresh Ciphertext</button>
-        </div>
-        <div class="row">
-          <input
-            id="circle-entity-ciphertext"
-            placeholder="Fresh entitySecretCiphertext (required for wallet create)"
-          />
-        </div>
-        <div class="row">
-          <button id="save-circle-wallet" type="button">Save Wallet Details</button>
-          <span id="circle-wallet-save-status">No wallet details saved yet.</span>
-        </div>
-        <pre id="circle-wallet-output"></pre>
-        <div id="circle-funding-cue"></div>
       </section>
       <section>
         <h2>Wallet Balances</h2>
