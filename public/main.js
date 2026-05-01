@@ -369,17 +369,19 @@ function applyEthglobalHackathonExecutionModeUi() {
   const netSel = document.getElementById("ethglobal-demo-execution-network");
   if (!modeSel || !netSel) return;
   const mode = modeSel.value;
-  const hasArc = Array.from(netSel.options).some((o) => o.value === "arc-testnet");
+  const arcOpt = Array.from(netSel.options).find((o) => o.value === "arc-testnet");
   if (mode === "local") {
-    if (hasArc) netSel.value = "arc-testnet";
+    if (arcOpt) arcOpt.hidden = false;
+    if (arcOpt) netSel.value = "arc-testnet";
     netSel.disabled = true;
     netSel.title = "Execution local stays on Arc Testnet (KeeperHub slug arc-testnet; no bridge destination).";
   } else {
-    netSel.disabled = false;
-    netSel.title = "";
     if (netSel.value === "arc-testnet") {
       netSel.value = "base-sepolia";
     }
+    if (arcOpt) arcOpt.hidden = true;
+    netSel.disabled = false;
+    netSel.title = "";
   }
 }
 
