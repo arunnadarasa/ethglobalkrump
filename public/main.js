@@ -1340,6 +1340,24 @@ function flushEthglobalHackathonOutput(timeline, meta = {}) {
   });
 }
 
+function summarizeFailedAgentSession(session) {
+  if (!session || session.status === "completed") {
+    return {};
+  }
+  const trace = Array.isArray(session.trace) ? session.trace : [];
+  let lastErrorMessage = null;
+  for (let i = trace.length - 1; i >= 0; i -= 1) {
+    if (trace[i]?.kind === "error" && trace[i]?.message) {
+      lastErrorMessage = trace[i].message;
+      break;
+    }
+  }
+  return {
+    session_summary: session.summary || null,
+    last_trace_error: lastErrorMessage
+  };
+}
+
 function syncEthglobalHackathonPanels() {
   const ensName = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
   const ensInput = document.getElementById("ens-name-input");
@@ -1425,6 +1443,10 @@ async function runEthglobalHackathonDemoFromUi() {
     return;
   }
 
+  const winnerInputEl = document.getElementById("ethglobal-demo-winner-wallet");
+  const challengerInputEl = document.getElementById("ethglobal-demo-challenger-wallet");
+  let winnerWallet = "";
+
   try {
     if (window.ethereum && !connectedAccount) {
       try {
@@ -1433,9 +1455,7 @@ async function runEthglobalHackathonDemoFromUi() {
         /* wallet optional until winner fill / MetaMask rails */
       }
     }
-    const winnerInputEl = document.getElementById("ethglobal-demo-winner-wallet");
-    const challengerInputEl = document.getElementById("ethglobal-demo-challenger-wallet");
-    let winnerWallet = String(winnerInputEl?.value || "").trim();
+    winnerWallet = String(winnerInputEl?.value || "").trim();
     if (!winnerWallet && connectedAccount) {
       winnerWallet = connectedAccount;
     }
@@ -1464,6 +1484,25 @@ async function runEthglobalHackathonDemoFromUi() {
   }
 
   try {
+    // #region agent log
+    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
+      body: JSON.stringify({
+        sessionId: "995d4d",
+        runId: "post-fix-scope",
+        hypothesisId: "H1",
+        location: "public/main.js:runEthglobalHackathonDemoFromUi:beforeSync",
+        message: "hackathon_wallet_scope_probe",
+        data: {
+          challengerPresent: challengerInputEl != null,
+          winnerInputPresent: winnerInputEl != null,
+          winnerWalletLen: String(winnerWallet || "").length
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     syncEthglobalHackathonPanels();
     applyEthglobalHackathonExecutionModeUi();
     const payRail = document.getElementById("ethglobal-demo-battle-payment-mode").value;
@@ -1628,12 +1667,14 @@ async function runEthglobalHackathonDemoFromUi() {
       return;
     }
     const fetched = await request(`/api/agents/sessions/${encodeURIComponent(sessionIdAfter)}`);
-    const sessOk = fetched.body?.session?.status === "completed";
+    const sess = fetched.body?.session;
+    const sessOk = sess?.status === "completed";
     timeline.push({
       step: "agent_session_challenge_payout",
       session_id: sessionIdAfter,
-      status: fetched.body?.session?.status || null,
-      completed: sessOk
+      status: sess?.status || null,
+      completed: sessOk,
+      ...summarizeFailedAgentSession(sess)
     });
     flushEthglobalHackathonOutput(timeline, { running: true });
     if (!sessOk) {
