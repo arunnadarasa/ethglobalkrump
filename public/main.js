@@ -1441,6 +1441,24 @@ async function runEthglobalHackathonDemoFromUi() {
 
   try {
     syncEthglobalHackathonPanels();
+    const payRail = document.getElementById("ethglobal-demo-battle-payment-mode").value;
+    if (payRail === "circle_wallet") {
+      const circleBc = document.getElementById("circle-blockchain");
+      if (circleBc) {
+        circleBc.value = "ARC-TESTNET";
+      }
+    }
+    timeline.push({
+      step: "demo_rails",
+      at: new Date().toISOString(),
+      battle_payment_mode: payRail,
+      execution_mode: document.getElementById("ethglobal-demo-execution-mode").value,
+      circle_blockchain: document.getElementById("circle-blockchain")?.value || null,
+      keeperhub_local_hint:
+        "KEEPERHUB_API_BASE=http://localhost:3001/api + KEEPERHUB_API_KEY_LOCAL for Arc Testnet (local KeeperHub)"
+    });
+    flushEthglobalHackathonOutput(timeline, { running: true });
+
     const ensName = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
     const registryInterop = document.getElementById("ethglobal-demo-registry-interop")?.value?.trim() || "";
     const agentIdEnsip25 =
@@ -1561,7 +1579,9 @@ async function runEthglobalHackathonDemoFromUi() {
     /* 4 Agent session challenge_payout (UCP trace) — pass ENS + registry hints in context */
     setEnsStepStatus("ethglobal-demo-step-ucp", "active");
     const agentCtxSave = document.getElementById("agent-context-json")?.value || "";
-    document.getElementById("agent-payment-mode").value = "offchain_demo";
+    document.getElementById("agent-payment-mode").value = document.getElementById(
+      "ethglobal-demo-battle-payment-mode"
+    ).value;
     const ctxPayload = {
       agent_ens_name: ensName,
       ensip25_registry: registryInterop,

@@ -18,8 +18,9 @@
       <section id="ethglobal-hackathon-demo" class="ethglobal-demo-section">
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
-          Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`challenge_payout`) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout to the winner wallet.
-          Long on-chain waits are safe to trim in edit; this button runs the spine end-to-end.
+          Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`challenge_payout`) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout on
+          <strong>Arc Testnet</strong>. Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
+          — pair with self-hosted KeeperHub at <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> (+ <code>KEEPERHUB_API_KEY_LOCAL</code>). Long waits are OK to trim in edit.
         </p>
         <div class="ethglobal-demo-story" role="list">
           <p class="ethglobal-demo-story-title">Brief deck spine (parallel to Story slide)</p>
@@ -29,7 +30,7 @@
             <li>Vyper settlement policy cue (Arc proof)</li>
             <li>UCP checkout + orchestrator trace (<code>challenge_payout</code>)</li>
             <li>Battle closes — winner selected</li>
-            <li>KeeperHub executes USDC transfer to winner Arc address</li>
+            <li>Local KeeperHub executes Arc Testnet payout to winner (no CCTP in this preset)</li>
           </ol>
         </div>
         <div class="row hackathon-chip-row" aria-label="Hackathon demo progress">
@@ -88,13 +89,13 @@
             Battle entry fee (minor)
             <input id="ethglobal-demo-entry-fee" type="number" min="100" value="500" style="width: 90px" />
           </label>
-          <select id="ethglobal-demo-battle-payment-mode">
+          <select id="ethglobal-demo-battle-payment-mode" title="Recommended: Circle ARC-TESTNET wallet + saved wallet details">
+            <option value="circle_wallet" selected>Circle wallet (recommended)</option>
             <option value="offchain_demo">Offchain demo (fast)</option>
             <option value="metamask">MetaMask</option>
-            <option value="circle_wallet">Circle wallet</option>
           </select>
-          <select id="ethglobal-demo-execution-mode">
-            <option value="local">Execution local (Arc)</option>
+          <select id="ethglobal-demo-execution-mode" title="Use local for KeeperHub Arc-only payouts">
+            <option value="local" selected>Execution local (Arc / local KeeperHub)</option>
             <option value="online">Execution online (CCTP + target)</option>
           </select>
           <select id="ethglobal-demo-execution-network">
@@ -106,7 +107,9 @@
           </select>
         </div>
         <p class="ethglobal-demo-hint caption">
-          Use the ENS Agent Identity panel below for <code>ens-write-mode</code> (Circle/MetaMask) when Guided ENSIP-25 is selected — demo preview alone cannot satisfy bidirectional trust for
+          Use <strong>Circle Wallet Onboarding</strong> below with blockchain <code>ARC-TESTNET</code>; save wallet details so battle entry + agent session payments succeed. Configure the server with
+          <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
+          For ENS Guided flow, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask) — demo preview alone cannot satisfy bidirectional trust for
           <code>challenge_payout</code>.
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
