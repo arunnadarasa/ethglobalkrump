@@ -4,10 +4,11 @@ const dancers = [
   { id: "dancer-3", name: "RAWFIRE", tipsMinor: 0 }
 ];
 
+/* Demo catalog uses small minor units (~$0.10) so UCP + agent sessions can be rehearsed cheaply. */
 const tutorialClips = [
-  { id: "clip-1", title: "Chest Pop Fundamentals", priceMinor: 25, creator: "NOVA" },
-  { id: "clip-2", title: "Arm Swing Variations", priceMinor: 40, creator: "SHADOW" },
-  { id: "clip-3", title: "Stomp Timing and Control", priceMinor: 30, creator: "RAWFIRE" }
+  { id: "clip-1", title: "Chest Pop Fundamentals", priceMinor: 10, creator: "NOVA" },
+  { id: "clip-2", title: "Arm Swing Variations", priceMinor: 10, creator: "SHADOW" },
+  { id: "clip-3", title: "Stomp Timing and Control", priceMinor: 10, creator: "RAWFIRE" }
 ];
 
 const entries = [];
@@ -16,8 +17,8 @@ const payouts = [];
 const unlocks = new Map();
 const feedbackRequests = [];
 const practiceRooms = [
-  { id: "room-1", name: "Downtown Cypher Studio", rate_minor_per_min: 12, mode: "in_person" },
-  { id: "room-2", name: "Arc Virtual Lab", rate_minor_per_min: 8, mode: "virtual" }
+  { id: "room-1", name: "Downtown Cypher Studio", rate_minor_per_min: 1, mode: "in_person" },
+  { id: "room-2", name: "Arc Virtual Lab", rate_minor_per_min: 1, mode: "virtual" }
 ];
 const practiceBookings = [];
 const samplePacks = [
@@ -26,8 +27,8 @@ const samplePacks = [
     title: "Battle Chants Vol. 1",
     creator: "NOVA",
     tiers: [
-      { id: "tier-personal", name: "Personal", price_minor: 300 },
-      { id: "tier-commercial", name: "Commercial", price_minor: 1200 }
+      { id: "tier-personal", name: "Personal", price_minor: 10 },
+      { id: "tier-commercial", name: "Commercial", price_minor: 10 }
     ]
   },
   {
@@ -35,8 +36,8 @@ const samplePacks = [
     title: "Stomp Percussion Toolkit",
     creator: "SHADOW",
     tiers: [
-      { id: "tier-personal", name: "Personal", price_minor: 250 },
-      { id: "tier-commercial", name: "Commercial", price_minor: 1000 }
+      { id: "tier-personal", name: "Personal", price_minor: 10 },
+      { id: "tier-commercial", name: "Commercial", price_minor: 10 }
     ]
   }
 ];
@@ -47,9 +48,9 @@ const challengePayouts = [];
 const crews = [];
 const crewSettlements = [];
 const merchCatalog = [
-  { id: "merch-1", name: "KRUMP Hoodie", price_minor: 4500, category: "apparel" },
-  { id: "merch-2", name: "Battle Gloves", price_minor: 1800, category: "gear" },
-  { id: "merch-3", name: "Crew Cap", price_minor: 1200, category: "apparel" }
+  { id: "merch-1", name: "KRUMP Hoodie", price_minor: 10, category: "apparel" },
+  { id: "merch-2", name: "Battle Gloves", price_minor: 10, category: "gear" },
+  { id: "merch-3", name: "Crew Cap", price_minor: 10, category: "apparel" }
 ];
 const merchOrders = [];
 

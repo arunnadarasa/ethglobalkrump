@@ -294,6 +294,7 @@ function makeAgentOrchestrator({
   }
 
   function listCapabilities() {
+    // When changing intent ids/count, mirror `ALL_ORCHESTRATOR_INTENTS_CSV` in `public/main.js`.
     return {
       version: "1.0.0",
       model: "openclaw-style-inrepo",

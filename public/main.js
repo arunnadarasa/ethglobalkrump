@@ -55,7 +55,12 @@ let lastAutoAgentId = "";
 
 const ETHGLOBAL_HACK_WINNER_LABEL = "ETHGlobal Demo — Winner";
 const ETHGLOBAL_HACK_CHALLENGER_LABEL = "ETHGlobal Demo — Challenger";
-const ETHGLOBAL_CHALLENGE_AMOUNT_MINOR = 1500;
+/** Cheap demo rail: 10 minor units = $0.10 (see helpers.toUsd in server). */
+const DEMO_USDC_MINOR = 10;
+/** Keep in sync with `listCapabilities().intents` in `src/agents/orchestrator.js`. */
+const ALL_ORCHESTRATOR_INTENTS_CSV =
+  "tip_dancer,unlock_clip,battle_entry,judge_feedback_request,crew_split_settlement,practice_room_reserve,sample_pack_purchase,challenge_payout,merch_concierge_checkout";
+const ETHGLOBAL_CHALLENGE_AMOUNT_MINOR = DEMO_USDC_MINOR;
 
 const AISA_LLM_MODEL_CATALOG = [
   { id: "claude-3-7-sonnet-20250219", endpoint: "/v1/chat/completions", capabilities: ["text", "coding"] },
@@ -425,18 +430,13 @@ async function runAgentSessionFromUi() {
   const paymentMode = document.getElementById("agent-payment-mode").value || "offchain_demo";
   const execution = getExecutionSelection("agent-execution-mode", "agent-execution-network");
   const parsedContext = parseAgentContext();
-  const fallbackAmounts = {
-    tip_dancer: 25,
-    unlock_clip: 500,
-    battle_entry: 500,
-    judge_feedback_request: 600,
-    crew_split_settlement: 2500,
-    practice_room_reserve: 300,
-    sample_pack_purchase: 700,
-    challenge_payout: 1500,
-    merch_concierge_checkout: 5000
-  };
-  const amountMinor = Number(parsedContext.amount_minor || fallbackAmounts[intent] || 100);
+  const fallbackAmounts = Object.fromEntries(
+    ALL_ORCHESTRATOR_INTENTS_CSV.split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => [id, DEMO_USDC_MINOR])
+  );
+  const amountMinor = Number(parsedContext.amount_minor || fallbackAmounts[intent] || DEMO_USDC_MINOR);
   const payment = await resolvePaymentReference(paymentMode, amountMinor, `agent-${intent}`, intent);
   const ensName = document.getElementById("agent-ens-name")?.value?.trim() || "";
   const context = {
@@ -1359,6 +1359,105 @@ function summarizeFailedAgentSession(session) {
   };
 }
 
+function applyEnsJudgeNineIntentCsvFromUi() {
+  const el = document.getElementById("ens-allowed-intents-csv");
+  if (!el) return;
+  el.value = ALL_ORCHESTRATOR_INTENTS_CSV;
+  setEnsJudgeChip({
+    statusId: "ens-gating-chip",
+    chipText:
+      "allowedIntents = all 9 orchestrator intents. Run ENSIP-25 guided write to publish. High-risk intents still require bidirectional ENSIP-25.",
+    variant: "warning"
+  });
+}
+
+function resetEnsJudgeNameDraftFromUi() {
+  const nameEl = document.getElementById("ens-name-input");
+  if (!nameEl) return;
+  nameEl.value = "";
+  nameEl.placeholder = "your-new-judge.eth (Sepolia ENS)";
+  nameEl.focus();
+  maybeAutoFillAgentIdFromEnsName();
+}
+
+async function runNineIntentMarathonDemoFromUi() {
+  const amountMinor = Number(document.getElementById("agent-marathon-minor")?.value || DEMO_USDC_MINOR);
+  const rail = document.getElementById("agent-marathon-payment-mode")?.value || "offchain_demo";
+  const ctxEl = document.getElementById("agent-context-json");
+  const intentSelect = document.getElementById("agent-intent");
+  const paymentSelect = document.getElementById("agent-payment-mode");
+  if (!ctxEl || !intentSelect || !paymentSelect) return;
+  if (rail === "x402") {
+    print("agent-marathon-output", {
+      error: "Nine-intent marathon does not drive x402. Pick offchain demo, Circle, or MetaMask."
+    });
+    return;
+  }
+  const restoreCtx = ctxEl.value;
+  const restoreIntent = intentSelect.value;
+  const restorePay = paymentSelect.value;
+  const intents = ALL_ORCHESTRATOR_INTENTS_CSV.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const timeline = [];
+  let stopped = false;
+  try {
+    paymentSelect.value = rail;
+    let baseCtx = {};
+    try {
+      if (restoreCtx.trim()) {
+        baseCtx = JSON.parse(restoreCtx);
+      }
+    } catch (_ignore) {
+      baseCtx = {};
+    }
+    for (const intent of intents) {
+      intentSelect.value = intent;
+      ctxEl.value = JSON.stringify({ ...baseCtx, amount_minor: amountMinor });
+      try {
+        await runAgentSessionFromUi();
+        const sid = lastAgentSessionId;
+        let sess = null;
+        if (sid) {
+          const chk = await request(`/api/agents/sessions/${encodeURIComponent(sid)}`);
+          sess = chk.body?.session || null;
+        }
+        const row = {
+          intent,
+          session_id: sid || null,
+          status: sess?.status || null
+        };
+        if (sess?.status === "failed") {
+          Object.assign(row, summarizeFailedAgentSession(sess));
+        }
+        timeline.push(row);
+        if (!sid || sess?.status !== "completed") {
+          stopped = true;
+          break;
+        }
+      } catch (err) {
+        timeline.push({ intent, ok: false, error: err?.message || String(err) });
+        stopped = true;
+        break;
+      }
+    }
+  } finally {
+    ctxEl.value = restoreCtx;
+    intentSelect.value = restoreIntent;
+    paymentSelect.value = restorePay;
+  }
+  const allCompleted =
+    !stopped &&
+    timeline.length === intents.length &&
+    timeline.every((row) => String(row.status) === "completed");
+  print("agent-marathon-output", {
+    ok: allCompleted,
+    demo_amount_minor: amountMinor,
+    payment_mode_used: rail,
+    timeline
+  });
+}
+
 function syncEthglobalHackathonPanels() {
   const ensName = normalizeEnsNameInput(document.getElementById("ethglobal-demo-ens-name")?.value || "");
   const ensInput = document.getElementById("ens-name-input");
@@ -1374,8 +1473,10 @@ function syncEthglobalHackathonPanels() {
   const ensip25Reg = document.getElementById("ensip25-registry");
   if (ensip25Reg) ensip25Reg.value = reg;
 
-  const fee = Number(document.getElementById("ethglobal-demo-entry-fee")?.value || 500);
-  document.getElementById("entry-fee").value = String(fee > 99 ? fee : 500);
+  const minHackEntry = DEMO_USDC_MINOR;
+  const feeRaw = Number(document.getElementById("ethglobal-demo-entry-fee")?.value || DEMO_USDC_MINOR);
+  const fee = feeRaw >= minHackEntry ? feeRaw : minHackEntry;
+  document.getElementById("entry-fee").value = String(fee);
 
   document.getElementById("battle-mode").value = document.getElementById("ethglobal-demo-battle-payment-mode").value;
   document.getElementById("battle-execution-mode").value = document.getElementById("ethglobal-demo-execution-mode").value;
@@ -1401,7 +1502,7 @@ async function hackathonResolveWinnerEntryId() {
 }
 
 async function registerHackathonBattleSeedEntrant({ dancer_name, wallet, timeline }) {
-  const amountMinor = Number(document.getElementById("entry-fee").value || 500);
+  const amountMinor = Number(document.getElementById("entry-fee").value || DEMO_USDC_MINOR);
   const mode = document.getElementById("battle-mode").value || "offchain_demo";
   const execution = getExecutionSelection("battle-execution-mode", "battle-execution-network");
   const payment = await resolvePaymentReference(mode, amountMinor, "ethglobal-demo-battle-seed");
@@ -1965,29 +2066,6 @@ async function runAisaLlmFromUi() {
   const systemPrompt = document.getElementById("aisa-llm-system")?.value?.trim() || "";
   const userPrompt = document.getElementById("aisa-llm-user")?.value?.trim() || "";
   const startedAt = Date.now();
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "pre-fix",
-      hypothesisId: "U1",
-      location: "public/main.js:runAisaLlmFromUi",
-      message: "LLM submit started",
-      data: {
-        mode,
-        capability,
-        model,
-        endpointPath,
-        replayRequested,
-        replayHeadersPresent: Boolean(replayHeaders),
-        userPromptLength: userPrompt.length
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
   const response = await request("/api/aisa/llm/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2007,31 +2085,6 @@ async function runAisaLlmFromUi() {
     })
   });
   const elapsedMs = Date.now() - startedAt;
-  const outputEl = document.getElementById("aisa-llm-output");
-  const outputStyle = outputEl ? window.getComputedStyle(outputEl) : null;
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "pre-fix",
-      hypothesisId: "U2",
-      location: "public/main.js:runAisaLlmFromUi",
-      message: "LLM submit completed",
-      data: {
-        elapsedMs,
-        httpStatus: response.status,
-        ok: response.ok,
-        answerPresent: Boolean(response.body?.answer),
-        outputWhiteSpace: outputStyle?.whiteSpace || null,
-        outputOverflowWrap: outputStyle?.overflowWrap || null,
-        outputWordBreak: outputStyle?.wordBreak || null
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
   print("aisa-llm-output", {
     route: "/api/aisa/llm/chat",
     ok: response.ok,
@@ -2424,6 +2477,22 @@ document.getElementById("agent-run-session").addEventListener("click", async () 
   }
 });
 
+document.getElementById("ens-preset-nine-intents")?.addEventListener("click", () => {
+  applyEnsJudgeNineIntentCsvFromUi();
+});
+
+document.getElementById("ens-reset-name-new-judge")?.addEventListener("click", () => {
+  resetEnsJudgeNameDraftFromUi();
+});
+
+document.getElementById("agent-run-marathon")?.addEventListener("click", async () => {
+  try {
+    await runNineIntentMarathonDemoFromUi();
+  } catch (error) {
+    print("agent-marathon-output", { error: error?.message || String(error) });
+  }
+});
+
 document.getElementById("ens-resolve-identity")?.addEventListener("click", async () => {
   try {
     debugEnsLog("H5", "public/main.js:ens-resolve-identity:click", "resolve button event fired", {});
@@ -2638,28 +2707,6 @@ document.getElementById("settlement-evaluate").addEventListener("click", async (
 async function loadKeeperHubStatusFromUi() {
   const data = await request("/api/keeperhub/status");
   renderKeeperhubLocalDebugHint(data.body || {});
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "pre-fix",
-      hypothesisId: "K1",
-      location: "public/main.js:loadKeeperHubStatusFromUi",
-      message: "keeperhub status loaded",
-      data: {
-        httpStatus: data.status,
-        configured: Boolean(data.body?.configured),
-        apiBase: data.body?.api_base || null,
-        arcSupported: data.body?.arc_supported ?? null,
-        executeNetwork: data.body?.execute_network || null,
-        error: data.body?.error || null
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
   print("keeperhub-output", { status: data.status, body: data.body });
 }
 
@@ -2741,33 +2788,6 @@ function updateKeeperhubChainHint() {
     } else {
       reminder.textContent = `Top up KeeperHub wallets used for online execution on ${label} with USDC and ${native} (native gas on the network you select below).`;
     }
-    // #region agent log
-    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-      body: JSON.stringify({
-        sessionId: "995d4d",
-        runId: "post-fix",
-        hypothesisId: "K5",
-        location: "public/main.js:updateKeeperhubChainHint",
-        message: "keeperhub reminder rendered",
-        data: {
-          executionMode,
-          selectedNetwork: network,
-          isLocalMode,
-          destinationChain,
-          nativeSymbol: native,
-          reminderText: reminder.textContent || "",
-          chainHint: target?.textContent || "",
-          localDedicatedVisible: Boolean(localDedicated && !localDedicated.classList.contains("hidden")),
-          onlineDedicatedVisible: Boolean(onlineDedicated && !onlineDedicated.classList.contains("hidden")),
-          networkDisabled: Boolean(networkSelect?.disabled),
-          destinationGasButtonDisabled: Boolean(destinationGasButton?.disabled)
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
   }
 }
 
@@ -2795,26 +2815,6 @@ function renderKeeperhubLocalDebugHint(status = null) {
       "You can continue with local transfer tests on ARC-TESTNET without CCTP.";
   }
   target.textContent = text;
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "post-fix",
-      hypothesisId: "K4",
-      location: "public/main.js:renderKeeperhubLocalDebugHint",
-      message: "keeperhub local debug guidance rendered",
-      data: {
-        configured,
-        arcSupported,
-        apiBase,
-        text
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
 }
 
 function setKeeperhubDestinationBalanceHint({ nativeBalance, nativeSymbol, usdcBalance, destinationChain }) {
@@ -3534,28 +3534,12 @@ async function bootstrap() {
   });
   refreshAisaLlmModelOptions();
   print("agent-output", {
-    info: "Use agent controls to run H2A sessions and inspect A2A/A2H traces backed by UCP routes."
+    info:
+      `Default orchestration amounts mirror ~$${(DEMO_USDC_MINOR / 100).toFixed(2)} USDC-equivalent rails. Use Nine-intent rehearsal (choose offchain for instant deck runs) after Load Agent Capabilities.`
   });
   print("keeperhub-output", {
     info: "Load status to see if Arc testnet is listed in KeeperHub; use demo transfer or U5 payout checkbox when your org key and wallet are configured."
   });
-  // #region agent log
-  fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-    body: JSON.stringify({
-      sessionId: "995d4d",
-      runId: "pre-fix",
-      hypothesisId: "K3",
-      location: "public/main.js:bootstrap",
-      message: "keeperhub bootstrap info shown",
-      data: {
-        infoMessage: "Load status to see if Arc testnet is listed in KeeperHub; use demo transfer or U5 payout checkbox when your org key and wallet are configured."
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion
   await refreshLeaderboard();
   await loadTutorials();
   await refreshBattle();

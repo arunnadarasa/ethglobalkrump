@@ -9,7 +9,10 @@
   <body>
     <main>
       <h1>Krump x UCP Top 3 MVP Demo</h1>
-      <p class="subtitle">U1: Live Tipping • U2: Pay-per-Move • U5: Battle Entry + Prize Payout</p>
+      <p class="subtitle">
+        U1: Live Tipping • U2: Pay-per-Move • U5: Battle Entry + Prize Payout — demo rails default to ~<strong>$0.10 USDC‑equivalent</strong> minors (adjust in
+        <code>.env</code> via <code>MIN_COMMERCIAL_MINOR</code>).
+      </p>
       <div class="row">
         <button id="connect-metamask" type="button">Connect MetaMask</button>
         <span id="wallet-status">Wallet: not connected</span>
@@ -137,7 +140,7 @@
           </label>
           <label>
             Battle entry fee (minor)
-            <input id="ethglobal-demo-entry-fee" type="number" min="100" value="500" style="width: 90px" />
+            <input id="ethglobal-demo-entry-fee" type="number" min="10" value="10" title="10 minors ≈ US$0.10 (see server MIN_COMMERCIAL_MINOR)" style="width: 90px" />
           </label>
           <select id="ethglobal-demo-battle-payment-mode" title="Recommended: Circle ARC-TESTNET wallet + saved wallet details">
             <option value="circle_wallet" selected>Circle wallet (recommended)</option>
@@ -185,7 +188,7 @@
             <option value="api_key_proxy">API key proxy (/apis/v1)</option>
           </select>
           <input id="aisa-x402-intent" value="judge_feedback_request" placeholder="Intent (pilot allowlist)" />
-          <input id="aisa-x402-amount" type="number" min="1" value="600" />
+          <input id="aisa-x402-amount" type="number" min="10" value="10" />
           <input id="aisa-x402-memo" value="pitch-demo-aisa-x402" placeholder="Memo" style="min-width: 240px" />
           <input
             id="aisa-x402-target-path"
@@ -260,6 +263,10 @@
       </section>
       <section>
         <h2>Agent Orchestration (H2A / A2H / A2A)</h2>
+        <p class="caption">
+          <strong>Nine‑intent rehearsal:</strong> set amount + rail → run all orchestrator intents in sequence (printed to the marathon pane). Prefer
+          <em>Offchain demo</em> for instant deck narration; Circle/MetaMask still uses ~minor amounts from the Marathon field only.
+        </p>
         <div class="row">
           <button id="agent-load-capabilities" type="button">Load Agent Capabilities</button>
           <button id="agent-load-identity" type="button">Load Agent Identity</button>
@@ -303,7 +310,20 @@
           <button id="agent-get-last-session" type="button">Get Last Session</button>
         </div>
         <div class="row">
-          <input id="settlement-amount-minor" type="number" min="1" value="250" />
+          <label>
+            Nine-intent amount (minor units)
+            <input id="agent-marathon-minor" type="number" min="1" max="5000" value="10" title="Default ~$0.10" />
+          </label>
+          <select id="agent-marathon-payment-mode">
+            <option value="offchain_demo" selected>Marathon rail: Offchain demo</option>
+            <option value="circle_wallet">Marathon rail: Circle wallet</option>
+            <option value="metamask">Marathon rail: MetaMask</option>
+          </select>
+          <button id="agent-run-marathon" type="button">Run all 9 intents in order</button>
+        </div>
+        <pre id="agent-marathon-output"></pre>
+        <div class="row">
+          <input id="settlement-amount-minor" type="number" min="1" value="10" />
           <button id="settlement-evaluate" type="button">Evaluate Vyper Settlement Policy</button>
         </div>
         <pre id="agent-output"></pre>
@@ -311,7 +331,10 @@
 
       <section>
         <h2>ENS Agent Identity (for Vyper agent)</h2>
-        <p class="subtitle">Write/resolve ENS on Sepolia; high-risk trust uses strict ENSIP-25 key agent-registration[registry][agentId].</p>
+        <p class="subtitle">
+          Write/resolve ENS on Sepolia; high-risk trust uses strict ENSIP-25 key agent-registration[registry][agentId]. Use <strong>All 9 intents (CSV)</strong> when
+          standing up a new demo judge ENS, then run guided setup.
+        </p>
         <div class="row">
           <input
             id="ens-name-input"
@@ -352,13 +375,15 @@
             <option value="metamask">ENS write mode: MetaMask</option>
           </select>
           <button id="ens-run-guided-flow" type="button">Run ENSIP-25 setup (guided)</button>
+          <button id="ens-preset-nine-intents" type="button">All 9 intents (CSV)</button>
+          <button id="ens-reset-name-new-judge" type="button">Clear name → new judge</button>
           <button id="ens-check-signer-balance" type="button">Check wallet Sepolia ETH</button>
           <button id="ens-check-name-status" type="button">Check ENS name status</button>
         </div>
         <div class="row">
           <input
             id="ens-allowed-intents-csv"
-            placeholder="allowedIntents CSV (blank = mirrors Agent intent; e.g. tip_dancer,challenge_payout)"
+            placeholder="allowedIntents CSV (blank mirrors Agent intent; button fills all orchestrator intents)"
             style="min-width: 420px"
           />
           <input id="ensip25-agent-id" placeholder="ENSIP-25 agentId (defaults to agentId)" style="min-width: 300px" />
@@ -458,7 +483,7 @@
         </div>
         <div class="row">
           <input id="keeperhub-demo-recipient" placeholder="Recipient 0x… (Arc testnet)" style="min-width: 280px" />
-          <input id="keeperhub-demo-amount" type="number" min="1" value="100" />
+          <input id="keeperhub-demo-amount" type="number" min="1" value="10" />
           <select id="keeperhub-demo-mode">
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
@@ -491,7 +516,7 @@
             <option value="dancer-2">SHADOW</option>
             <option value="dancer-3">RAWFIRE</option>
           </select>
-          <input id="tip-amount" type="number" min="1" value="25" />
+          <input id="tip-amount" type="number" min="1" value="10" />
           <select id="tip-mode">
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
@@ -547,7 +572,7 @@
         <form id="register-form">
           <input id="entry-name" placeholder="Dancer name" required />
           <input id="entry-wallet" placeholder="Wallet (Arc testnet)" required />
-          <input id="entry-fee" type="number" min="100" value="500" />
+          <input id="entry-fee" type="number" min="10" value="10" />
           <select id="battle-mode">
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
@@ -588,7 +613,7 @@
           <input id="u3-dancer-name" placeholder="Dancer name" />
           <input id="u3-judge-name" placeholder="Judge name" />
           <input id="u3-topic" placeholder="Feedback topic" />
-          <input id="u3-amount" type="number" min="100" value="600" />
+          <input id="u3-amount" type="number" min="10" value="10" />
           <select id="u3-mode">
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
@@ -692,7 +717,7 @@
           <button id="u8-list" type="button">List Challenges</button>
           <input id="u8-title" placeholder="Challenge title" />
           <input id="u8-sponsor" placeholder="Sponsor" />
-          <input id="u8-bounty" type="number" min="100" value="1500" />
+          <input id="u8-bounty" type="number" min="10" value="10" />
           <button id="u8-create" type="button">Create Challenge</button>
         </div>
         <div class="row">
@@ -736,7 +761,7 @@
         </div>
         <div class="row">
           <input id="u4-crew-id" placeholder="Crew id" />
-          <input id="u4-split-amount" type="number" min="1" value="2500" />
+          <input id="u4-split-amount" type="number" min="10" value="10" />
           <select id="u4-mode">
             <option value="metamask">MetaMask on-chain</option>
             <option value="circle_wallet">Circle wallet</option>
@@ -764,7 +789,7 @@
         <div class="row">
           <button id="u10-catalog" type="button">Load Catalog</button>
           <input id="u10-style" placeholder="Style (aggressive, clean...)" />
-          <input id="u10-budget" type="number" min="0" value="5000" />
+          <input id="u10-budget" type="number" min="0" value="50" />
           <button id="u10-recommend" type="button">Get Recommendations</button>
         </div>
         <div class="row">

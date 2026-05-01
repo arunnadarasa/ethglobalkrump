@@ -80,6 +80,9 @@ const ONLINE_EXECUTION_DEFAULT_NETWORK = process.env.KEEPERHUB_ONLINE_DEFAULT_NE
 const DEFAULT_EXECUTION_MODE = String(process.env.KEEPERHUB_DEFAULT_EXECUTION_MODE || "online").toLowerCase();
 const ENS_PRIVATE_KEY = process.env.ENS_PRIVATE_KEY || "";
 const DEFAULT_HIGH_RISK_INTENTS = ["challenge_payout", "crew_split_settlement"];
+const MIN_COMMERCIAL_MINOR = Number.isFinite(Number(process.env.MIN_COMMERCIAL_MINOR))
+  ? Math.max(1, Number(process.env.MIN_COMMERCIAL_MINOR))
+  : 10;
 const ENSIP25_REGISTRY_INTEROP = process.env.ENSIP25_REGISTRY_INTEROP || "";
 const ENSIP25_REGISTRY_ADDRESS = process.env.ENSIP25_REGISTRY_ADDRESS || "";
 const ENSIP25_REGISTRY_CHAIN_ID = Number(process.env.ENSIP25_REGISTRY_CHAIN_ID || ARCTESTNET_CHAIN_ID || "5042002");
@@ -2775,9 +2778,14 @@ app.post("/api/battle/register", async (req, res) => {
   if (!dancer_name || !wallet) {
     return sendError(res, 400, "invalid_entry", "dancer_name and wallet are required");
   }
-  if (!Number.isInteger(entry_fee_minor) || entry_fee_minor < 100) {
-    return sendError(res, 400, "invalid_fee", "entry_fee_minor must be integer >= 100");
-  }
+    if (!Number.isInteger(entry_fee_minor) || entry_fee_minor < MIN_COMMERCIAL_MINOR) {
+      return sendError(
+        res,
+        400,
+        "invalid_fee",
+        `entry_fee_minor must be integer >= ${MIN_COMMERCIAL_MINOR}`
+      );
+    }
 
   const execution = await maybeExecuteOnlineTransfer({
     executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
@@ -2899,8 +2907,13 @@ app.post("/api/judge-feedback/requests", async (req, res) => {
   if (!dancer_name || !judge_name || !topic) {
     return sendError(res, 400, "invalid_feedback_request", "dancer_name, judge_name, and topic are required");
   }
-  if (!Number.isInteger(amount_minor) || amount_minor < 100) {
-    return sendError(res, 400, "invalid_amount", "amount_minor must be an integer >= 100");
+  if (!Number.isInteger(amount_minor) || amount_minor < MIN_COMMERCIAL_MINOR) {
+    return sendError(
+      res,
+      400,
+      "invalid_amount",
+      `amount_minor must be an integer >= ${MIN_COMMERCIAL_MINOR}`
+    );
   }
   const execution = await maybeExecuteOnlineTransfer({
     executionMode: execution_mode || DEFAULT_EXECUTION_MODE,
@@ -3129,8 +3142,18 @@ app.get("/api/challenges", (_req, res) => {
 
 app.post("/api/challenges", (req, res) => {
   const { title, sponsor_name, bounty_minor } = req.body || {};
-  if (!title || !sponsor_name || !Number.isInteger(bounty_minor) || bounty_minor < 100) {
-    return sendError(res, 400, "invalid_challenge", "title, sponsor_name, bounty_minor>=100 are required");
+  if (
+    !title ||
+    !sponsor_name ||
+    !Number.isInteger(bounty_minor) ||
+    bounty_minor < MIN_COMMERCIAL_MINOR
+  ) {
+    return sendError(
+      res,
+      400,
+      "invalid_challenge",
+      `title, sponsor_name, bounty_minor>=${MIN_COMMERCIAL_MINOR} are required`
+    );
   }
   const challenge = {
     id: helpers.makeId("challenge"),
