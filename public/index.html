@@ -51,7 +51,7 @@
         <h2>Demo for ETHGlobal Hackathon</h2>
         <p class="subtitle">
           Slide-deck story in one run: seeded battle entrants → ENS + ENSIP-25 judge trust (`challenge_payout`) → Vyper cue → UCP/agent trace → close battle → KeeperHub payout on
-          <strong>Arc Testnet</strong>. Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
+          <strong>Arc Testnet</strong>. Judge default <code>gaanakrump.eth</code> (pre-configured; use <strong>Trust verify only</strong> unless you are re-running a live ENS write). Defaults: <strong>Circle wallet</strong> rails for battle/agent payments and <strong>Execution local (Arc)</strong>
           — pair with self-hosted KeeperHub at <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> (+ <code>KEEPERHUB_API_KEY_LOCAL</code>). Long waits are OK to trim in edit.
         </p>
         <div class="ethglobal-demo-story" role="list">
@@ -80,7 +80,8 @@
         <div class="row ethglobal-demo-fields">
           <input
             id="ethglobal-demo-ens-name"
-            placeholder="Judge ENS name (e.g. winner.krump.eth)"
+            placeholder="Judge ENS (default gaanakrump.eth)"
+            value="gaanakrump.eth"
             style="min-width: 260px"
           />
           <input
@@ -106,7 +107,7 @@
             ENS path
             <select id="ethglobal-demo-ens-strategy">
               <option value="guided_live">Guided ENSIP-25 (live write + registry upsert)</option>
-              <option value="verify_only">Trust verify only (already configured ENS + registry)</option>
+              <option value="verify_only" selected>Trust verify only (already configured ENS + registry)</option>
             </select>
           </label>
           <label>
@@ -142,7 +143,7 @@
         <p class="ethglobal-demo-hint caption">
           Use <strong>Circle Wallet Onboarding</strong> above with blockchain <code>ARC-TESTNET</code>; save wallet details so battle entry + agent session payments succeed. Configure the server with
           <code>KEEPERHUB_API_BASE=http://localhost:3001/api</code> and <code>KEEPERHUB_API_KEY_LOCAL</code> so declare-winner uses local KeeperHub on Arc Testnet (<code>arc-testnet</code> slug).
-          For ENS Guided flow, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask) — demo preview alone cannot satisfy bidirectional trust for
+          Default judge <code>gaanakrump.eth</code> expects <strong>Trust verify only</strong> unless you redo a guided write. For a full guided ENSIP-25 run, use the ENS Agent Identity panel <code>ens-write-mode</code> (Circle/MetaMask); demo preview alone cannot satisfy bidirectional trust for
           <code>challenge_payout</code>.
         </p>
         <pre id="ethglobal-hackathon-output"></pre>
