@@ -1359,6 +1359,101 @@ function arcExplorerHrefFromKeeperhubExecution(es) {
   return h ? `${ARCSCAN_TESTNET_TX}${h}` : null;
 }
 
+/**
+ * Build labeled ArcScan rows from a commerce `execution` object when status is already embedded.
+ * When only `executionId` exists, use appendArcExplorerStep + waitForArcExplorerLink.
+ */
+function arcExplorerEntriesFromExecution(execution, { label, track }) {
+  if (!execution || typeof execution !== "object") return [];
+  const es =
+    execution.execution_status ||
+    execution.keeperhub?.execution_status ||
+    null;
+  const hrefFromKh = arcExplorerHrefFromKeeperhubExecution(es);
+  if (hrefFromKh) {
+    return [{ label, track, href: hrefFromKh }];
+  }
+  const kh = execution.keeperhub;
+  if (kh && typeof kh === "object") {
+    const hrefDirect = arcExplorerHrefFromKeeperhubExecution(kh);
+    if (hrefDirect) {
+      return [{ label, track, href: hrefDirect }];
+    }
+  }
+  return [];
+}
+
+function isTerminalKeeperhubExecutionFailure(es) {
+  if (!es || typeof es !== "object") return false;
+  const s = String(es.status || es.state || es.executionStatus || "").toLowerCase();
+  if (["failed", "error", "cancelled", "rejected"].includes(s)) return true;
+  const err = es.error;
+  if (typeof err === "string" && err.trim() && !/pending|processing/i.test(err)) return true;
+  return false;
+}
+
+const DEFAULT_ARC_POLL_MS = 1200;
+const DEFAULT_ARC_TIMEOUT_MS = 90000;
+
+/** Poll GET /api/keeperhub/executions/:id until ArcScan href, terminal failure, or timeout. */
+async function waitForArcExplorerLink(executionId, khMode, opts = {}) {
+  const id = String(executionId || "").trim();
+  if (!id) return { ok: false, reason: "no_execution_id" };
+  const mode = khMode === "local" ? "local" : "online";
+  const intervalMs = Number(opts.intervalMs || DEFAULT_ARC_POLL_MS);
+  const timeoutMs = Number(opts.timeoutMs || DEFAULT_ARC_TIMEOUT_MS);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await request(
+      `/api/keeperhub/executions/${encodeURIComponent(id)}?mode=${encodeURIComponent(mode)}`
+    );
+    if (res.ok && res.body?.execution_status) {
+      const es = res.body.execution_status;
+      if (isTerminalKeeperhubExecutionFailure(es)) {
+        return { ok: false, reason: "failed", execution_status: es };
+      }
+      const href = arcExplorerHrefFromKeeperhubExecution(es);
+      if (href) {
+        return { ok: true, href, execution_status: es };
+      }
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ok: false, reason: "timeout" };
+}
+
+/** Wait for an Arc tx link when possible; push one row into arcExplorerLinks. */
+async function appendArcExplorerStep(arcExplorerLinks, execution, { label, track }, khMode) {
+  if (!Array.isArray(arcExplorerLinks)) return { ok: false, reason: "no_array" };
+  const immediate = arcExplorerEntriesFromExecution(execution, { label, track });
+  if (immediate.length) {
+    arcExplorerLinks.push(immediate[0]);
+    return { ok: true, waited: false };
+  }
+  if (!execution || typeof execution !== "object") {
+    return { ok: false, reason: "no_execution" };
+  }
+  if (execution.mode === "local" && !execution.keeperhub && !execution.bridge) {
+    return { ok: false, reason: "local_noop" };
+  }
+  const execId = execution.keeperhub?.executionId || execution.keeperhub?.id;
+  if (!execId) {
+    return { ok: false, reason: "no_execution_id" };
+  }
+  const w = await waitForArcExplorerLink(execId, khMode);
+  if (w.ok && w.href) {
+    arcExplorerLinks.push({ label, track, href: w.href });
+    return { ok: true, waited: true };
+  }
+  return { ok: false, reason: w.reason || "poll_failed", waited: true };
+}
+
+let hackathonArcExplorerLinksRef = null;
+
+function setHackathonArcExplorerLinksRef(arr) {
+  hackathonArcExplorerLinksRef = arr;
+}
+
 function clearEthglobalHackathonExplorerLinks() {
   const wrap = document.getElementById("ethglobal-hackathon-explorer-links");
   if (!wrap) return;
@@ -1366,14 +1461,47 @@ function clearEthglobalHackathonExplorerLinks() {
   wrap.classList.add("hidden");
 }
 
-/** After hackathon flush: show clickable Arcscan link when KeeperHub payout has a tx hash. */
+/** After hackathon flush: show ArcScan links (multi-row) or fallback to single KeeperHub payout link. */
 function refreshEthglobalHackathonExplorerLinks(meta = {}) {
   const wrap = document.getElementById("ethglobal-hackathon-explorer-links");
   if (!wrap) return;
+
+  let arc_explorer_links = meta.arc_explorer_links;
+  if (arc_explorer_links === undefined && hackathonArcExplorerLinksRef) {
+    arc_explorer_links = [...hackathonArcExplorerLinksRef];
+  }
+
+  if (Array.isArray(arc_explorer_links) && arc_explorer_links.length > 0) {
+    wrap.classList.remove("hidden");
+    wrap.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "ethglobal-demo-explorer-caption ethglobal-demo-explorer-title";
+    title.textContent = meta.running ? "Arc transactions (so far):" : "Arc transactions (explorer):";
+    wrap.appendChild(title);
+    arc_explorer_links.forEach((row) => {
+      const line = document.createElement("div");
+      line.className = "ethglobal-demo-explorer-row";
+      const lab = document.createElement("span");
+      lab.className = "ethglobal-demo-explorer-label";
+      lab.textContent = `${row.track || "?"} — ${row.label || "Step"}`;
+      const a = document.createElement("a");
+      a.href = row.href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      const hm = String(row.href || "").match(/0x[0-9a-fA-F]{64}/);
+      a.textContent = hm ? hm[0] : String(row.href || "").replace(/^https:\/\//, "");
+      line.appendChild(lab);
+      line.appendChild(a);
+      wrap.appendChild(line);
+    });
+    return;
+  }
+
   if (meta.running) {
     clearEthglobalHackathonExplorerLinks();
     return;
   }
+
   const payout = meta.payout_body;
   const es = payout?.keeperhub?.execution_status;
   const href = arcExplorerHrefFromKeeperhubExecution(es);
@@ -1398,12 +1526,20 @@ function refreshEthglobalHackathonExplorerLinks(meta = {}) {
 }
 
 function flushEthglobalHackathonOutput(timeline, meta = {}) {
+  let arc_explorer_links = meta.arc_explorer_links;
+  if (arc_explorer_links === undefined && hackathonArcExplorerLinksRef) {
+    arc_explorer_links = [...hackathonArcExplorerLinksRef];
+  }
   print("ethglobal-hackathon-output", {
     hackathon_demo: true,
     ...meta,
+    ...(arc_explorer_links !== undefined ? { arc_explorer_links } : {}),
     timeline_steps: timeline
   });
-  refreshEthglobalHackathonExplorerLinks(meta);
+  refreshEthglobalHackathonExplorerLinks({
+    ...meta,
+    ...(arc_explorer_links !== undefined ? { arc_explorer_links } : {})
+  });
 }
 
 function summarizeFailedAgentSession(session) {
@@ -1607,8 +1743,10 @@ async function registerHackathonBattleSeedEntrant({ dancer_name, wallet, timelin
  * Eight Circle-funded commerce beats (after Vyper, before hackathon agent session).
  * Each beat performs a POST that triggers maybeExecuteOnlineTransfer with client payment_ref.
  */
-async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName }) {
+async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName, arcExplorerLinks, khMode }) {
   const execution = getExecutionSelection("battle-execution-mode", "battle-execution-network");
+  const kh = khMode || keeperhubDeclareWinnerRestBaseFromUi();
+  const links = arcExplorerLinks || [];
   const circleMode = "circle_wallet";
   const beatSummaries = [];
   const judgeName = judgeLabelFromEns(ensName);
@@ -1660,6 +1798,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u1.ok) {
     throw new Error(`WOW U1 tip failed (HTTP ${u1.status})`);
   }
+  await appendArcExplorerStep(links, u1.body?.execution, { label: "U1 Live battle micro-tipping", track: "U1" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const clipList = await request("/api/tutorials");
   const clip = (clipList.body?.tutorials || []).find((row) => row.id === "clip-1");
@@ -1685,6 +1825,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u2.ok) {
     throw new Error(`WOW U2 tutorial pay failed (HTTP ${u2.status})`);
   }
+  await appendArcExplorerStep(links, u2.body?.execution, { label: "U2 Pay-per-move tutorial unlock", track: "U2" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const payU3 = await resolvePaymentReference(circleMode, amtDemo, "ethglobal-wow-u3-feedback", "");
   const u3 = await request("/api/judge-feedback/requests", {
@@ -1712,6 +1854,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u3.ok) {
     throw new Error(`WOW U3 judge feedback failed (HTTP ${u3.status})`);
   }
+  await appendArcExplorerStep(links, u3.body?.execution, { label: "U3 Judge feedback marketplace", track: "U3" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const crewName = `ETHGlobal WOW Crew ${Date.now().toString(36)}`;
   const crewRes = await request("/api/crews", {
@@ -1751,6 +1895,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u4.ok) {
     throw new Error(`WOW U4 split failed (HTTP ${u4.status})`);
   }
+  await appendArcExplorerStep(links, u4.body?.execution, { label: "U4 Crew revenue split wallet", track: "U4" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   // #region agent log
   fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
@@ -1802,6 +1948,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u6.ok) {
     throw new Error(`WOW U6 practice reserve failed (HTTP ${u6.status})`);
   }
+  await appendArcExplorerStep(links, u6.body?.execution, { label: "U6 Practice room booking", track: "U6" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const packsRes = await request("/api/sample-packs");
   const pack = (packsRes.body?.packs || []).find((p) => p.id === "pack-1");
@@ -1829,6 +1977,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u7.ok) {
     throw new Error(`WOW U7 sample pack failed (HTTP ${u7.status})`);
   }
+  await appendArcExplorerStep(links, u7.body?.execution, { label: "U7 Sample pack licensing", track: "U7" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const chCreate = await request("/api/challenges", {
     method: "POST",
@@ -1907,6 +2057,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u8p.ok) {
     throw new Error(`WOW U8 payout failed (HTTP ${u8p.status})`);
   }
+  await appendArcExplorerStep(links, u8p.body?.execution, { label: "U8 Skill challenges + bounties", track: "U8" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   const itemId = "merch-1";
   const quantity = 1;
@@ -1936,6 +2088,8 @@ async function runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensNa
   if (!u10.ok) {
     throw new Error(`WOW U10 merch checkout failed (HTTP ${u10.status})`);
   }
+  await appendArcExplorerStep(links, u10.body?.execution, { label: "U10 Agent merch concierge", track: "U10" }, kh);
+  flushEthglobalHackathonOutput(timeline, { running: true });
 
   timeline.push({
     step: "wow_circle_commerce_complete",
@@ -2017,8 +2171,11 @@ async function runEthglobalHackathonDemoFromUi() {
   }
 
   try {
+    const arcExplorerLinks = [];
+    setHackathonArcExplorerLinksRef(arcExplorerLinks);
     syncEthglobalHackathonPanels();
     applyEthglobalHackathonExecutionModeUi();
+    const khMode = keeperhubDeclareWinnerRestBaseFromUi();
     const hackathonAgentIntent =
       document.getElementById("ethglobal-demo-hackathon-intent")?.value || "tip_dancer";
     document.getElementById("agent-intent").value = hackathonAgentIntent;
@@ -2089,6 +2246,8 @@ async function runEthglobalHackathonDemoFromUi() {
         flushEthglobalHackathonOutput(timeline, { running: false, ok: false, battle_error: r1.body });
         return;
       }
+      await appendArcExplorerStep(arcExplorerLinks, r1.body?.execution, { label: "U5 Battle entry", track: "U5-entry" }, khMode);
+      flushEthglobalHackathonOutput(timeline, { running: true });
     }
     if (doSeed && needWinner) {
       const r2 = await registerHackathonBattleSeedEntrant({
@@ -2173,7 +2332,7 @@ async function runEthglobalHackathonDemoFromUi() {
 
     setEnsStepStatus("ethglobal-demo-step-ucp", "active");
     if (nineCircleWow && payRail === "circle_wallet") {
-      await runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName });
+      await runEthglobalHackathonEightCircleCommercialBeats(timeline, { ensName, arcExplorerLinks, khMode });
     }
 
     // #region agent log
@@ -2294,6 +2453,22 @@ async function runEthglobalHackathonDemoFromUi() {
       (executeVia === false || (payout?.keeperhub && !payout.keeperhub.skipped && payout.keeperhub.ok !== false));
     setEnsStepStatus("ethglobal-demo-step-keeperhub", payoutRes.ok && keeperhubOk ? "done" : "failed");
 
+    if (executeVia && payoutRes.ok) {
+      let prizeHref = arcExplorerHrefFromKeeperhubExecution(payout?.keeperhub?.execution_status);
+      const prizeExecId = payout?.keeperhub?.transfer?.executionId;
+      if (!prizeHref && prizeExecId) {
+        const w = await waitForArcExplorerLink(prizeExecId, khMode);
+        if (w.ok) prizeHref = w.href;
+      }
+      if (prizeHref) {
+        arcExplorerLinks.push({
+          label: "U5 Prize payout (KeeperHub)",
+          track: "U5-payout",
+          href: prizeHref
+        });
+      }
+    }
+
     flushEthglobalHackathonOutput(timeline, {
       running: false,
       ok: payoutRes.ok,
@@ -2309,6 +2484,7 @@ async function runEthglobalHackathonDemoFromUi() {
     });
     flushEthglobalHackathonOutput(timeline, { running: false, ok: false });
   } finally {
+    setHackathonArcExplorerLinksRef(null);
     if (btn) {
       btn.dataset.running = "0";
       btn.disabled = false;

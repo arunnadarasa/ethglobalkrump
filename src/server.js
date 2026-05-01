@@ -316,6 +316,33 @@ async function maybeExecuteOnlineTransfer({ executionMode, executionNetwork, amo
     defaultNetwork: ONLINE_EXECUTION_DEFAULT_NETWORK
   });
   if (selected.mode === "local") {
+    const enableLocalArc = String(process.env.LOCAL_COMMERCE_ARC_TRANSFERS || "").trim().toLowerCase() === "true";
+    const dest = String(recipientAddress || "").trim();
+    if (enableLocalArc && keeperhub.isConfigured() && dest) {
+      try {
+        const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+        if (!summary.execute_network) {
+          return { mode: "local", network: null, bridge: null, keeperhub: null, payment_ref: null };
+        }
+        const transfer = await keeperhub.executeTransferPayout({
+          recipientAddress: dest,
+          amountMinor,
+          network: summary.execute_network,
+          mode: "local"
+        });
+        const payment_ref =
+          transfer?.executionId || transfer?.id || `local-kh-${Date.now().toString(36)}`;
+        return {
+          mode: "local",
+          network: summary.execute_network,
+          bridge: null,
+          keeperhub: transfer,
+          payment_ref
+        };
+      } catch (_err) {
+        return { mode: "local", network: null, bridge: null, keeperhub: null, payment_ref: null };
+      }
+    }
     return { mode: "local", network: null, bridge: null, keeperhub: null, payment_ref: null };
   }
   const destination = String(recipientAddress || "").trim();
@@ -1600,6 +1627,23 @@ app.get("/api/keeperhub/chains", async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error.status || 502, "keeperhub_chains_failed", error.message);
+  }
+});
+
+app.get("/api/keeperhub/executions/:executionId", async (req, res) => {
+  try {
+    if (!keeperhub.isConfigured()) {
+      return sendError(res, 400, "keeperhub_not_configured", "Set KEEPERHUB_API_KEY");
+    }
+    const executionId = String(req.params.executionId || "").trim();
+    if (!executionId) {
+      return sendError(res, 400, "invalid_execution_id", "executionId is required");
+    }
+    const mode = String(req.query.mode || "auto").trim().toLowerCase();
+    const execution_status = await keeperhub.getExecutionStatus(executionId, { mode });
+    return res.json({ ok: true, execution_id: executionId, execution_status });
+  } catch (error) {
+    return sendError(res, error.status || 502, "keeperhub_execution_status_failed", error.message);
   }
 });
 
