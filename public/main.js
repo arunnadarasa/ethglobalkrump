@@ -1333,9 +1333,68 @@ async function evaluateSettlementFromUi() {
 }
 
 function resetEthglobalHackathonStepChips() {
+  clearEthglobalHackathonExplorerLinks();
   ["ethglobal-demo-step-seed", "ethglobal-demo-step-ens", "ethglobal-demo-step-vyper", "ethglobal-demo-step-ucp", "ethglobal-demo-step-close", "ethglobal-demo-step-keeperhub"].forEach((id) => {
     setEnsStepStatus(id, null);
   });
+}
+
+const ARCSCAN_TESTNET_TX = "https://testnet.arcscan.app/tx/";
+
+function sanitizeArcTxHashMaybe(hex) {
+  const s = String(hex || "").trim();
+  return /^0x[0-9a-fA-F]{64}$/.test(s) ? s : null;
+}
+
+/** Canonical Arcscan testnet link from KeeperHub execution_status (JSON-safe; no HTML injection). */
+function arcExplorerHrefFromKeeperhubExecution(es) {
+  if (!es || typeof es !== "object") return null;
+  const candidateUrls = [es.transactionLink, es.result?.transactionLink].filter((u) => typeof u === "string");
+  for (const u of candidateUrls) {
+    const m = u.match(/0x[0-9a-fA-F]{64}/);
+    if (m) return `${ARCSCAN_TESTNET_TX}${m[0]}`;
+  }
+  const h =
+    sanitizeArcTxHashMaybe(es.transactionHash) || sanitizeArcTxHashMaybe(es.result?.transactionHash);
+  return h ? `${ARCSCAN_TESTNET_TX}${h}` : null;
+}
+
+function clearEthglobalHackathonExplorerLinks() {
+  const wrap = document.getElementById("ethglobal-hackathon-explorer-links");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  wrap.classList.add("hidden");
+}
+
+/** After hackathon flush: show clickable Arcscan link when KeeperHub payout has a tx hash. */
+function refreshEthglobalHackathonExplorerLinks(meta = {}) {
+  const wrap = document.getElementById("ethglobal-hackathon-explorer-links");
+  if (!wrap) return;
+  if (meta.running) {
+    clearEthglobalHackathonExplorerLinks();
+    return;
+  }
+  const payout = meta.payout_body;
+  const es = payout?.keeperhub?.execution_status;
+  const href = arcExplorerHrefFromKeeperhubExecution(es);
+  if (!href || !meta.ok) {
+    wrap.classList.add("hidden");
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = "";
+  const cap = document.createElement("span");
+  cap.className = "ethglobal-demo-explorer-caption";
+  cap.textContent = "Arc transaction (explorer):";
+  const a = document.createElement("a");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  const short = sanitizeArcTxHashMaybe(es.transactionHash || es.result?.transactionHash);
+  a.textContent = short || href.replace(/^https:\/\//, "");
+  wrap.appendChild(cap);
+  wrap.appendChild(a);
 }
 
 function flushEthglobalHackathonOutput(timeline, meta = {}) {
@@ -1344,6 +1403,7 @@ function flushEthglobalHackathonOutput(timeline, meta = {}) {
     ...meta,
     timeline_steps: timeline
   });
+  refreshEthglobalHackathonExplorerLinks(meta);
 }
 
 function summarizeFailedAgentSession(session) {
@@ -1504,6 +1564,14 @@ async function hackathonResolveWinnerEntryId() {
   const matches = entrants.filter((e) => e.dancer_name === ETHGLOBAL_HACK_WINNER_LABEL);
   if (!matches.length) return null;
   return matches[matches.length - 1].id;
+}
+
+/** KeeperHub REST base: localhost self-hosted vs cloud (paired with KEEPERHUB_API_BASE / *_LOCAL). */
+function keeperhubDeclareWinnerRestBaseFromUi() {
+  const hackEl = document.getElementById("ethglobal-demo-execution-mode");
+  const battleEl = document.getElementById("battle-execution-mode");
+  const raw = String((hackEl && hackEl.value) || (battleEl && battleEl.value) || "").toLowerCase().trim();
+  return raw === "local" ? "local" : "online";
 }
 
 async function registerHackathonBattleSeedEntrant({ dancer_name, wallet, timeline }) {
@@ -2205,7 +2273,11 @@ async function runEthglobalHackathonDemoFromUi() {
     const payoutRes = await request("/api/battle/declare-winner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ winner_entry_id: winnerEntryId, execute_via_keeperhub: executeVia })
+      body: JSON.stringify({
+        winner_entry_id: winnerEntryId,
+        execute_via_keeperhub: executeVia,
+        keeperhub_rest_base: keeperhubDeclareWinnerRestBaseFromUi()
+      })
     });
     const payout = payoutRes.body?.payout || null;
     timeline.push({
@@ -2773,7 +2845,11 @@ document.getElementById("payout-winner").addEventListener("click", async () => {
   const data = await request("/api/battle/declare-winner", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ winner_entry_id, execute_via_keeperhub })
+    body: JSON.stringify({
+      winner_entry_id,
+      execute_via_keeperhub,
+      keeperhub_rest_base: keeperhubDeclareWinnerRestBaseFromUi()
+    })
   });
   print("battle-output", { status: data.status, body: data.body });
   await refreshBattle();
@@ -2964,6 +3040,7 @@ document.getElementById("ethglobal-hackathon-run-demo")?.addEventListener("click
       ok: false,
       error: error?.message || String(error)
     });
+    clearEthglobalHackathonExplorerLinks();
   }
 });
 
@@ -2980,6 +3057,7 @@ document.getElementById("ethglobal-hackathon-fill-winner-mm")?.addEventListener(
       ok: false,
       fill_winner_error: error?.message || String(error)
     });
+    clearEthglobalHackathonExplorerLinks();
   }
 });
 

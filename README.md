@@ -432,6 +432,7 @@ The [OpenAgents KeeperHub prize](https://ethglobal.com/events/openagents/prizes)
    - `KEEPERHUB_API_KEY_ONLINE` — optional; preferred when `KEEPERHUB_API_BASE` points to hosted KeeperHub
    - `KEEPERHUB_API_BASE` — optional, default `https://app.keeperhub.com/api` (must include `/api`; if you omit it, the client normalizes `https://app.keeperhub.com` to the default)
    - `KEEPERHUB_EXECUTE_NETWORK` — optional; if Arc (`ARC_CHAIN_ID`, default `5042002`) is missing from KeeperHub `GET /api/chains` or execution expects another `network` string, set the slug explicitly (see [Direct execution](https://docs.keeperhub.com/api/direct-execution)). When **only** `KEEPERHUB_API_BASE` targets **localhost**, Krump assumes **`arc-testnet`** after a failed `/chains` match so hackathon payouts can still run until chains are seeded in KeeperHub.
+   - **`declare-winner` REST routing:** With **`KEEPERHUB_API_BASE`** pointing at hosted KeeperHub and **`KEEPERHUB_API_BASE_LOCAL`** at **`http://localhost:3001/api`**, picking **Execution local** in the UI sends **`keeperhub_rest_base: "local"`** so `/chains` and `/execute/*` hit self-hosted KeeperHub for that payout (optional env **`KEEPERHUB_DECLARE_WINNER_REST_BASE`** overrides when set).
    - `KEEPERHUB_TOKEN_ADDRESS` — optional; defaults to `CIRCLE_TOKEN_ADDRESS` for USDC-style ERC-20 transfers. Leave unset only if you intend a **native** transfer on that network.
    - `KEEPERHUB_TOKEN_DECIMALS` / `KEEPERHUB_TOKEN_SYMBOL` — optional metadata for non-standard tokens (defaults `6` / `USDC`)
 

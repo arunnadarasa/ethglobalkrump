@@ -2826,7 +2826,7 @@ app.post("/api/battle/close", (_req, res) => {
 });
 
 app.post("/api/battle/declare-winner", async (req, res) => {
-  const { winner_entry_id, execute_via_keeperhub } = req.body || {};
+  const { winner_entry_id, execute_via_keeperhub, keeperhub_rest_base } = req.body || {};
   const winner = entries.find((entry) => entry.id === winner_entry_id);
   if (!winner) {
     return sendError(res, 404, "winner_not_found", "Unknown winner entry id");
@@ -2855,7 +2855,9 @@ app.post("/api/battle/declare-winner", async (req, res) => {
       };
     } else {
       try {
-        const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID);
+        const declared = String(keeperhub_rest_base || process.env.KEEPERHUB_DECLARE_WINNER_REST_BASE || "auto").toLowerCase();
+        const khMode = ["local", "online", "auto"].includes(declared) ? declared : "auto";
+        const summary = await keeperhub.getStatusSummary(ARCTESTNET_CHAIN_ID, { mode: khMode });
         if (!summary.execute_network) {
           stored.keeperhub = {
             ok: false,
@@ -2873,14 +2875,17 @@ app.post("/api/battle/declare-winner", async (req, res) => {
           const transfer = await keeperhub.executeTransferPayout({
             recipientAddress: String(winner.wallet).trim(),
             amountMinor: totalPoolMinor,
-            network: summary.execute_network
+            network: summary.execute_network,
+            mode: khMode
           });
-          stored.keeperhub = { ok: true, transfer, arc: summary };
+          stored.keeperhub = { ok: true, transfer, arc: summary, keeperhub_rest_base: khMode };
           stored.settlement_status =
             transfer?.status === "failed" ? "keeperhub_failed" : "keeperhub_submitted";
           if (transfer?.executionId) {
             try {
-              stored.keeperhub.execution_status = await keeperhub.getExecutionStatus(transfer.executionId);
+              stored.keeperhub.execution_status = await keeperhub.getExecutionStatus(transfer.executionId, {
+                mode: khMode
+              });
             } catch (_e) {
               // non-fatal
             }

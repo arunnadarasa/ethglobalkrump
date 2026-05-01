@@ -170,8 +170,13 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
       bodyPreview: String(text || "").slice(0, 300)
     });
     if (text.trimStart().startsWith("<!") || text.includes("<title>Error</title>")) {
+      const isLocalExecute =
+        /\b(localhost|127\.0\.0\.1)\b/i.test(url) && /\/execute\//i.test(path);
       const err = new Error(
         `KeeperHub returned HTML (${response.status}) for ${method} ${url}. ` +
+          (isLocalExecute
+            ? `Local Next dev (Turbopack) sometimes drops App Router handlers under /api/execute/*. If GET ${url.split("/execute/")[0]}/chains returns JSON but this URL is HTML 404, stop the running KeeperHub dev server and retry with webpack: \`pnpm dev:webpack -- -p <port>\`, or smoke test production (\`pnpm build && pnpm start\`). `
+            : "") +
           `If you set KEEPERHUB_API_BASE, it must include /api (e.g. ${DEFAULT_BASE}).`
       );
       err.status = response.status;
@@ -192,9 +197,9 @@ async function keeperhubFetch(path, { method = "GET", body, executeRoute = false
   return parsed;
 }
 
-async function listChains({ includeDisabled = false } = {}) {
+async function listChains({ includeDisabled = false, mode = "auto" } = {}) {
   const q = includeDisabled ? "?includeDisabled=true" : "";
-  const out = await keeperhubFetch(`/chains${q}`, { method: "GET", executeRoute: false });
+  const out = await keeperhubFetch(`/chains${q}`, { method: "GET", executeRoute: false, mode });
   const parsedChains = Array.isArray(out) ? out : Array.isArray(out?.data) ? out.data : [];
   return parsedChains;
 }
@@ -317,8 +322,9 @@ function resolveLocalArcFallbackExecuteNetworkSlug() {
   return String(process.env.KEEPERHUB_EXECUTE_NETWORK || "").trim() || "arc-testnet";
 }
 
-async function getStatusSummary(arcChainId) {
-  const baseForSummary = getBaseUrl("auto");
+async function getStatusSummary(arcChainId, { mode = "auto" } = {}) {
+  const resolvedMode = String(mode || "auto").toLowerCase();
+  const baseForSummary = getBaseUrl(resolvedMode);
   const configured = isConfigured();
   if (!configured) {
     return {
@@ -332,7 +338,7 @@ async function getStatusSummary(arcChainId) {
     };
   }
   try {
-    const chains = await listChains({ includeDisabled: true });
+    const chains = await listChains({ includeDisabled: true, mode: resolvedMode });
     const chain = pickArcChain(chains, arcChainId);
     const executeNetworkFromSlug = resolveExecuteNetworkSlug(chain);
     /**
@@ -349,6 +355,7 @@ async function getStatusSummary(arcChainId) {
 
     // #region agent log
     logKeeperhubDebug("KH-H1", "getStatusSummary execute slug resolution", {
+      khMode: resolvedMode,
       chainCount: Array.isArray(chains) ? chains.length : null,
       arcChainIdRequested: Number(arcChainId),
       arcRowMatched: Boolean(chain),
@@ -377,13 +384,15 @@ async function getStatusSummary(arcChainId) {
             isEnabled: chain.isEnabled
           }
         : null,
-      token_address_configured: Boolean(resolveTokenAddress())
+      token_address_configured: Boolean(resolveTokenAddress()),
+      keeperhub_rest_mode: resolvedMode
     };
   } catch (error) {
     const localhostBase = shouldUseArcTestnetSlugFallback(baseForSummary);
     const executeNetworkFallback = localhostBase ? resolveLocalArcFallbackExecuteNetworkSlug() : null;
     // #region agent log
     logKeeperhubDebug("KH-H1-catch", "getStatusSummary listChains failed", {
+      khMode: resolvedMode,
       errorMessage: String(error.message || ""),
       localhostBase,
       resolvedExecuteNetwork: executeNetworkFallback,
@@ -397,7 +406,8 @@ async function getStatusSummary(arcChainId) {
       arc_supported: false,
       execute_network: executeNetworkFallback,
       chain: null,
-      error: error.message
+      error: error.message,
+      keeperhub_rest_mode: resolvedMode
     };
   }
 }

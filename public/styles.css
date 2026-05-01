@@ -107,6 +107,28 @@ pre {
   color: #9ee5bb;
 }
 
+.ethglobal-demo-explorer-links {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2e466f;
+  background: #0d1627;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ethglobal-demo-explorer-links .ethglobal-demo-explorer-caption {
+  color: #b3bfd1;
+  font-size: 0.9rem;
+}
+
+.ethglobal-demo-explorer-links a {
+  color: #7ab8ff;
+  word-break: break-all;
+}
+
 .hidden {
   display: none;
 }
