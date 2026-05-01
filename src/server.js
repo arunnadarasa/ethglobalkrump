@@ -2223,7 +2223,12 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       return sendError(res, 400, "agent_id_required", "agentId is required");
     }
     if (!allowedIntent || typeof allowedIntent !== "string") {
-      return sendError(res, 400, "allowed_intent_required", "allowedIntent is required (single intent id)");
+      return sendError(
+        res,
+        400,
+        "allowed_intent_required",
+        "allowedIntent is required (comma-separated intent ids for the ENS allowedIntents text record)."
+      );
     }
     const normalizedEnsip25AgentId = String(ensip25AgentId || agentId || "").trim();
     if (!normalizedEnsip25AgentId) {
@@ -2277,7 +2282,7 @@ app.post("/api/ens/setup-agent", async (req, res) => {
             agentId: agentId.trim(),
             tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
             capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
-            allowedIntents: [allowedIntent.trim()],
+            allowedIntents: parseCsvList(allowedIntent),
             arcAddress: arcActorAddress.trim(),
             ensip25Key: ensip25AttestationKey,
             ensip25Value: normalizedEnsip25Value,
@@ -2325,7 +2330,7 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       agentId: agentId.trim(),
       tokenUri: typeof tokenUri === "string" ? tokenUri.trim() : "",
       capabilitiesUri: typeof capabilitiesUri === "string" ? capabilitiesUri.trim() : "",
-      allowedIntent: allowedIntent.trim(),
+      allowedIntent: String(allowedIntent).trim(),
       ensip25AttestationKey,
       ensip25AttestationValue: normalizedEnsip25Value,
       attestor: typeof attestor === "string" ? attestor.trim() : "",
@@ -2347,11 +2352,15 @@ app.post("/api/ens/setup-agent", async (req, res) => {
       universalResolverAddress: ENS_UNIVERSAL_RESOLVER_ADDRESS
     });
 
-    const trust = await deriveTrustForIntent(resolved, allowedIntent.trim(), {
+    const allowedIntentCsv = String(allowedIntent).trim();
+    const intentsList = parseCsvList(allowedIntentCsv);
+    const primaryIntentForPreview =
+      intentsList[0] || allowedIntentCsv.split(",")[0]?.trim() || allowedIntentCsv;
+    const trust = await deriveTrustForIntent(resolved, primaryIntentForPreview, {
       agentIdCandidate: normalizedEnsip25AgentId,
       registryCandidate: registryInteropAddress
     });
-    const versioning = deriveVersionForIntent(resolved, allowedIntent.trim());
+    const versioning = deriveVersionForIntent(resolved, primaryIntentForPreview);
     return res.json({
       ok: true,
       ens_name: resolved.ens_name,

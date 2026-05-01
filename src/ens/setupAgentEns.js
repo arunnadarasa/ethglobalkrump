@@ -71,8 +71,9 @@ async function setupAgentEns({
   if (!agentId || typeof agentId !== "string") {
     throw new Error("agentId is required");
   }
-  if (!allowedIntent || typeof allowedIntent !== "string") {
-    throw new Error("allowedIntent is required (single intent id)");
+  const normalizedAllowedIntent = typeof allowedIntent === "string" ? allowedIntent.trim() : "";
+  if (!normalizedAllowedIntent) {
+    throw new Error("allowedIntent is required (comma-separated intent ids stored in allowedIntents text record)");
   }
 
   // Import ESM dependencies at runtime because this repo is CommonJS.
@@ -294,7 +295,7 @@ async function setupAgentEns({
     ["agentId", agentId],
     ["tokenUri", normalizedTokenUri || null],
     ["capabilitiesUri", normalizedCapabilitiesUri || null],
-    ["allowedIntents", allowedIntent],
+    ["allowedIntents", normalizedAllowedIntent],
     ["arcAddress", arcActorAddress],
     ...(ensip25AttestationKey
       ? [[ensip25AttestationKey, typeof ensip25AttestationValue === "string" ? ensip25AttestationValue : ""]]

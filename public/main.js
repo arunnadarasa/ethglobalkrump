@@ -766,6 +766,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
   const capabilitiesVersion = document.getElementById("ens-capabilities-version")?.value?.trim() || "";
   const compatibleIntents = document.getElementById("ens-compatible-intents")?.value?.trim() || "";
   const selectedIntent = document.getElementById("agent-intent")?.value || "";
+  const allowedIntentsCsv = document.getElementById("ens-allowed-intents-csv")?.value?.trim() || "";
   const writeMode = document.getElementById("ens-write-mode")?.value || "demo";
   debugEnsLog("H3", "public/main.js:registerUpdateEnsJudgeIdentityForUi", "register clicked with form state", {
     hasJudgeEnsInputElement: Boolean(judgeEnsInputEl),
@@ -813,7 +814,7 @@ async function registerUpdateEnsJudgeIdentityForUi() {
     agentId,
     tokenUri,
     capabilitiesUri,
-    allowedIntent: selectedIntent,
+    allowedIntent: allowedIntentsCsv || selectedIntent,
     ensip25Registry,
     ensip25AgentId,
     ensip25Value,
@@ -1484,27 +1485,11 @@ async function runEthglobalHackathonDemoFromUi() {
   }
 
   try {
-    // #region agent log
-    fetch("http://127.0.0.1:7488/ingest/73a172ba-d779-4052-830f-514180f8d969", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "995d4d" },
-      body: JSON.stringify({
-        sessionId: "995d4d",
-        runId: "post-fix-scope",
-        hypothesisId: "H1",
-        location: "public/main.js:runEthglobalHackathonDemoFromUi:beforeSync",
-        message: "hackathon_wallet_scope_probe",
-        data: {
-          challengerPresent: challengerInputEl != null,
-          winnerInputPresent: winnerInputEl != null,
-          winnerWalletLen: String(winnerWallet || "").length
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
     syncEthglobalHackathonPanels();
     applyEthglobalHackathonExecutionModeUi();
+    const hackathonAgentIntent =
+      document.getElementById("ethglobal-demo-hackathon-intent")?.value || "tip_dancer";
+    document.getElementById("agent-intent").value = hackathonAgentIntent;
     const payRail = document.getElementById("ethglobal-demo-battle-payment-mode").value;
     if (payRail === "circle_wallet") {
       const circleBc = document.getElementById("circle-blockchain");
@@ -1517,6 +1502,7 @@ async function runEthglobalHackathonDemoFromUi() {
       at: new Date().toISOString(),
       battle_payment_mode: payRail,
       execution_mode: document.getElementById("ethglobal-demo-execution-mode").value,
+      hackathon_agent_intent: hackathonAgentIntent,
       circle_blockchain: document.getElementById("circle-blockchain")?.value || null,
       keeperhub_local_hint:
         "KEEPERHUB_API_BASE=http://localhost:3001/api + KEEPERHUB_API_KEY_LOCAL for Arc Testnet (local KeeperHub)"
@@ -1530,7 +1516,6 @@ async function runEthglobalHackathonDemoFromUi() {
       document.getElementById("ens-agent-id")?.value?.trim() ||
       deriveAgentIdFromEnsName(ensName);
 
-    document.getElementById("agent-intent").value = "tip_dancer";
     flushEthglobalHackathonOutput(timeline, { running: true });
 
     /* 1 Battle seed */
@@ -1640,7 +1625,7 @@ async function runEthglobalHackathonDemoFromUi() {
     flushEthglobalHackathonOutput(timeline, { running: true });
     setEnsStepStatus("ethglobal-demo-step-vyper", "done");
 
-    /* 4 Agent session tip_dancer (UCP trace) — intent matches ENS allowedIntents (gaanakrump.eth is tip_dancer-gated) */
+    /* 4 Agent session UCP trace — intent from ethglobal-demo-hackathon-intent (must be listed on judge ENS allowedIntents) */
     setEnsStepStatus("ethglobal-demo-step-ucp", "active");
     const agentCtxSave = document.getElementById("agent-context-json")?.value || "";
     document.getElementById("agent-payment-mode").value = document.getElementById(
@@ -1670,7 +1655,8 @@ async function runEthglobalHackathonDemoFromUi() {
     const sess = fetched.body?.session;
     const sessOk = sess?.status === "completed";
     timeline.push({
-      step: "agent_session_tip_dancer",
+      step: `agent_session_${hackathonAgentIntent}`,
+      intent: hackathonAgentIntent,
       session_id: sessionIdAfter,
       status: sess?.status || null,
       completed: sessOk,
